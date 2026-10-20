@@ -1,0 +1,18 @@
+# Python / uv
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Data and run outputs (large, regenerable)
+data/
+artifacts/
+
+# Quarto build output (the freeze cache docs/_freeze/ IS committed)
+docs/_book/
+docs/.quarto/
+/.quarto/
+
+# Editors / OS
+.ipynb_checkpoints/
+.DS_Store
