@@ -10,11 +10,10 @@ book:
     - part: "Setup & data"
       chapters:
         - 101_environment_setup.qmd
-    - part: "Appendices"
-      chapters:
-        - 902_references.qmd
+  appendices:
+    - 902_references.qmd
 
-number-sections: false
+number-sections: true
 bibliography: references.bib
 
 execute:

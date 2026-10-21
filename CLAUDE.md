@@ -16,7 +16,7 @@ A Quarto-book lab for learning LLM fine-tuning (Hugging Face, LoRA SFT) on ConvF
 - **Stages pass data through files** in `artifacts/`, never through kernel state.
 - **Heavy chapters** (baseline, training, evaluation, ablations) use `freeze: true`. `train()`/`evaluate()` skip work when `artifacts/<run_id>/DONE` exists unless `force=True`. Run long renders in `tmux`.
 - **Splits:** tune on `val` (page-grouped 10% of train). Use `dev` only for final reported numbers.
-- **Chapter files** are named `docs/PCC_first_words.qmd` (P = part, CC = chapter). Appendices are `9CC`. Titles carry the code, e.g. `"2.3 From base model to instruct model"`, and `number-sections` is off.
+- **Chapter files** are named `docs/PCC_first_words.qmd` (P = part, CC = chapter). Appendices are `9CC`. Titles carry no number: Quarto numbers chapters itself (`number-sections: true`), so rendered numbers differ from the `PCC` codes.
 - **Teaching style:** demonstrate claims with code on the real model and data. Use "Under the hood" and "Further reading" callouts. Cite via `docs/references.bib` and link terms to the glossary.
 
 ## Commands

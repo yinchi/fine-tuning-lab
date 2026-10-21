@@ -1,6 +1,4 @@
----
-title: "Preface"
----
+# Preface {.unnumbered}
 
 This book is a hands-on lab for learning LLM fine-tuning with Hugging Face, using the ConvFinQA
 conversational question-answering task [@chen2022convfinqa]. It explains how models work, runs the

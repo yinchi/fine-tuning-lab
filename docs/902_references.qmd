@@ -1,6 +1,4 @@
----
-title: "A.2 References"
----
+# References
 
 ::: {#refs}
 :::

@@ -49,9 +49,9 @@ Hardware: DGX Spark (NVIDIA GB10, ~121 GB unified memory, aarch64, CUDA 13.2).
    - new terms link to the glossary;
    - each chapter opens with a short "you will learn" list.
 8. **Numbering:**
-   - Files are named `PCC_first_words.qmd`: P = part, CC = chapter within the part, then the first words of the title.
-   - Appendices use `9CC`.
-   - `_quarto.yml` sets `number-sections: false`, and each title carries the code (e.g. `title: "2.3 From base model to instruct model"`), so rendered numbers match filenames. Cross-references use `@sec-` labels.
+   - Files are named `PCC_first_words.qmd`: P = part, CC = chapter within the part, then the first words of the title. Appendices use `9CC`.
+   - `_quarto.yml` sets `number-sections: true`, so Quarto numbers chapters itself: straight through the book, not per part, with appendices (listed under `appendices:`) lettered A, B, and so on. Titles carry no code.
+   - The `P.C` codes (written §2.3 in this plan) are therefore **plan and filename identifiers only**. They don't match the rendered chapter numbers. Cross-references in the book use `@sec-` labels.
 
 ## What ConvFinQA looks like (content of §1.2)
 Source: github.com/czyssrs/ConvFinQA (`data.zip`), from Chen et al., EMNLP 2022. Conversations are built from FinQA: earnings-report pages, each with a table and the text around it.
@@ -142,7 +142,7 @@ fine-tuning-lab/
     stats.py                # bootstrap CIs, paired cluster bootstrap over conversations, cross-seed agreement
   tests/                    # test_executor, test_python_format, test_formatting, test_constrained, test_stats, test_authoring, test_splits
   docs/                     # THE LAB: Quarto book
-    _quarto.yml             # type: book; parts as below; number-sections: false; execute: freeze: auto;
+    _quarto.yml             # type: book; parts as below; number-sections: true; execute: freeze: auto;
                             #   jupyter: fine-tuning-lab; bibliography: references.bib; code-fold
     references.bib          # ConvFinQA, FinQA, Transformer, InstructGPT, LoRA, QLoRA, PoT, PAL, self-consistency,
                             #   self-repair, "Let Me Speak Freely?", Fin-R1, FINDER, Qwen3 report
@@ -455,6 +455,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-20: Added Part 2 Foundations as teaching material, with "Under the hood" links from the experiment chapters.
 - 2026-10-20: Private GitHub repo `ycchan-mumu/fine-tuning-lab`; TensorBoard for tracking.
 - 2026-10-20: Project moved to the personal Linux account. The GitHub repo is now `yinchi/fine-tuning-lab` (private), replacing `ycchan-mumu/fine-tuning-lab`. Quarto is installed under `~/.local/opt/quarto`, symlinked into `~/.local/bin`.
+- 2026-10-20: Native Quarto numbering replaces manual codes in titles (`number-sections: true`, appendices under `appendices:`). Chapter numbers run straight through the book and no longer match the `PCC` filenames or the plan's §P.C identifiers. This supersedes the numbering part of the 2026-10-20 decision on file naming.
 - 2026-10-20: In VS Code, the Quarto extension exports `QUARTO_PYTHON` from the selected Python interpreter, overriding `docs/_environment*`. A bare interpreter made re-renders fail with `No module named 'yaml'`. The committed `.vscode/settings.json` selects `.venv`; no `_environment` file is used.
 
 ## Verification
