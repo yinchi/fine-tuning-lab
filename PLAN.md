@@ -7,7 +7,7 @@ The goal is to learn the Hugging Face fine-tuning workflow end to end, using Con
 1. It **explains** what LLMs and fine-tuning actually do, hands-on with the real models and ConvFinQA examples. This is Part 2, Foundations.
 2. It **runs and documents** the experiments, so the rendered book is also the lab notebook and the record of results. This is Part 3.
 
-Quarto's freeze cache keeps expensive chapters, such as training and full evaluation, from re-running on every render.
+Expensive computations, such as training and full evaluation, cache their results in `artifacts/`, so re-rendering a chapter loads them instead of recomputing. Quarto's freeze cache keeps unchanged chapters from re-running at all.
 
 Decisions already made:
 - **Output:** the model emits the ConvFinQA **DSL program**, and a Python executor computes the number. §3.5 runs the same pipeline with **Python output** to test whether models already trained on lots of code do better in a language they know.
@@ -33,14 +33,21 @@ Hardware: DGX Spark (NVIDIA GB10, ~121 GB unified memory, aarch64, CUDA 13.2).
 2. **Stages pass data through files, never kernel state.** Each chapter writes artifacts to `artifacts/` (processed data, adapters, predictions, metrics), and later chapters read them. Freeze caches rendered output only, not Python objects.
 3. **Logic lives in `src/convfinqa/`.** Chapters import it, explain it, and call it with visible config. pytest covers the package. Chapters hold narration, config, calls, and plots, never large logic.
 4. **Freeze is set per chapter:**
-   - `_quarto.yml` sets `execute: freeze: auto`: a chapter re-runs only when its source changes. This fits light chapters.
-   - Heavy chapters (§3.2–3.6) set `freeze: true` in their front matter. A whole-book `quarto render` never re-runs them. Run one deliberately with `quarto render docs/303_training_with.qmd`.
+   - `_quarto.yml` sets `execute: freeze: auto` for **every** chapter: a chapter re-runs, in full, only when its own `.qmd` changes. Editing a chapter therefore always shows your changes. Freeze watches only the `.qmd`, not `src/convfinqa/`, `_environment`, or the data; to force a re-run, delete `docs/_freeze/<chapter>/`.
+   - We don't use `freeze: true`. Tested: it hides prose edits from a whole-book render, and rendering the chapter directly re-executes every cell. Accidental re-runs are prevented by the artifact system in item 5 instead.
    - `docs/_freeze/` is committed, so the book renders anywhere without a GPU.
-5. **Expensive functions skip work that's already done.** `train()` and `evaluate()` check for `artifacts/<run_id>/DONE` and return the cached result unless `force=True`. An accidental re-execution is then cheap.
+5. **Artifacts are named, tracked, and built on demand** (`src/convfinqa/artifacts.py`). An artifact is a named result on disk, such as a processed split, a trained adapter, or an evaluation.
+   - **Registration.** Builders are functions registered by name template, e.g. `@artifact("sft-{variant}-{seed}", deps=["tokenized-{variant}", "split-v1"], heavy=True)`. Dependencies are plain name strings. The whole graph is validated when the registry loads (every dep exists, no cycles), and a test checks it.
+   - **Builders.** A builder receives `out` (a temp dir), one handle per dependency (path, output hash, `.json()` helpers), and keyword parameters. It uses **only** those: no chapter globals, no shared state. It loads its own model and needs no teardown, because heavy builders run in their own process.
+   - **Node files.** Each artifact has `artifacts/<name>/node.json`: its config, the output hashes of its dependencies, content hashes of the outputs it declares significant (logs and TensorBoard files excluded), and a `version` field to bump when a code change should invalidate it. It is written last and atomically, after building in a temp dir.
+   - **Freshness is recursive.** An artifact is fresh only if its config matches, **every dependency is itself fresh**, and the dependencies' current output hashes equal the recorded ones. Content hashes give early cutoff: a deterministic rebuild with identical output leaves dependents fresh.
+   - **Light vs. heavy.** Light artifacts rebuild in the notebook kernel whenever stale. A stale or missing **heavy** artifact raises an error with the build command, unless `RUN_HEAVY=1` is set; then the decorator launches `python -m convfinqa.artifacts build <name> --params '<json>'` as a subprocess, logging to `artifacts/<name>/build.log`. The subprocess frees all memory on exit and isolates crashes. A lock file prevents two concurrent builds of one artifact.
+   - **Across chapters.** Artifacts are global by name, so any chapter can depend on one built elsewhere. Each chapter records the output hashes of the artifacts it used in `artifacts/_chapters/<chapter>.json` (the chapter name comes from `QUARTO_DOCUMENT_FILE`). `python -m convfinqa.artifacts refresh` deletes `docs/_freeze/<chapter>/` for chapters whose artifacts changed or are stale, since Quarto's freeze only watches the `.qmd`. It runs automatically before every render and preview through `pre-render` in `_quarto.yml`, via a small stdlib-only shim script that starts the project venv's Python (a `pre-render` script otherwise runs under the system `python3`). Other subcommands: `build <name>` and `status` (a fresh/stale/missing tree with reasons).
+   - **Chapter conventions.** Cells that call heavy artifacts carry a `#HEAVY` comment. **The recommended build is a full-book render:** `RUN_HEAVY=1 quarto render docs/ --log artifacts/render.log` inside `tmux` or `screen`. The freshness check rebuilds only the heavy artifacts that are missing or stale. `build <name>` builds one artifact without Quarto.
 6. **Long runs:**
-   - Run them in `tmux`.
-   - Disable tqdm in rendered output, log to `artifacts/<run_id>/train.log` and TensorBoard, and show only a summary and plots in the chapter.
-   - Each run directory stores the resolved config, git commit, library versions, and metrics, so every chapter's numbers trace back to a run.
+   - Run the full-book render, `quarto render docs/`, in `tmux` or `screen`, with `RUN_HEAVY=1` reaching it (see 1.1 for the exact commands; `tmux` needs `-e RUN_HEAVY=1`).
+   - Disable tqdm in rendered output, log to `artifacts/<name>/build.log` and TensorBoard, and show only a summary and plots in the chapter.
+   - Each artifact directory stores the resolved config, git commit, library versions, and metrics, so every chapter's numbers trace back to a run.
 7. **Teaching conventions** used throughout:
    - every claim is demonstrated with code on the real model or data;
    - `::: {.callout-note title="Under the hood"}` boxes link results back to Part 2;
@@ -128,17 +135,18 @@ fine-tuning-lab/
   pyproject.toml            # uv; python 3.14; torch from the cu132 index; xgrammar; dev deps: ipykernel, matplotlib, pytest
   .gitignore                # data/raw/, artifacts/, .venv/, docs/_book/
   data/raw/                 # unzipped ConvFinQA json (untracked)
-  artifacts/                # per-stage outputs: processed/, runs/<run_id>/{config.json,metrics.json,predictions.jsonl,adapter/,tb/,DONE}
+  artifacts/                # per-artifact outputs: processed/, runs/<name>/{node.json,build.log,metrics.json,predictions.jsonl,adapter/,tb/}, _chapters/
   src/convfinqa/
     data.py                 # load raw json, table→markdown, pretty-print a conversation, page-grouped val split
     executor.py             # parse + execute DSL programs, FinQA tolerance
     python_format.py        # DSL → straight-line Python translator; AST-whitelisted safe evaluator
     constrained.py          # EBNF grammars (DSL, Python subset); xgrammar HF logits processor
     formatting.py           # conversation → chat messages; assistant-only label mask; per-turn eval prompts
-    train.py                # train(cfg) -> run_dir   (TRL SFTTrainer + PEFT; DONE guard)
-    evaluate.py             # evaluate(model_or_run, split, history_mode, output_format, grammar) -> metrics (DONE guard)
+    train.py                # train(cfg) -> run_dir   (TRL SFTTrainer + PEFT; heavy artifact builder)
+    evaluate.py             # evaluate(model_or_run, split, history_mode, output_format, grammar) -> metrics (heavy artifact builder)
     authoring.py            # schema validation, grounding check, answer filling for new examples
-    runs.py                 # run_id, config/env capture, DONE markers
+    runs.py                 # run ids, config/env capture (git commit, library versions)
+    artifacts.py            # @artifact registry, node.json, recursive freshness, subprocess builds, build/status/refresh CLI
     stats.py                # bootstrap CIs, paired cluster bootstrap over conversations, cross-seed agreement
   tests/                    # test_executor, test_python_format, test_formatting, test_constrained, test_stats, test_authoring, test_splits
   docs/                     # THE LAB: Quarto book
@@ -160,11 +168,11 @@ fine-tuning-lab/
     206_lora_in.qmd               # 2.6 LoRA in detail
     # Part 3 — Experiments
     301_formatting_conversations.qmd  # 3.1 Formatting conversations for training
-    302_the_untuned.qmd           # 3.2 The untuned baseline            (freeze: true)
-    303_training_with.qmd         # 3.3 Training with LoRA              (freeze: true)
-    304_evaluating_the.qmd        # 3.4 Evaluating the fine-tuned model (freeze: true)
-    305_dsl_vs.qmd                # 3.5 DSL vs Python output            (freeze: true)
-    306_constrained_decoding.qmd  # 3.6 Constrained decoding            (freeze: true)
+    302_the_untuned.qmd           # 3.2 The untuned baseline            (HEAVY)
+    303_training_with.qmd         # 3.3 Training with LoRA              (HEAVY)
+    304_evaluating_the.qmd        # 3.4 Evaluating the fine-tuned model (HEAVY)
+    305_dsl_vs.qmd                # 3.5 DSL vs Python output            (HEAVY)
+    306_constrained_decoding.qmd  # 3.6 Constrained decoding            (HEAVY)
     # Part 4 — Beyond
     401_writing_your.qmd          # 4.1 Writing your own examples
     402_retrospective.qmd         # 4.2 Retrospective
@@ -188,7 +196,7 @@ fine-tuning-lab/
   - Write a short `CLAUDE.md` that says:
     - read `PLAN.md` first;
     - update the Progress tracker and Decision log as work happens, and commit them with the related change;
-    - remember the conventions: logic in `src/convfinqa/`, chapters thin, `freeze: true` + DONE guard for heavy work, dev only for final numbers, `PCC_first_words.qmd` naming.
+    - remember the conventions: logic in `src/convfinqa/`, chapters thin, heavy artifacts built only with `RUN_HEAVY=1` or the `build` command, dev only for final numbers, `PCC_first_words.qmd` naming.
   - `git init`; write `.gitignore`; make the first commit (including `PLAN.md` and `CLAUDE.md`). Then `gh repo create yinchi/fine-tuning-lab --private --source . --push`.
 - **The chapter:** checks that CUDA is available, the device is GB10, and a bf16 matmul runs. It prints library versions.
   - It explains the driver-vs-runtime distinction: `nvidia-smi` shows "CUDA 13.2", `torch.version.cuda` shows "13.2", and `nvcc --version` shows "13.2".
@@ -269,14 +277,14 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - `artifacts/processed/val.jsonl`: about 300 conversations.
   - `dev` files in two shapes: per-conversation (421) and per-turn (1,490).
 
-**3.2 The untuned baseline** (`302_the_untuned.qmd`, `freeze: true`)
+**3.2 The untuned baseline** (`302_the_untuned.qmd`, HEAVY)
 - Runs `Qwen/Qwen3-4B-Instruct-2507` untuned, with 2–3 in-context examples, on dev.
   - The examples come from **train-fit**: 3 fixed sets, each drawn with its own seed. Report the mean ± std across sets and the per-set results.
   - Any prompt iteration happens on **val**. Dev is run once, with the final prompt.
 - Uses greedy, batched generation with left padding. Each predicted program is parsed and executed.
 - Reports **execution accuracy** (the headline metric), program accuracy, and the invalid rate. These follow the evaluation rules in §3.4.
 
-**3.3 Training with LoRA** (`303_training_with.qmd`, `freeze: true`)
+**3.3 Training with LoRA** (`303_training_with.qmd`, HEAVY)
 - **Base models:**
   - Smoke run: `Qwen/Qwen2.5-0.5B-Instruct`, 50 steps.
   - Main run: `Qwen/Qwen3-4B-Instruct-2507`.
@@ -293,13 +301,13 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - After training, run a quick val execution-accuracy check. Dev is never looked at here.
 - `train(cfg)` writes to `artifacts/runs/<run_id>/`.
 - The chapter plots train and eval loss from `trainer_state.json`.
-- Expected time for the main run: about 1–2 hours on GB10. Render this chapter inside tmux.
+- Expected time for the main run: about 1–2 hours on GB10. It is built by the full-book render with `RUN_HEAVY=1` in `tmux` or `screen` (see 1.1).
 - **Under the hood:**
   - The step-0 val loss should match the gold-program negative log-likelihood measured in 2.4.
   - Adapter analysis: the size of the weight change each adapter makes (‖(α/r)·B·A‖) as a heatmap of layer × module (q/k/v/o/gate/up/down), and the singular-value spectrum of those weight changes, which shows how much of rank 16 is actually used.
   - Re-run 2.4's per-token log-prob heatmap on the same val example with the adapter on, to show which tokens became easier.
 
-**3.4 Evaluating the fine-tuned model** (`304_evaluating_the.qmd`, `freeze: true`)
+**3.4 Evaluating the fine-tuned model** (`304_evaluating_the.qmd`, HEAVY)
 - Compares the fine-tuned model with the baseline and with the reference table above, rendered as a chart with our two points overlaid on the published results.
 - Accuracy is broken down by turn index and by Type I vs. Type II.
 - Two history modes:
@@ -337,7 +345,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
 - Error analysis: a sample of failures sorted into wrong number picked, wrong operation, broken `#k` reference, or a program that doesn't parse.
   - **Under the hood:** for some failures, compare base and fine-tuned log-probs of the gold program vs. the predicted one. Was the right answer close?
 
-**3.5 DSL vs Python output** (`305_dsl_vs.qmd`, `freeze: true`)
+**3.5 DSL vs Python output** (`305_dsl_vs.qmd`, HEAVY)
 - **Hypothesis:** models trained on lots of code write Python more reliably than an unfamiliar DSL.
   - Prior evidence: GPT-3 scored 45.2 with ordinary math notation vs. 40.8 with the original DSL (ConvFinQA paper, Tab. 5). PoT and FINDER both use Python.
   - Expectation: a clear gap untuned, which shrinks after fine-tuning.
@@ -359,7 +367,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - Program accuracy is left out because it can't be compared across syntaxes.
 - **Possible follow-up (§4.2):** a REPL-style variant where variables persist across turns.
 
-**3.6 Constrained decoding** (`306_constrained_decoding.qmd`, `freeze: true`)
+**3.6 Constrained decoding** (`306_constrained_decoding.qmd`, HEAVY)
 This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters, and the §3.4 evaluation (predicted history; greedy; one attempt; invalid counts as wrong).
 - **Under the hood:** a grammar is a logits processor (see 2.1). Show the mask at one decoding step: which tokens are allowed vs. what the model would have picked.
 - **Syntaxes:**
@@ -424,6 +432,7 @@ Mark each item `[x]` when it's done and verified. Add a short note (run id, head
 - [x] 1.1 Environment: uv project, Quarto 1.10.19, kernel, git + private GitHub repo `yinchi/fine-tuning-lab`, `PLAN.md`/`CLAUDE.md` committed. Chapter renders: GB10, CUDA 13.2 everywhere, bf16 matmul OK, torch 2.14.1+cu132.
 - [x] 1.2 Data downloaded and explored; `max_length` chosen. Train 3,037 convs / 11,104 turns, dev 421 / 1,490; test has no labels. Longest full conversation 3,460 tokens, so `max_length` = 3584 (saved to `artifacts/processed/lengths.json`; tied to the Qwen3 tokenizer).
 - [ ] 1.3 Executor; 100% gold match (or mismatches explained)
+- [ ] Artifact system (`artifacts.py`, `test_artifacts.py`): needed before the first heavy cell (2.4)
 - [ ] 2.1 From text to tokens
 - [ ] 2.2 Anatomy of Qwen3-4B
 - [ ] 2.3 From base model to instruct model
@@ -458,6 +467,9 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-20: Native Quarto numbering replaces manual codes in titles (`number-sections: true`, appendices under `appendices:`). Chapter numbers run straight through the book and no longer match the `PCC` filenames or the plan's §P.C identifiers. This supersedes the numbering part of the 2026-10-20 decision on file naming.
 - 2026-10-20: In VS Code, the Quarto extension exports `QUARTO_PYTHON` from the selected Python interpreter, overriding `docs/_environment*`. A bare interpreter made re-renders fail with `No module named 'yaml'`. The committed `.vscode/settings.json` selects `.venv`; no `_environment` file is used.
 - 2026-10-21: Chapter environment variables live in a committed `docs/_environment` (`TQDM_DISABLE`, `HF_HUB_DISABLE_PROGRESS_BARS`, and a `PYTHONWARNINGS` filter for the tqdm IProgress warning). HTML code blocks default to `code-fold: show`; heavy cells can fold with `#| code-fold: true`. ConvFinQA facts for the DSL: 18 official constants; `%` literals evaluate as /100; the paper's generator can copy any page token that parses as a number or ends in `%`.
+- 2026-10-21: No `freeze: true`. Tested in a scratch book: a frozen chapter ignores prose edits in a whole-book render, and rendering it directly re-executes every cell. All chapters use `freeze: auto`. Heavy cells (`#HEAVY`) load results from `artifacts/<run_id>/` (DONE + matching `config.json`) and raise an error if they are missing, unless `RUN_HEAVY=1` or `force=True`. This supersedes the 2026-10-20 decision that heavy chapters use `freeze: true`.
+- 2026-10-21: Artifact system replaces the `DONE` + `force=True` guard (this supersedes the previous entry's mechanism, not its `freeze: auto` decision). Named artifacts with string deps and name templates in a registry; per-artifact `node.json` with config, dependency hashes and content hashes; **recursive** freshness; light artifacts build in-kernel, heavy ones in a subprocess only with `RUN_HEAVY=1` (or the `build` command); builders own their models and use only parameters and dependency handles; chapter records plus `refresh` re-render chapters whose artifacts changed. DVC was considered and rejected for now: the helper keeps training calls visible in chapters and needs no new tool.
+- 2026-10-21: The recommended build is a full-book render with `RUN_HEAVY=1`, wrapped in `tmux` or `screen`; the artifact freshness check decides which heavy artifacts to rebuild. `refresh` runs automatically through Quarto's `pre-render` hook (tested in a scratch project: it runs before `render` and at preview start, inherits `RUN_HEAVY`, and runs from the project directory under the system `python3`, so the hook is a shim that starts the venv's Python). A frozen chapter is never executed, so without `refresh` a stale artifact in an unchanged chapter would go unnoticed.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.
@@ -475,8 +487,9 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
   - **2.5:** the hand-computed cross-entropy equals `model(labels=...).loss` to within 1e-4.
   - **2.6:** at step 0, the LoRA-wrapped model's logits equal the base model's exactly; the trainable-parameter count matches PEFT's.
   - **3.3:** the step-0 val loss is within a few percent of 2.4's gold-program negative log-likelihood (the formatting is identical).
-- `quarto render docs/303_training_with.qmd` (smoke config first) finishes, writes `artifacts/runs/<id>/DONE`, and shows falling loss curves.
-- After everything has run once, a full `quarto render docs/` finishes in minutes. Heavy chapters come from `_freeze/`, and the training, baseline, and eval code isn't re-run.
-- Editing prose in a `freeze: true` chapter and running the full book render doesn't retrain. Rendering that chapter explicitly does re-execute it, and the DONE guard makes it return immediately.
+- `RUN_HEAVY=1 quarto render docs/303_training_with.qmd` (smoke config first) finishes, writes `artifacts/runs/<name>/node.json`, and shows falling loss curves.
+- After everything has run once, a full `quarto render docs/` finishes in minutes. Unchanged chapters come from `_freeze/`.
+- Editing prose in a heavy chapter and rendering it re-executes the chapter, and the heavy cells load their artifacts and show the edit. With an artifact removed, the same render fails with the error naming the build command, and starts no training. `RUN_HEAVY=1` builds it in a subprocess.
+- Artifact tests (`test_artifacts.py`): fresh; own config changed; a dependency rebuilt; a stale middle node with a fresh-looking leaf (recursive check); missing dependency; early cutoff on identical output; `RUN_HEAVY` set to `1`, `0` and unset; an interrupted build leaves no `node.json`; the graph has no missing deps or cycles; `refresh` deletes exactly the stale chapters' freeze folders.
 - In the book, §1.2 shows real conversations, and §3.4 shows fine-tuned execution accuracy clearly above the §3.2 baseline.
 - The rendered book shows chapter codes matching the filenames, and has working cross-references, glossary links, and a bibliography. Part 2 renders in a few minutes from a clean freeze.

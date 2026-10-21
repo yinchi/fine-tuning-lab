@@ -14,7 +14,8 @@ See [`PLAN.md`](PLAN.md) for the full plan, progress tracker and decision log.
 uv sync                                   # create .venv with all dependencies
 uv run pytest                             # run the tests
 quarto preview docs/                      # live-preview the book
-quarto render docs/<chapter>.qmd          # (re-)execute one chapter, e.g. a frozen training chapter
+quarto render docs/                       # render the whole book (RUN_HEAVY=1 also builds stale heavy artifacts)
+quarto render docs/<chapter>.qmd          # (re-)execute one chapter
 ```
 
 Hardware used: NVIDIA DGX Spark (GB10, 128 GB unified memory, aarch64, CUDA 13.2).
