@@ -1,0 +1,164 @@
+---
+title: "The DSL and its executor"
+---
+
+**You will learn:**
+
+- the grammar of ConvFinQA's program language;
+- how our executor, `src/convfinqa/executor.py`, runs a program, with the conventions it inherits from the official code;
+- the kinds of error a program can have, which later chapters count when scoring model outputs;
+- that the executor reproduces every gold answer in `train` and `dev` exactly.
+
+The model never does arithmetic itself. It writes a **program**, and the executor computes the number.
+That makes each answer checkable, and it keeps exact arithmetic out of a model that reads numbers one
+digit at a time.
+
+## The grammar
+
+<!-- No highlighter supports EBNF; `ruby` colours the strings, operators and comments well. -->
+```ruby
+program   = number | step { "," step }
+step      = operation "(" argument "," argument ")"
+operation = "add" | "subtract" | "multiply" | "divide" | "exp" | "greater"
+argument  = number | percent | "#" index | constant
+number    = digits, optionally with commas and a decimal point, e.g. 206588 or 1,234.5
+percent   = number "%"            # evaluated as number / 100
+index     = digit { digit }       # the result of an earlier step
+constant  = "const_" ( digits | "m1" )   # a fixed list of 18, see the previous chapter
+```
+
+A program with no parentheses is a **number-selection** turn: its value is just that number. Every other
+program is a list of steps. Step *k* may refer to the result of any earlier step as `#j` with `j < k`.
+The last step's result is the answer.
+
+## Running a program
+
+```{python}
+import pandas as pd
+
+from convfinqa import data, executor
+
+program = "subtract(206588, 181001), divide(#0, 181001)"
+steps = executor.parse_program(program)
+results = executor.trace(program)
+pd.DataFrame(
+    {
+        "step": [f"#{i}" for i in range(len(steps))],
+        "operation": [s.op for s in steps],
+        "arguments": [", ".join(s.args) for s in steps],
+        "result": [
+            r if isinstance(r, str)
+            else f"{round(r, executor.ROUND_DIGITS):g}" for r in results
+        ],
+    }
+)
+```
+
+The first step is `206588 - 181001 = 25587`, the second divides it by `181001` to get the percentage
+change, `0.14136`.
+
+## Conventions inherited from the official code
+
+The executor follows `eval_program` and `str_to_num` in the authors' `code/utils/general_utils.py`.
+
+```{python}
+cases = {
+    "number with commas": "1,234.5",
+    "percent literal": "multiply(900, 0.25%)",
+    "constant": "divide(300, const_3)",
+    "negative constant": "multiply(5, const_m1)",
+    "rounded to 5 places": "divide(2, 3)",
+    "a tiny result rounds to 0": "divide(1, const_1000000)",
+    "comparison": "greater(3, 2)",
+}
+pd.DataFrame({
+    "program": cases.values(),
+    "value": [executor.execute(p) for p in cases.values()]
+}, index=cases.keys())
+```
+
+- `%` divides by 100, so `0.25%` is `0.0025`.
+- Every result is rounded to **5 decimal places**, which is also how the gold answers are stored.
+- `greater` returns the string `"yes"` or `"no"`. Such a result cannot be used as a number in a later step.
+- Two answers match only when they are **exactly equal after rounding**: the official script has no
+  numerical tolerance beyond that rounding.
+
+## When a program is wrong
+
+A model's output can fail in several ways. The executor reports the **kind** of failure instead of
+raising an anonymous error, so the evaluation can count them separately.
+
+```{python}
+bad = {
+    "empty output": "",
+    "unbalanced parenthesis": "add(1, 2",
+    "one argument": "add(1)",
+    "nested call": "add(1, add(2, 3))",
+    "unknown operator": "sqrt(4, 2)",
+    "not a number": "add(one, 2)",
+    "reference to a later step": "add(1, 2), add(#1, 2)",
+    "division by zero": "divide(1, 0)",
+    "complex result": "exp(-8, 0.5)",
+}
+rows = []
+for label, p in bad.items():
+    value, kind = executor.try_execute(p)
+    rows.append({"failure": label, "program": p, "error kind": kind})
+pd.DataFrame(rows)
+```
+
+`try_execute` returns `(value, None)` on success and `(None, kind)` on failure and never raises for a
+bad program. An invalid output counts as a wrong answer in our headline metric.
+
+## Do the gold programs reproduce the gold answers?
+
+The strongest test of the executor is the data: every turn's `turn_program` must execute to its
+`exe_ans_list` entry.
+
+```{python}
+rows = []
+for split in ["train", "dev"]:
+    n = mismatches = 0
+    for conv in data.load_split(split):
+        a = conv["annotation"]
+        for prog, gold in zip(a["turn_program"], a["exe_ans_list"]):
+            n += 1
+            if not executor.answers_match(executor.try_execute(prog)[0], gold):
+                mismatches += 1
+    rows.append({
+        "split": split,
+        "turns": n,
+        "mismatches": mismatches,
+        "match rate": 1 - mismatches / n
+    })
+result = pd.DataFrame(rows)
+assert (result.mismatches == 0).all()
+result
+```
+
+There are no mismatches, so there is nothing to explain. The same check runs in `pytest`
+(`tests/test_executor.py`), along with unit tests for each operation and error kind.
+
+## Where our executor differs from the official one
+
+- **`table_*` operations are rejected** as unknown operators. The authors' code supports
+  `table_sum`, `table_average`, `table_max` and `table_min`, but no ConvFinQA gold program uses them.
+- **Errors are reported by kind.** The official function returns a single invalid flag.
+- **Syntax is checked with a fixed pattern.** The official code checks structure by token position.
+  Ours parses each step as `operation(argument, argument)` and rejects, for example, nested calls and
+  missing commas. All gold programs pass, so this does not change a gold score. We have not compared
+  the two parsers on malformed model output.
+- **`#k` must refer to an earlier step.** A reference to itself or a later step is invalid. The
+  official code reaches the same result through a lookup error.
+
+::: {.callout-note title="Under the hood"}
+The executor never looks at the page, so it cannot tell whether a number in a program was copied from
+the text or invented. The paper's own model could only copy numbers from its input. Our fine-tuned
+model writes freely, and only the constrained-decoding chapter tests whether restricting it helps.
+:::
+
+::: {.callout-tip title="Further reading"}
+The official execution and evaluation code is `code/utils/general_utils.py` in the ConvFinQA
+repository (<https://github.com/czyssrs/ConvFinQA>). The paper [@chen2022convfinqa] defines the
+operations and the metrics.
+:::

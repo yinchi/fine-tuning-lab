@@ -431,7 +431,7 @@ Mark each item `[x]` when it's done and verified. Add a short note (run id, head
 
 - [x] 1.1 Environment: uv project, Quarto 1.10.19, kernel, git + private GitHub repo `yinchi/fine-tuning-lab`, `PLAN.md`/`CLAUDE.md` committed. Chapter renders: GB10, CUDA 13.2 everywhere, bf16 matmul OK, torch 2.14.1+cu132.
 - [x] 1.2 Data downloaded and explored; `max_length` chosen. Train 3,037 convs / 11,104 turns, dev 421 / 1,490; test has no labels. Longest full conversation 3,460 tokens, so `max_length` = 3584 (saved to `artifacts/processed/lengths.json`; tied to the Qwen3 tokenizer).
-- [ ] 1.3 Executor; 100% gold match (or mismatches explained)
+- [x] 1.3 Executor; 100% gold match. `executor.py` reproduces all 11,104 train and 1,490 dev gold answers exactly (0 mismatches, 45 tests pass); errors reported by kind.
 - [ ] Artifact system (`artifacts.py`, `test_artifacts.py`): needed before the first heavy cell (2.4)
 - [ ] 2.1 From text to tokens
 - [ ] 2.2 Anatomy of Qwen3-4B
