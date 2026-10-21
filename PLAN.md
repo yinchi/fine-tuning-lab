@@ -421,7 +421,7 @@ This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters
 ## Progress tracker
 Mark each item `[x]` when it's done and verified. Add a short note (run id, headline number) where useful.
 
-- [ ] 1.1 Environment: uv project, Quarto, kernel, git + private GitHub repo, `PLAN.md`/`CLAUDE.md` committed. **Done so far:** `uv sync` OK (torch 2.14.1+cu132, CUDA 13.2, GB10, bf16 matmul OK); Quarto 1.10.19 + kernel `fine-tuning-lab` installed. **Left:** git init + GitHub repo, `docs/_quarto.yml`, `101_environment_setup.qmd`.
+- [x] 1.1 Environment: uv project, Quarto 1.10.19, kernel, git + private GitHub repo `yinchi/fine-tuning-lab`, `PLAN.md`/`CLAUDE.md` committed. Chapter renders: GB10, CUDA 13.2 everywhere, bf16 matmul OK, torch 2.14.1+cu132.
 - [ ] 1.2 Data downloaded and explored; `max_length` chosen
 - [ ] 1.3 Executor; 100% gold match (or mismatches explained)
 - [ ] 2.1 From text to tokens
@@ -455,6 +455,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-20: Added Part 2 Foundations as teaching material, with "Under the hood" links from the experiment chapters.
 - 2026-10-20: Private GitHub repo `ycchan-mumu/fine-tuning-lab`; TensorBoard for tracking.
 - 2026-10-20: Project moved to the personal Linux account. The GitHub repo is now `yinchi/fine-tuning-lab` (private), replacing `ycchan-mumu/fine-tuning-lab`. Quarto is installed under `~/.local/opt/quarto`, symlinked into `~/.local/bin`.
+- 2026-10-20: In VS Code, the Quarto extension exports `QUARTO_PYTHON` from the selected Python interpreter, overriding `docs/_environment*`. A bare interpreter made re-renders fail with `No module named 'yaml'`. The committed `.vscode/settings.json` selects `.venv`; no `_environment` file is used.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.

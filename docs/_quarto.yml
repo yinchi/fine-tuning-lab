@@ -1,0 +1,29 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "Fine-tuning lab: LLMs on ConvFinQA"
+  author: "Yin-Chi Chan"
+  chapters:
+    - index.qmd
+    - part: "Setup & data"
+      chapters:
+        - 101_environment_setup.qmd
+    - part: "Appendices"
+      chapters:
+        - 902_references.qmd
+
+number-sections: false
+bibliography: references.bib
+
+execute:
+  freeze: auto
+
+jupyter: fine-tuning-lab
+
+format:
+  html:
+    theme: cosmo
+    code-fold: true
+    code-tools: true

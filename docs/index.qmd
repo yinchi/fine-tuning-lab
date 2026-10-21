@@ -1,0 +1,9 @@
+---
+title: "Preface"
+---
+
+This book is a hands-on lab for learning LLM fine-tuning with Hugging Face, using the ConvFinQA
+conversational question-answering task [@chen2022convfinqa]. It explains how models work, runs the
+experiments, and records the results.
+
+The full roadmap lives in `PLAN.md` in the repository root.

@@ -16,3 +16,6 @@ docs/.quarto/
 # Editors / OS
 .ipynb_checkpoints/
 .DS_Store
+
+# Machine-specific Quarto env (absolute QUARTO_PYTHON)
+docs/_environment.local
