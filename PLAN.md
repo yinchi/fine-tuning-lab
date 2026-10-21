@@ -370,6 +370,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
 **3.6 Constrained decoding** (`306_constrained_decoding.qmd`, HEAVY)
 This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters, and the §3.4 evaluation (predicted history; greedy; one attempt; invalid counts as wrong).
 - **Under the hood:** a grammar is a logits processor (see 2.1). Show the mask at one decoding step: which tokens are allowed vs. what the model would have picked.
+- **Observation, not an assumption:** with the Qwen3-4B-Instruct-2507 tokenizer, every DSL operator in the gold programs is a single token, bare or with a leading space. This holds for all 9,775 operator occurrences in the 8,981 unique train and dev programs, and for all 12,806 occurrences inside the chat-formatted conversations; there are 11 distinct token strings for the 6 operators, and `exp` only ever appears with the leading space. It makes the operator-position mask small and easy to show. Grammars are written at the character level and must not depend on it: the model may emit any token sequence, and another tokenizer or base model may split operators differently. A chapter that uses the fact asserts it in a cell or test.
 - **Syntaxes:**
   - **DSL:** least familiar, so the constraint should matter most.
   - **Python subset:** the same subset the safe evaluator accepts.
@@ -433,7 +434,7 @@ Mark each item `[x]` when it's done and verified. Add a short note (run id, head
 - [x] 1.2 Data downloaded and explored; `max_length` chosen. Train 3,037 convs / 11,104 turns, dev 421 / 1,490; test has no labels. Longest full conversation 3,460 tokens, so `max_length` = 3584 (saved to `artifacts/processed/lengths.json`; tied to the Qwen3 tokenizer).
 - [x] 1.3 Executor; 100% gold match. `executor.py` reproduces all 11,104 train and 1,490 dev gold answers exactly (0 mismatches, 45 tests pass); errors reported by kind.
 - [ ] Artifact system (`artifacts.py`, `test_artifacts.py`): needed before the first heavy cell (2.4)
-- [ ] 2.1 From text to tokens
+- [x] 2.1 From text to tokens to next-token probabilities. Qwen3-4B-Instruct-2507: 151,669-token vocabulary, digits are single tokens; the trace on the AAPL turn-1 prompt (1,125 tokens) matches `model(...).logits` exactly; untuned top token is a code fence (p=0.614), gold first token `5` has p=0.024 (rank 5); greedy is repeatable, same-seed sampling is repeatable; a digits-only mask makes greedy output `5363`.
 - [ ] 2.2 Anatomy of Qwen3-4B
 - [ ] 2.3 From base model to instruct model
 - [ ] 2.4 Probing the untuned model; val gold-program NLL recorded
@@ -470,6 +471,8 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-21: No `freeze: true`. Tested in a scratch book: a frozen chapter ignores prose edits in a whole-book render, and rendering it directly re-executes every cell. All chapters use `freeze: auto`. Heavy cells (`#HEAVY`) load results from `artifacts/<run_id>/` (DONE + matching `config.json`) and raise an error if they are missing, unless `RUN_HEAVY=1` or `force=True`. This supersedes the 2026-10-20 decision that heavy chapters use `freeze: true`.
 - 2026-10-21: Artifact system replaces the `DONE` + `force=True` guard (this supersedes the previous entry's mechanism, not its `freeze: auto` decision). Named artifacts with string deps and name templates in a registry; per-artifact `node.json` with config, dependency hashes and content hashes; **recursive** freshness; light artifacts build in-kernel, heavy ones in a subprocess only with `RUN_HEAVY=1` (or the `build` command); builders own their models and use only parameters and dependency handles; chapter records plus `refresh` re-render chapters whose artifacts changed. DVC was considered and rejected for now: the helper keeps training calls visible in chapters and needs no new tool.
 - 2026-10-21: The recommended build is a full-book render with `RUN_HEAVY=1`, wrapped in `tmux` or `screen`; the artifact freshness check decides which heavy artifacts to rebuild. `refresh` runs automatically through Quarto's `pre-render` hook (tested in a scratch project: it runs before `render` and at preview start, inherits `RUN_HEAVY`, and runs from the project directory under the system `python3`, so the hook is a shim that starts the venv's Python). A frozen chapter is never executed, so without `refresh` a stale artifact in an unchanged chapter would go unnoticed.
+- 2026-10-21: Evaluation and generation code always passes `do_sample=False` (and `temperature=None, top_p=None, top_k=None`) for greedy decoding, and sets every sampling setting explicitly otherwise. Qwen3-4B-Instruct-2507 ships generation defaults of temperature 0.7, top_p 0.8, top_k 20, so a bare `generate()` samples.
+- 2026-10-21: Math in the book stays as LaTeX through Quarto's default MathJax 4 from a CDN. Vendoring MathJax is deferred until offline reading matters. Single symbols such as a minus infinity may be written as plain text.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.

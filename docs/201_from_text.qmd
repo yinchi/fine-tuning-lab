@@ -1,0 +1,462 @@
+---
+title: "From text to tokens to next-token probabilities"
+---
+
+**You will learn:**
+
+- how a language model turns text into integers called *tokens*, and what that does to ConvFinQA's numbers;
+- how to read a tokenization, using a colour-coded view of real questions, table rows and programs.
+
+A language model never sees letters or digits. It sees a sequence of integers. The **tokenizer** splits
+text into pieces from a fixed vocabulary and replaces each piece by its position in that vocabulary.
+This chapter works with the model we fine-tune later, `Qwen/Qwen3-4B-Instruct-2507`.
+
+## From text to tokens
+
+```{python}
+from transformers import AutoTokenizer
+
+from convfinqa import data
+from convfinqa.viz import show_tokens, tokenize
+
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+print(f"vocabulary size: {len(tok):,}")
+```
+
+The helper `show_tokens` colours each token. Hover over a token to see its id. Examples come from the
+`train` split.
+
+### A question
+
+```{python}
+conv = {c["id"]: c for c in data.load_split("train")}[
+    "Single_AAPL/2002/page_23.pdf-1"
+]
+question = conv["annotation"]["dialogue_break"][0]
+show_tokens(tok, question)
+```
+
+Common words are single tokens, and the space in front of a word belongs to the word: `␣was`, `␣the`.
+The year `2001` is not one token. It is four.
+
+### A table row
+
+```{python}
+row = data.table_to_markdown(conv["table"]).splitlines()[2]
+show_tokens(tok, row)
+```
+
+The symbols and separators `|`, `$` and the spaces around them cost tokens too. A table of a few dozen
+cells is already hundreds of tokens, which is why a whole report page makes a long prompt.
+
+### Numbers
+
+```{python}
+for text in ["206588", "0.14136", "1,234.5", "28%", "$ 5742"]:
+    display(show_tokens(tok, text))
+```
+
+Every digit is its own token. The same digits give the same tokens wherever they appear:
+
+```{python}
+display(show_tokens(
+    tok,
+    "net cash from operating activities was 181001 in 2008, so 181001 is the base"
+))
+```
+
+The model never sees `181001` as one unit, only the digit sequence `1 8 1 0 0 1`. This follows from
+the tokenizer's design (see below), and it is one reason why we do not ask the model to do arithmetic
+itself. It writes a program, and the executor from the previous chapter computes the number.
+
+### A gold program
+
+```{python}
+show_tokens(tok, conv["annotation"]["turn_program"][-1])
+```
+
+The DSL was not designed for this tokenizer. Some pieces merge in surprising ways, such as `),` and
+`(#`, and an operator takes its leading space with it (`␣divide`). Fine-tuning teaches the model to
+produce exactly this token sequence.
+
+### Another tokenizer, for contrast
+
+GPT-2's tokenizer has no rule that isolates digits. Its vocabulary merges digits that were frequent
+together in its training text, so the same number can be cut differently in different places.
+
+```{python}
+gpt2 = AutoTokenizer.from_pretrained("gpt2")
+for text in ["206588", " 181001", "0.14136"]:
+    print(f"GPT-2: {text!r}")
+    display(show_tokens(gpt2, text))
+    print(f"Qwen3: {text!r}")
+    display(show_tokens(tok, text))
+```
+
+For arithmetic this is awkward either way, but Qwen's digit-by-digit split is at least consistent: a
+digit is always one token, whatever its neighbours are.
+
+::: {.callout-note title="Under the hood"}
+Qwen's tokenizer is a **byte-level BPE** tokenizer. Its vocabulary was built by starting from single
+bytes and repeatedly merging the most frequent adjacent pairs in a large text corpus. Before any
+merging applies, a **pre-tokenizer** first splits the text with a regular expression. Part of Qwen's
+expression is `\p{N}`, which matches a single digit, so a digit can never merge with its neighbours.
+```{python}
+import json
+
+pre = json.loads(tok.backend_tokenizer.to_str())\
+    ["pre_tokenizer"]["pretokenizers"][0]["pattern"]["Regex"]
+print(pre)
+```
+:::
+
+## Tracing one prediction
+
+Now we follow a single prediction through the model. The model's only job is to read a sequence of
+tokens and say how likely each possible **next** token is. We take the first turn of the conversation
+from above, formatted as a chat, and stop right where the assistant's answer begins.
+
+```{python}
+import torch
+from transformers import AutoModelForCausalLM
+
+from convfinqa.formatting import conversation_messages
+
+# the system prompt and the first user turn
+messages = conversation_messages(conv)[:2]
+
+prompt = tok.apply_chat_template(
+    messages, tokenize=False, add_generation_prompt=True
+)
+
+print("...", repr(prompt[-70:]))
+gold = conv["annotation"]["turn_program"][0]
+print("gold answer:", gold)
+```
+
+The prompt ends with `<|im_start|>assistant` and a newline: the model is about to write its answer. The
+gold answer is `5363`, so the right first token is `5`. We load the model in bf16 on the GPU (the first
+run downloads about 8 GB).
+
+```{python}
+name = "Qwen/Qwen3-4B-Instruct-2507"
+model = AutoModelForCausalLM.from_pretrained(name, dtype=torch.bfloat16)\
+    .to("cuda").eval()
+cfg = model.config
+print(f"{cfg.num_hidden_layers} layers, hidden size {cfg.hidden_size}, vocabulary rows {cfg.vocab_size:,}")
+```
+
+### Token ids
+
+```{python}
+ids = tok(prompt, add_special_tokens=False, return_tensors="pt")\
+    ["input_ids"].to("cuda")
+print("shape:", tuple(ids.shape), "(batch, tokens)")
+print(
+    "last five ids:",
+    ids[0, -5:].tolist(),
+    [tok.decode([i]) for i in ids[0, -5:]]
+)
+```
+
+### Embeddings
+
+Each id selects one row of a big table, the **embedding matrix**, which has one row per vocabulary entry.
+The row is a vector of 2,560 numbers that the model learned for that token.
+
+```{python}
+with torch.no_grad():
+    emb = model.model.embed_tokens(ids)
+print("embedding matrix:", tuple(model.model.embed_tokens.weight.shape))
+print("after lookup:", tuple(emb.shape), emb.dtype, "(batch, tokens, hidden)")
+```
+
+### The transformer
+
+The vectors pass through 36 transformer layers. Each layer adds an update to every position's vector, so the vector is a running sum that every layer nudges, and its shape never changes. What happens inside a layer, attention across positions and a small network at each position, is the subject of the next chapter. For now the stack is a black box that maps vectors to vectors. We feed the embeddings from the previous step straight in. `output_hidden_states` keeps the vectors at
+every stage: entry 0 is the embeddings we put in, entry *k* is what layer *k* produced, and the last
+entry is the transformer's final output, which is what the next step uses.
+
+```{python}
+with torch.no_grad():
+    out = model.model(inputs_embeds=emb, output_hidden_states=True)
+hidden = out.last_hidden_state
+print("hidden states kept:", len(out.hidden_states), "= embeddings + 36 layers")
+print("final hidden state:", tuple(hidden.shape))
+
+# the last entry is the final output, and feeding ids instead
+# gives the same result: the model simply does the embedding lookup itself
+assert torch.equal(out.hidden_states[-1], hidden)
+with torch.no_grad():
+    assert torch.equal(hidden, model.model(input_ids=ids).last_hidden_state)
+```
+
+The meaning of a position's vector changes on the way through. It starts as the embedding of token *i*.
+By the end it encodes a prediction for the token at position *i* + 1.
+
+### Logits
+
+The last step turns each position's vector into one score per vocabulary entry. These scores are the
+**logits**. A matrix with 151,936 rows, the language-model head, does the multiplication.
+
+```{python}
+with torch.no_grad():
+    logits = model.lm_head(hidden)
+print("logits:", tuple(logits.shape), "(batch, tokens, vocabulary rows)")
+```
+
+In this model the head's weights are the embedding matrix itself (more on that at the end). So the
+score of a token is the dot product of the final vector with that token's embedding: the final vector
+scores highest on the tokens it points toward.
+
+```{python}
+E = model.model.embed_tokens.weight                 # one embedding per vocabulary row
+manual = hidden[0, -1].float() @ E.float().T        # dot product with every token's embedding
+head = logits[0, -1].float()
+diff = (manual - head).abs().max().item()
+print(f"logits range from {head.min().item():.1f} to {head.max().item():.1f}")
+print(f"largest difference between the two: {diff:.3f}")
+assert diff < 0.07 and manual.argmax() == head.argmax()
+```
+
+The two agree up to rounding. The head stores its logits in bf16, whose spacing near 20 is 0.125, so
+a difference of up to half that, about 0.06, is just the rounding, and the top token is the same.
+
+Every position gets its own row of logits: position *i* scores the token that should come at *i* + 1.
+For writing an answer only the **last** position matters, because the prompt is already given.
+(Training uses all of them; see the chapter on how fine-tuning works.) We check that our step-by-step path reproduces the
+model's own forward pass exactly:
+
+```{python}
+with torch.no_grad():
+    assert torch.equal(logits, model(input_ids=ids).logits)
+last = logits[0, -1].float()
+print("scores for the next token:", tuple(last.shape))
+```
+
+### Softmax and the prediction
+
+Logits are arbitrary real numbers. **Softmax** turns them into probabilities: it exponentiates each
+score and divides by the total, so every value is positive and they sum to 1.
+
+```{python}
+probs = torch.softmax(last, dim=-1)
+best = int(probs.argmax())
+gold_id = tok(gold, add_special_tokens=False)["input_ids"][0]
+rank = int((probs > probs[gold_id]).sum()) + 1
+
+print(f"probabilities sum to {probs.sum().item():.4f}")
+print(f"most likely next token: {tok.decode([best])!r} with probability {probs[best]:.3f}")
+print(f"the gold first token {tok.decode([gold_id])!r}: probability {probs[gold_id]:.3f}, rank {rank}")
+```
+
+The untuned model does not know our DSL. It starts a Markdown code block and gives the correct first
+digit a few percent. Nothing in the pipeline was wrong; the model simply has not seen this task. Teaching
+it is what fine-tuning does, and we will measure this exact quantity on whole conversations in the chapter that probes the untuned model.
+
+### The whole path
+
+```{python}
+import pandas as pd
+
+pd.DataFrame(
+    [
+        (
+            "token ids",
+            tuple(ids.shape),
+            "integers from the tokenizer"
+        ),
+        (
+            "embeddings",
+            tuple(emb.shape),
+            "one learned vector per token"
+        ),
+        (
+            "after 36 layers",
+            tuple(hidden.shape),
+            "vectors that have read the whole prompt"
+        ),
+        (
+            "logits",
+            tuple(logits.shape),
+            "one score per vocabulary row, at every position"
+        ),
+        (
+            "last position",
+            tuple(last.shape),
+            "scores for the next token"
+        ),
+        (
+            "softmax",
+            tuple(probs.shape),
+            "probabilities, summing to 1"
+        ),
+    ],
+    columns=["stage", "shape", "meaning"],
+)
+```
+
+::: {.callout-note title="Under the hood"}
+The vocabulary has 151,669 tokens but the matrices have 151,936 rows. The extra rows are padding that
+makes the sizes friendlier to the GPU. They correspond to no token:
+
+```{python}
+n_tokens = len(tok)
+print(f"probability on the {cfg.vocab_size - n_tokens} padding rows: {probs[n_tokens:].sum().item():.2e}")
+```
+
+The embedding matrix and the language-model head are also **the same tensor** in this model (the
+config says `tie_word_embeddings`), so the table that turns a token into a vector is reused to turn a
+vector back into token scores:
+
+```{python}
+print(
+    "tied:",
+    cfg.tie_word_embeddings,
+    "| same memory:",
+    model.lm_head.weight.data_ptr() == model.model.embed_tokens.weight.data_ptr()
+)
+```
+:::
+
+## The distribution over next tokens
+
+The softmax output is a whole **probability distribution** over the vocabulary, not just a winner. Here
+are the ten most likely next tokens for the prompt above, and how they change with the **temperature**
+*T*: before the softmax, the logits are divided by *T*.
+
+```{python}
+#| fig-cap: "The ten most likely next tokens at three temperatures."
+from convfinqa.viz import next_token_stats, plot_next_token
+
+plot_next_token(tok, last, temperatures=(0.3, 1.0, 2.0), k=10);
+```
+
+- At *T* = 1 the logits are used as they are. This is the model's own distribution.
+- A low *T* sharpens it: the leader takes almost everything. As *T* approaches 0, the result is just the
+  argmax.
+- A high *T* flattens it: the tail of unlikely tokens gains probability.
+
+The **entropy** in the panel titles summarises the spread: it is 0 when one token has all the probability,
+and grows as the distribution flattens. The same numbers as a table:
+
+```{python}
+pd.DataFrame(
+    {f"T = {t}": next_token_stats(last, t, 10) for t in (0.3, 1.0, 2.0)}
+).T.round(3)
+```
+
+At *T* = 0.3 the top token holds almost all the probability. At *T* = 2 the ten tokens shown hold only
+about 80% of it, and the gold token `5` has more than doubled its probability, from 0.024 to 0.055. The
+model is not any better informed; the distribution is just less sure of itself.
+
+## Choosing a token: greedy and sampling
+
+To write more than one token, the model repeats the trace: it picks a token, appends it to the input,
+and predicts again. How it picks decides everything about the output.
+
+- **Greedy decoding** always takes the most likely token. Nothing is random, so the same input gives the
+  same output.
+- **Sampling** draws the next token at random from the (temperature-adjusted) distribution, so the
+  output varies from run to run. A random-number **seed** makes a sampled run repeatable.
+
+Before we try both, one pitfall. The model ships with default generation settings:
+
+```{python}
+gc = model.generation_config
+print({k: getattr(gc, k) for k in ("do_sample", "temperature", "top_p", "top_k")})
+```
+
+These are sampling settings, so `model.generate()` with no arguments **samples**. Whenever we want greedy
+decoding we pass `do_sample=False` explicitly, and for sampling we pass every setting explicitly too.
+
+```{python}
+def continuation(max_new_tokens=14, **kwargs):
+    with torch.no_grad():
+        out = model.generate(ids, max_new_tokens=max_new_tokens, **kwargs)
+    return tok.decode(out[0, ids.shape[1]:])
+
+greedy = dict(do_sample=False, temperature=None, top_p=None, top_k=None)
+sampled = dict(do_sample=True, temperature=1.0, top_p=1.0, top_k=0)
+
+rows = [
+    ("greedy", "-", continuation(**greedy)),
+    ("greedy again", "-", continuation(**greedy))
+]
+for seed in (0, 1, 2, 0):
+    torch.manual_seed(seed)
+    rows.append(("sampled", seed, continuation(**sampled)))
+assert rows[0][2] == rows[1][2]   # greedy is repeatable
+assert rows[2][2] == rows[5][2]   # so is sampling with the same seed
+
+# pandas cuts longer cells at 50 characters
+pd.set_option("display.max_colwidth", 80)
+
+pd.DataFrame(rows, columns=["decoding", "seed", "first 14 tokens"])
+```
+
+Greedy gives the same text twice. Sampling gives different text for different seeds, and the same text
+again for the same seed. The untuned model's greedy answer is not our DSL, but it does contain the right
+number. It is also the reason this matters later: **greedy evaluation is deterministic, so the evaluation
+chapter has no generation seed to report**. Only the training seed varies between runs.
+
+::: {.callout-note title="Deterministic, but only for the same setup"}
+Greedy decoding is deterministic given the same input, model weights, software and hardware. Running
+the same prompt in a different batch size, or on a different GPU, can change tiny numerical values in
+bf16 and could flip a near-tie. We evaluate with a fixed setup for this reason.
+:::
+
+## Editing the logits
+
+A **logits processor** is a function that edits the logits after the model produces them and before
+the softmax. The simplest edit is a **mask**: adding $-\infty$ to a token's logit makes its probability
+exactly 0, and the probabilities of the remaining tokens renormalise to sum to 1.
+
+Say we know the answer to this question is a number, and we allow only the ten digit tokens:
+
+```{python}
+from convfinqa.constrained import AllowedTokens
+
+digit_ids = [
+    tok(str(d), add_special_tokens=False)["input_ids"] for d in range(10)
+]
+assert all(len(x) == 1 for x in digit_ids)
+digit_ids = [x[0] for x in digit_ids]
+
+processor = AllowedTokens(digit_ids)
+masked = processor(ids, last[None])[0]
+p_masked = torch.softmax(masked, dim=-1)
+top = p_masked.topk(3)
+
+print(
+    f"P('5') before the mask: {probs[gold_id]:.3f}, after: {p_masked[gold_id]:.3f}"
+)
+print(
+    "top three now:",
+    [
+        (tok.decode([int(i)]), round(v, 3))
+        for v, i in zip(top.values.tolist(), top.indices)
+    ]
+)
+```
+
+The code fence and `program` are gone, and the model's own ranking of the digits decides the rest. Using
+the processor inside `generate`:
+
+```{python}
+from transformers import LogitsProcessorList
+
+print(repr(continuation(
+    max_new_tokens=4,
+    logits_processor=LogitsProcessorList([processor]),
+    **greedy
+)))
+```
+
+The model writes `5363`, the gold answer. The mask taught the model nothing: it only removed the
+options it would have preferred, and the digits it already ranked highest did the rest. That works
+here because the right answer was already the model's favourite digit sequence, and it is not
+guaranteed in general. This mask is also far too crude. It can never end the answer, because the
+end-of-turn token is not allowed, and it cannot write an operator or a parenthesis. A useful
+constraint changes the allowed set at every step depending on what has been written so far. That is a
+**grammar**, the subject of the constrained-decoding chapter.
