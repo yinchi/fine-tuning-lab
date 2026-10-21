@@ -1,0 +1,401 @@
+---
+title: "What ConvFinQA looks like"
+---
+
+**You will learn:**
+
+- how a ConvFinQA conversation is built from one page of an earnings report;
+- what the questions, programs and answers look like, for both conversation types;
+- how big the data is, and how long a full conversation gets in tokens, which sets `max_length` for training.
+
+ConvFinQA [@chen2022convfinqa] turns FinQA questions about earnings-report pages into multi-turn
+conversations. Each page has text before a table, the table, and text after it. A conversation asks a
+chain of questions about that page, and each turn has a small **program** in a domain-specific
+language (DSL) that computes the answer.
+
+## Getting the data
+
+The code lives in `src/convfinqa/data.py`. The download clones the authors' repository and unzips
+`data.zip` into `data/raw/`, and does nothing if the data is already there.
+
+```{python}
+import json
+from collections import Counter
+from pathlib import Path
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from convfinqa import data
+
+data.download_data()
+
+splits = {
+    name: data.load_split(name)
+    for name in ["train", "dev", "test", "train_turn", "dev_turn"]
+}
+
+pd.DataFrame({
+    "rows": {k: len(v) for k, v in splits.items()},
+    "has labels": {
+        k: "annotation" in v[0] and "turn_program" in v[0]["annotation"]
+        for k, v in splits.items()
+    }
+})
+```
+
+The official test split has questions but no answers, so **we use `dev` as our test set**. For tuning we
+carve a validation split out of `train` in a later chapter.
+The `*_turn` files hold the same conversations unrolled to one row per turn. We work from the
+conversation files and unroll ourselves, which the counts above confirm gives the same number of turns:
+
+```{python}
+n_turns = {
+    s: sum(len(c["annotation"]["dialogue_break"])
+    for c in splits[s]) for s in ["train", "dev"]
+}
+
+assert n_turns["train"] == len(splits["train_turn"])\
+    and n_turns["dev"] == len(splits["dev_turn"])
+
+n_turns
+```
+
+## One record
+
+A conversation is a JSON object. The fields we use are `pre_text`, `table`, `post_text`, and under
+`annotation`: `dialogue_break` (the questions), `turn_program`, `exe_ans_list` (the answers) and
+`qa_split` (see Type II below).
+
+```{python}
+by_id = {c["id"]: c for c in splits["train"]}
+conv_I = by_id["Single_AAPL/2002/page_23.pdf-1"]
+
+print("Top-level keys of the conversation:")
+print(sorted(conv_I.keys()))
+
+print("Annotation keys of the conversation:")
+print(sorted(conv_I["annotation"].keys()))
+```
+
+## A Type I conversation
+
+Type I conversations decompose **one** FinQA question into a chain of turns. First the page the model
+sees: the text before the table (shortened here), the table as markdown, and the text after.
+
+```{python}
+from IPython.display import Markdown
+
+def show_page(conv, n=300):
+    pre = " ".join(conv["pre_text"])
+    post = " ".join(conv["post_text"])
+    return Markdown(
+        f"*pre_text ({len(conv['pre_text'])} sentences):* …{pre[-n:]}\n\n"
+        + data.table_to_markdown(conv["table"])
+        + f"\n\n*post_text ({len(conv['post_text'])} sentences):* {post[:n]}…"
+    )
+
+show_page(conv_I)
+```
+
+Then the conversation, one turn per line: question, gold program, and the number the program computes.
+
+```{python}
+print(data.format_conversation(conv_I))
+```
+
+The first turns just **select a number** from the table. Later turns compute with them. The last turn
+restates the full calculation, using `#0` for "the result of step 0" so the program stays self-contained.
+
+## A Type I conversation with a garbled table
+
+Not every page is this clean. Here is another Type I conversation, whose table header is garbled in
+the dataset.
+
+```{python}
+conv_garbled = by_id["Single_JKHY/2009/page_28.pdf-3"]
+show_page(conv_garbled)
+```
+
+::: {.callout-warning title="The header of this table is garbled in the dataset"}
+The raw `table_ori` shows what went wrong. The header was split across two rows:
+
+```{python}
+for row in conv_garbled["table_ori"][:3]:
+    print(row)
+```
+
+Read together, the first two rows are a single header row, `['', 'Year ended June 30, 2009', '2008',
+'2007']`, whose first label was extracted on a separate line from the other two. The cleaned `table`
+then built a header from the broken pieces: its columns repeat fragments of "year ended june 30 2009",
+and the year labels also show up in `pre_text` (the trailing `: 2009 2008 2007 .`). This is how the
+data ships, not a parsing error of ours.
+
+The model must work out that the columns are 2009, 2008 and 2007 from the table and the
+surrounding text, which is part of the task.
+:::
+
+```{python}
+print(data.format_conversation(conv_garbled))
+```
+
+Most tables are clean. The check below counts how many have repeated header cells:
+
+```{python}
+dup_header = sum(
+    len(set(c["table"][0])) < len(c["table"][0])
+    for c in splits["train"]
+)
+print(
+    f"{dup_header} of {len(splits['train'])} train tables repeat a header "
+    f"cell ({dup_header / len(splits['train']):.1%})"
+)
+```
+
+## A Type II conversation
+
+Type II conversations merge **two** FinQA questions about the same page. `qa_split` marks which turns
+belong to which: 0s, then 1s.
+
+```{python}
+conv_II = next(
+    c for c in splits["train"]
+    if data.conversation_type(c) == "II"
+    and len(c["annotation"]["dialogue_break"]) == 6
+)
+print(data.format_conversation(conv_II))
+print("qa_split:", conv_II["annotation"]["qa_split"])
+```
+
+## The DSL
+
+A program is a comma-separated list of steps, `op(arg, arg)`. A turn that only selects a number has
+a bare number as its program. The operations are `add`, `subtract`, `multiply`, `divide`, `exp` and
+`greater`. (The authors' code also lists FinQA's `table_sum`, `table_average`, `table_max` and
+`table_min`, but no ConvFinQA gold program uses them.) An argument is one of:
+
+- a **number literal** copied from the page, such as `206588` or `0.14136`, possibly with a `%`
+  sign, such as `19%`;
+- a **step reference** `#k`, the result of step *k*;
+- a **constant** from a fixed list.
+
+The chapter on the DSL and its executor covers the grammar and the executor in detail. Here we look
+at what makes an argument a literal or a constant, and how the paper's model decides what it may write.
+
+### Constants
+
+The constants are not read from the page. The authors' code defines a fixed list of 18, and every
+constant in the train and dev programs is in it:
+
+```{python}
+import re
+
+const_use = Counter(
+    c
+    for s in ["train", "dev"]
+    for conv in splits[s]
+    for p in conv["annotation"]["turn_program"]
+    for c in re.findall(r"const_\w+", p)
+)
+assert set(const_use) <= set(data.CONSTANTS)
+
+pd.Series(
+    {c: const_use.get(c, 0) for c in data.CONSTANTS},
+    name="uses (train + dev)"
+).to_frame().T
+```
+
+They are mostly scale factors and counts: `const_100` turns a ratio into a percentage,
+`const_1000` and `const_1000000` convert units, and small integers such as `const_3` count years for an
+average (the Type II example above ends with `divide(#1, const_3)`). The rule is by convention, not
+by whether the digits occur on the page: a number the question needs but does not read from the
+document is a constant, and the same digits read off the page are a literal.
+
+### Percentages and the executor
+
+The official executor (`str_to_num` in the authors' `general_utils.py`) strips commas and tries to
+read a float. If that fails and the string contains `%`, it removes the sign and divides by 100, so
+`19%` is evaluated as 0.19. A `const_` token is replaced by its number (`const_m1` is -1). The
+executor never looks at the page: whether a program may use `19%` at all is decided elsewhere.
+
+### What the paper's decoder may write
+
+FinQANet's generator [@chen2022convfinqa] is restricted: at each step it can emit an operator, a
+constant from the list, a step reference, or a number **copied from its input**. Its input is the
+question plus the context it is given (supporting text and table rows), split on spaces, and a token counts as a copyable number if, after
+removing commas, it parses as a number *or ends with `%`*. This is the rule, implemented in
+`data.copyable_numbers`:
+
+```{python}
+row = " ".join(conv_I["table"][-1])
+print(row)
+print(data.copyable_numbers(row))
+```
+
+This works because the page text is pre-tokenized: punctuation and symbols are separated from the
+surrounding text by spaces (`$ 103102`, `june 30 , 2009`, `( 2913 )`), so numbers can be extracted
+cleanly. The exception is `%`, which the data keeps attached to its number in the first form
+(`28%`) and also writes as a separate token in the parenthesised form (`( 28 % )`). The attached
+`28%` is a candidate. In the spaced form, `28` is a candidate and the lone `%` also passes the rule,
+which looks like an accidental quirk of the check.
+
+Whether our own models should be restricted this way is a separate question, taken up in the
+constrained-decoding chapter.
+
+## How big is it?
+
+```{python}
+rows = []
+for split in ["train", "dev"]:
+    for c in splits[split]:
+        for t in data.turns(c):
+            rows.append({
+                "split": split,
+                "id": c["id"],
+                "type": data.conversation_type(c),
+                "turn": t.index + 1,
+                "number_turn": data.is_number_turn(t.program),
+                "program": t.program
+            })
+df = pd.DataFrame(rows)
+
+per_conv = df.groupby(["split", "id", "type"]).size()\
+    .rename("turns").reset_index()
+
+summary = per_conv.groupby("split").agg(
+    conversations=("id", "count"),
+    turns=("turns", "sum"),
+    mean_turns=("turns", "mean")
+)
+
+summary["type II share"] = per_conv.assign(ii=per_conv.type == "II")\
+    .groupby("split").ii.mean()
+
+summary.round(2)
+```
+
+```{python}
+#| fig-cap: "Turns per conversation (train + dev) and the share of number-selection vs. program turns."
+fig, ax = plt.subplots(1, 2, figsize=(9, 3.2))
+pivot = per_conv.groupby(["turns", "type"]).size().unstack(fill_value=0)
+pivot.plot.bar(stacked=True, ax=ax[0], rot=0)
+
+ax[0].set(
+    xlabel="turns in conversation",
+    ylabel="conversations",
+    title="Conversation length"
+)
+
+share = df.groupby("split").number_turn.mean()
+
+share.rename("number-selection").to_frame().assign(program=1 - share)\
+    .plot.bar(stacked=True, ax=ax[1], rot=0)
+
+ax[1].set(ylabel="share of turns", title="Turn kind")
+plt.tight_layout()
+```
+
+The DSL operations are counted from the **new step each turn adds**: the last step of its program,
+since each program repeats the earlier steps.
+
+```{python}
+#| fig-cap: "How often each DSL operation is the new step of a turn (train)."
+ops = Counter()
+for p in df[(df.split == "train") & ~df.number_turn].program:
+    ops[data.split_steps(p)[-1].split("(")[0]] += 1
+pd.Series(ops).sort_values().plot.barh(figsize=(5, 2.5), xlabel="turns")
+plt.tight_layout()
+ops
+```
+
+## How long is a conversation in tokens?
+
+Training uses one sequence per **full conversation**: the system prompt, the page, and every question and
+answer. So the longest conversations set the memory we need. Turning a data row into token ids takes
+three steps:
+
+1. **Row to messages.** Our own choice, in `conversation_messages` (`src/convfinqa/formatting.py`): a
+   system prompt, then the page and the first question as the first user message, then the gold
+   program as the assistant's reply, and so on for every turn. The experiments part extends this
+   module for training.
+2. **Messages to one string.** The model's own **chat template**, which ships with its tokenizer. It
+   wraps each message in the special markers that the model was trained with.
+3. **String to token ids.** The tokenizer itself.
+
+Here is step 2 for the clean Type I conversation from above. The page text and table are cut out
+so the structure is visible.
+
+```{python}
+from transformers import AutoTokenizer
+
+from convfinqa.formatting import conversation_messages
+
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+
+text = tok.apply_chat_template(conversation_messages(conv_I), tokenize=False)
+cut = text.index("\n\nQuestion:")
+print(text[:260] + "\n[... page text and table omitted ...]" + text[cut:])
+```
+
+The `<|im_start|>` and `<|im_end|>` markers delimit each message and carry its role. The model learns
+to end every answer with `<|im_end|>`, and that token is part of what we train on.
+
+::: {.callout-note title="Which tokenizer, and why it matters"}
+The ConvFinQA paper doesn't prescribe a tokenizer; it predates our model. We use the tokenizer and
+chat template of the model we will fine-tune, `Qwen/Qwen3-4B-Instruct-2507`, so that the lengths
+below are what training will see. The numbers, and the `max_length` we derive from them, belong to
+this tokenizer and to our formatting. A different base model would give slightly different counts, so
+check them again before reusing the value.
+:::
+
+Now we count tokens for every conversation (step 3). `add_special_tokens=False` is needed because the
+template has already written the special tokens into the string.
+
+```{python}
+def n_tokens(conv):
+    text = tok.apply_chat_template(conversation_messages(conv), tokenize=False)
+    return len(tok(text, add_special_tokens=False)["input_ids"])
+
+lengths = pd.DataFrame([
+    dict(split=s, tokens=n_tokens(c)) for s in ["train", "dev"]
+    for c in splits[s]
+])
+lengths.groupby("split").tokens.describe(percentiles=[0.5, 0.9, 0.99, 0.999])\
+    .round(0)
+```
+
+```{python}
+#| fig-cap: "Tokens per full conversation."
+lengths.groupby("split").tokens.plot.hist(
+    bins=60, alpha=0.6, legend=True, figsize=(6, 3)
+)
+plt.xlabel("tokens in conversation")
+plt.tight_layout()
+```
+
+We pick `max_length` as the longest conversation rounded up to a multiple of 256, so that no training
+conversation is truncated. Truncating would cut off assistant tokens, which are exactly what the loss
+is computed on. The value is saved to a file for later chapters, since stages pass data through files.
+
+```{python}
+longest = int(lengths.tokens.max())
+max_length = -(-longest // 256) * 256
+out = Path("../artifacts/processed")
+out.mkdir(parents=True, exist_ok=True)
+
+(out / "lengths.json").write_text(
+    json.dumps({"longest": longest, "max_length": max_length})
+)
+print(f"longest conversation: {longest} tokens -> max_length = {max_length}")
+```
+
+::: {.callout-note title="Under the hood"}
+Notice how numbers like `206588` cost one token per digit in this tokenizer. The foundations part looks at
+tokenization properly. It is one reason the model writes a program and a Python executor does the
+arithmetic.
+:::
+
+::: {.callout-tip title="Further reading"}
+The ConvFinQA paper [@chen2022convfinqa] describes how the conversations were built and
+annotated. The dataset repository is at <https://github.com/czyssrs/ConvFinQA>.
+:::

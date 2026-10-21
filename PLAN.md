@@ -422,7 +422,7 @@ This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters
 Mark each item `[x]` when it's done and verified. Add a short note (run id, headline number) where useful.
 
 - [x] 1.1 Environment: uv project, Quarto 1.10.19, kernel, git + private GitHub repo `yinchi/fine-tuning-lab`, `PLAN.md`/`CLAUDE.md` committed. Chapter renders: GB10, CUDA 13.2 everywhere, bf16 matmul OK, torch 2.14.1+cu132.
-- [ ] 1.2 Data downloaded and explored; `max_length` chosen
+- [x] 1.2 Data downloaded and explored; `max_length` chosen. Train 3,037 convs / 11,104 turns, dev 421 / 1,490; test has no labels. Longest full conversation 3,460 tokens, so `max_length` = 3584 (saved to `artifacts/processed/lengths.json`; tied to the Qwen3 tokenizer).
 - [ ] 1.3 Executor; 100% gold match (or mismatches explained)
 - [ ] 2.1 From text to tokens
 - [ ] 2.2 Anatomy of Qwen3-4B
@@ -457,6 +457,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-20: Project moved to the personal Linux account. The GitHub repo is now `yinchi/fine-tuning-lab` (private), replacing `ycchan-mumu/fine-tuning-lab`. Quarto is installed under `~/.local/opt/quarto`, symlinked into `~/.local/bin`.
 - 2026-10-20: Native Quarto numbering replaces manual codes in titles (`number-sections: true`, appendices under `appendices:`). Chapter numbers run straight through the book and no longer match the `PCC` filenames or the plan's §P.C identifiers. This supersedes the numbering part of the 2026-10-20 decision on file naming.
 - 2026-10-20: In VS Code, the Quarto extension exports `QUARTO_PYTHON` from the selected Python interpreter, overriding `docs/_environment*`. A bare interpreter made re-renders fail with `No module named 'yaml'`. The committed `.vscode/settings.json` selects `.venv`; no `_environment` file is used.
+- 2026-10-21: Chapter environment variables live in a committed `docs/_environment` (`TQDM_DISABLE`, `HF_HUB_DISABLE_PROGRESS_BARS`, and a `PYTHONWARNINGS` filter for the tqdm IProgress warning). HTML code blocks default to `code-fold: show`; heavy cells can fold with `#| code-fold: true`. ConvFinQA facts for the DSL: 18 official constants; `%` literals evaluate as /100; the paper's generator can copy any page token that parses as a number or ends in `%`.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.

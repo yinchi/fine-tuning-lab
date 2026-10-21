@@ -38,7 +38,9 @@ nvcc = subprocess.run(
 ).stdout.strip().splitlines()[-2]
 
 smi_cuda = [
-    l for l in subprocess.run(["nvidia-smi"], capture_output=True, text=True).stdout.splitlines()
+    l for l in subprocess.run(
+        ["nvidia-smi"], capture_output=True, text=True
+    ).stdout.splitlines()
     if "CUDA Version" in l
 ][0].split("CUDA Version:")[1].split()[0]
 
@@ -81,6 +83,9 @@ from importlib.metadata import version
 import sys
 
 print("python", sys.version.split()[0])
-for pkg in ["torch", "transformers", "datasets", "accelerate", "peft", "trl", "xgrammar", "sympy", "tensorboard"]:
+for pkg in [
+    "torch", "transformers", "datasets", "accelerate", "peft",
+    "trl", "xgrammar", "sympy", "tensorboard"
+]:
     print(f"{pkg:13s}", version(pkg))
 ```

@@ -1,0 +1,5 @@
+# Quiet progress output in rendered chapters (the plan logs training to files and TensorBoard instead).
+TQDM_DISABLE=1
+HF_HUB_DISABLE_PROGRESS_BARS=1
+# tqdm.auto warns at import time that ipywidgets is missing; we don't use widget progress bars.
+PYTHONWARNINGS=ignore:IProgress not found

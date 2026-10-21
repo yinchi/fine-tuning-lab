@@ -10,6 +10,7 @@ book:
     - part: "Setup & data"
       chapters:
         - 101_environment_setup.qmd
+        - 102_what_convfinqa.qmd
   appendices:
     - 902_references.qmd
 
@@ -24,5 +25,5 @@ jupyter: fine-tuning-lab
 format:
   html:
     theme: cosmo
-    code-fold: true
+    code-fold: show
     code-tools: true
