@@ -49,7 +49,8 @@ context, and a small recurrent decoder writes the program [@chen2022convfinqa].
 3. **Growing prefixes can be reused.** Causal attention means a position's vector never depends on later
    tokens (we check this on the real model below). When a conversation grows by one turn, the earlier
    tokens do not need to be recomputed, and a training sequence containing a whole conversation covers
-   every prefix at once.
+   every prefix at once. The loss and its gradient on a whole conversation equal the sums over its
+   truncated prefixes; the project's tests check this numerically on a small model.
 
 ### What we cannot say
 
@@ -80,6 +81,12 @@ checks each row against the real model.
 ![One decoder-only stack, as in Qwen3-4B: embeddings, 36 identical layers, a final normalization and the output head. Each layer adds an attention update and a feed-forward update to a running sum, shown by the arrows that skip around each block. Position information enters through the attention blocks, not through the embeddings.](figures/decoder.svg){#fig-decoder fig-alt="Diagram of a decoder-only transformer. Token ids enter an embeddings block. A dashed box marked 36 times layers contains, from bottom to top, an RMSNorm, a causal self-attention block, an addition, an RMSNorm, a feed-forward block and a second addition, with residual arrows skipping each block. A box labelled token positions feeds the attention block from the left. Above the layers come a final RMSNorm, a linear output head and a softmax giving next-token probabilities."}
 
 ## Setting up
+
+::: {.callout-note title="Requirements"}
+This chapter runs the 4B model on a GPU and reads `artifacts/processed/lengths.json`, which the data
+chapter writes. The book is built once by its author, and the executed results are stored in
+`docs/_freeze/`, so a reader of the rendered book needs neither.
+:::
 
 We load the model and the example from the previous chapter: the first turn of the AAPL conversation, as
 a prompt of 1,125 tokens.
@@ -311,7 +318,7 @@ The shape does not change. Qwen3 normalizes **before** each block ("pre-norm"), 
 operation on each query and key vector inside attention, with its own learned scale of length
 `head_dim`.
 
-### Causal Self-Attention
+### Causal self-attention
 
 Attention is the only block in which positions exchange information. The settings that shape it:
 
@@ -414,13 +421,7 @@ $$
 
 That is, each pair is a point in a plane that is turned about the origin by $\alpha_{m,i}$.
 
-The pairs rotate at different speeds: small $i$ turns quickly with position, large $i$ slowly. The
-useful consequence comes from the fact that rotations compose: turning one vector by $m\theta_i$ and
-another by $n\theta_i$, and taking their dot product, is the same as turning one of them by
-$(n - m)\theta_i$ and leaving the other alone. So a rotated query at position $m$ and a rotated key at
-position $n$ have a dot product that depends only on the **offset** $m - n$, and attention sees
-relative distance. We can check
-that directly. First, how the rotation is computed. The rotation matrix is a sum of two simpler pieces,
+**How the rotation is computed.** The rotation matrix is a sum of two simpler pieces,
 
 $$
 \begin{pmatrix} \cos\alpha & -\sin\alpha \\ \sin\alpha & \cos\alpha \end{pmatrix}
@@ -433,9 +434,18 @@ $\cos\alpha \cdot (x_1, x_2) + \sin\alpha \cdot (-x_2, x_1)$. In the code, `rota
 to all $d/2$ pairs at once (it swaps the two halves of the vector and negates one), and the whole
 rotation is `x * cos + rotate_half(x) * sin`, with no matrix built. The tables `cos` and `sin` hold one
 row per position, with each pair's angle repeated for both halves of the vector so that the products
-line up. `rotated_dot` then rotates a query to position $m$ and a key to position $n$, using this
-formula, and returns their dot product. It is only a demonstration: the model does the same rotation
-inside every attention block, and then multiplies queries by keys.
+line up.
+
+**Why attention sees relative distance.** The pairs rotate at different speeds: small $i$ turns quickly
+with position, large $i$ slowly. The useful consequence comes from the fact that rotations compose:
+turning one vector by $m\theta_i$ and another by $n\theta_i$, and taking their dot product, is the same
+as turning one of them by $(n - m)\theta_i$ and leaving the other alone. So a rotated query at position
+$m$ and a rotated key at position $n$ have a dot product that depends only on the **offset** $m - n$,
+and attention sees relative distance.
+
+We can check this directly. The function `rotated_dot` rotates a query to position $m$ and a key to
+position $n$, using the formula above, and returns their dot product. It is only a demonstration: the
+model does the same rotation inside every attention block, and then multiplies queries by keys.
 
 ```{python}
 import math
@@ -602,7 +612,7 @@ The first 925 positions are untouched, even after 36 layers, and only the replac
 why earlier tokens never need to be recomputed when a conversation grows, and why a whole conversation
 can be trained in one pass.
 
-### Feed-forward Block
+### Feed-forward block
 
 After attention has mixed information across positions, the feed-forward network (FFN) processes each
 position **on its own**, with the same weights at every position. The library calls it `mlp`, so that
@@ -694,7 +704,7 @@ assert err < 0.02
 show_shapes(("layer input", "layer_input"), ("layer output", "layer"))
 ```
 
-### Linear Output Head
+### Linear output head
 
 After the last layer, one more RMSNorm, then the output head: a matrix multiplication that turns each
 position's vector of `hidden_size` numbers into `vocab_size` scores, the logits. For

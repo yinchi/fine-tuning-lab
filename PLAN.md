@@ -262,7 +262,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - User turn 1: the context (`pre_text`, the markdown table, `post_text`) followed by question 1.
   - Assistant turn 1: gold `turn_program[0]`.
   - Then user turn k: question k, and assistant turn k: gold `turn_program[k]`, for the rest of the conversation.
-- **Loss** is computed on **assistant tokens only**, all turns at once. The page is encoded once per conversation, not once per turn, which uses about 3–4× less compute than a per-turn layout.
+- **Loss** is computed on **assistant tokens only**, all turns at once. With causal attention this equals the sum of the losses on each truncated prefix, and so do the gradients; `tests/test_causal_prefix.py` checks both on a tiny Qwen3. Only the end of a conversation can be cut; dropping early tokens changes every later loss. The page is encoded once per conversation, not once per turn, which uses about 3–4× less compute than a per-turn layout.
 - **Masking:**
   - Check whether the Qwen3 chat template has `{% generation %}` tags, which TRL's `assistant_only_loss=True` needs.
   - If it doesn't, have `formatting.py` tokenize message by message and build `labels`, with -100 on system and user tokens. Write these as pre-tokenized `input_ids` and `labels`.
@@ -486,6 +486,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
     - a planted +5-point difference on synthetic data is detected;
     - the cluster bootstrap gives a wider CI than a turn-level bootstrap when outcomes are correlated within a conversation.
   - Split check: no page group appears in both train-fit and val.
+  - Causal-prefix equivalence (`test_causal_prefix.py`): on a tiny Qwen3, the summed loss and gradient of a whole conversation equal the sums over its truncated prefixes, and cutting the start does change the loss.
 - Foundations checks, written as asserts in the chapters so a failing check stops the render:
   - **2.5:** the hand-computed cross-entropy equals `model(labels=...).loss` to within 1e-4.
   - **2.6:** at step 0, the LoRA-wrapped model's logits equal the base model's exactly; the trainable-parameter count matches PEFT's.
