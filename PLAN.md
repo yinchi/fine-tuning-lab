@@ -281,7 +281,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
 - Runs `Qwen/Qwen3-4B-Instruct-2507` untuned, with 2–3 in-context examples, on dev.
   - The examples come from **train-fit**: 3 fixed sets, each drawn with its own seed. Report the mean ± std across sets and the per-set results.
   - Any prompt iteration happens on **val**. Dev is run once, with the final prompt.
-- Uses greedy, batched generation with left padding. Each predicted program is parsed and executed.
+- Uses greedy, batched generation with left padding, with a **fixed batch size and a fixed example order** (sorted by length once), because batch composition changes bf16 logits slightly. Each predicted program is parsed and executed.
 - Reports **execution accuracy** (the headline metric), program accuracy, and the invalid rate. These follow the evaluation rules in §3.4.
 
 **3.3 Training with LoRA** (`303_training_with.qmd`, HEAVY)
@@ -327,7 +327,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
 - **Uncertainty and seeds** (`stats.py`, also used in §3.5 and §3.6):
   - Every A-vs-B comparison gets a **paired cluster bootstrap**: resample the 421 dev conversations with replacement, 10,000 times, and score both systems on the same resample.
   - Report the 95% CI of the accuracy difference and an approximate p-value. Single-system accuracies also get bootstrap CIs.
-  - Greedy evaluation is deterministic, so the generation seed doesn't matter here. Only the **training seed** does: LoRA initialization, data order, dropout.
+  - Greedy evaluation is deterministic for a fixed batch size and example order, so the generation seed doesn't matter here (see the 2026-10-22 decision-log entry). Only the **training seed** does: LoRA initialization, data order, dropout.
   - A comparison whose CI straddles 0 gets 2 extra training seeds for each side. Report mean ± std across seeds, plus **cross-seed agreement**, the share of turns where all seeds give the same answer, and list the turns where they disagree in the error analysis.
   - All of these are **dev** scores.
   - **Untuned models** have no training seed. Their equivalent is the **few-shot example set**.
@@ -473,6 +473,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-21: The recommended build is a full-book render with `RUN_HEAVY=1`, wrapped in `tmux` or `screen`; the artifact freshness check decides which heavy artifacts to rebuild. `refresh` runs automatically through Quarto's `pre-render` hook (tested in a scratch project: it runs before `render` and at preview start, inherits `RUN_HEAVY`, and runs from the project directory under the system `python3`, so the hook is a shim that starts the venv's Python). A frozen chapter is never executed, so without `refresh` a stale artifact in an unchanged chapter would go unnoticed.
 - 2026-10-21: Evaluation and generation code always passes `do_sample=False` (and `temperature=None, top_p=None, top_k=None`) for greedy decoding, and sets every sampling setting explicitly otherwise. Qwen3-4B-Instruct-2507 ships generation defaults of temperature 0.7, top_p 0.8, top_k 20, so a bare `generate()` samples.
 - 2026-10-21: Math in the book stays as LaTeX through Quarto's default MathJax 4 from a CDN. Vendoring MathJax is deferred until offline reading matters. Single symbols such as a minus infinity may be written as plain text.
+- 2026-10-22: Evaluations fix the batch size and the order of examples. Measured on Qwen3-4B-Instruct-2507 with two prompts (1,348 and 962 tokens) run alone and in a batch of two: the logits differed by up to about 0.9 (logits range from about -20 to 27), the top token was the same, and nothing was bit-identical; the unpadded prompt differed as much as the padded one, so the batch size, not the padding, is the main cause. Greedy decoding is therefore deterministic only for a fixed batch size and order. The default `padding_side` of this tokenizer is `right`; generation uses left padding.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.

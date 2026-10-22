@@ -402,8 +402,10 @@ chapter has no generation seed to report**. Only the training seed varies betwee
 
 ::: {.callout-note title="Deterministic, but only for the same setup"}
 Greedy decoding is deterministic given the same input, model weights, software and hardware. Running
-the same prompt in a different batch size, or on a different GPU, can change tiny numerical values in
-bf16 and could flip a near-tie. We evaluate with a fixed setup for this reason.
+the same prompt inside a different batch can change the logits by a few percent in bf16: in a test with
+two prompts, by up to about 0.9 on logits ranging from -20 to 27, with the same top token. That is
+enough to flip a near-tie. We evaluate with a fixed batch size and a fixed order of examples for this
+reason.
 :::
 
 ## Editing the logits
