@@ -19,3 +19,6 @@ docs/.quarto/
 
 # Machine-specific Quarto env (absolute QUARTO_PYTHON)
 docs/_environment.local
+
+# Virtual documents written by the VS Code Quarto extension
+.vdoc.*.py

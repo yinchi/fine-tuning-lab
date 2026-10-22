@@ -223,8 +223,8 @@ These chapters are light on compute (minutes each) and use `freeze: auto`. They 
 
 **2.2 Anatomy of Qwen3-4B** (`202_anatomy_of.qmd`)
 - Read `config.json`: number of layers, hidden size, attention heads vs. key/value heads (grouped-query attention), RoPE, vocabulary, context length.
-- Print one decoder layer's module tree. Use forward hooks on one ConvFinQA input to show tensor shapes flowing through attention and the MLP (SwiGLU) with RMSNorm.
-- Parameter count by component (embeddings, attention q/k/v/o, MLP gate/up/down), and memory accounting: bf16 weights, plus the KV cache per token for a typical conversation length.
+- Print one decoder layer's module tree. Use forward hooks on one ConvFinQA input to show tensor shapes flowing through attention and the feed-forward network (FFN, called `mlp` in the library; SwiGLU) with RMSNorm. Use "feed-forward network" in prose and diagrams, matching Vaswani et al., and mention `mlp` once as the code name.
+- Parameter count by component (embeddings, attention q/k/v/o, feed-forward gate/up/down), and memory accounting: bf16 weights, plus the KV cache per token for a typical conversation length.
 - Which linear layers LoRA's `all-linear` will target. This sets up 2.6.
 
 **2.3 From base model to instruct model** (`203_from_base.qmd`)
@@ -435,7 +435,7 @@ Mark each item `[x]` when it's done and verified. Add a short note (run id, head
 - [x] 1.3 Executor; 100% gold match. `executor.py` reproduces all 11,104 train and 1,490 dev gold answers exactly (0 mismatches, 45 tests pass); errors reported by kind.
 - [ ] Artifact system (`artifacts.py`, `test_artifacts.py`): needed before the first heavy cell (2.4)
 - [x] 2.1 From text to tokens to next-token probabilities. Qwen3-4B-Instruct-2507: 151,669-token vocabulary, digits are single tokens; the trace on the AAPL turn-1 prompt (1,125 tokens) matches `model(...).logits` exactly; untuned top token is a code fence (p=0.614), gold first token `5` has p=0.024 (rank 5); greedy is repeatable, same-seed sampling is repeatable; a digits-only mask makes greedy output `5363`.
-- [ ] 2.2 Anatomy of Qwen3-4B
+- [x] 2.2 Anatomy of Qwen3-4B. Every block recomputed by hand from the model's weights and checked against hooked activations of layer 0 (relative differences 0.3-0.5%, bf16 rounding); all 36 layers by hand give the same top-5 tokens as the model; the causal-mask check leaves the first 925 of 1,125 positions unchanged (0.0 difference). 4,022,468,096 parameters (embedding 9.7%, feed-forward 66.9%, attention 23.5%); KV cache 147,456 bytes/token (0.53 GB at max_length 3,584); LoRA `all-linear` selects 7 projections per layer (252 modules), not the output head.
 - [ ] 2.3 From base model to instruct model
 - [ ] 2.4 Probing the untuned model; val gold-program NLL recorded
 - [ ] 2.5 How fine-tuning works; hand-written loss matches the model's loss

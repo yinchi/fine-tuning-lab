@@ -15,6 +15,7 @@ book:
     - part: "Foundations"
       chapters:
         - 201_from_text.qmd
+        - 202_anatomy_of.qmd
   appendices:
     - 902_references.qmd
 
