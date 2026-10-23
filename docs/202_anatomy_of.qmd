@@ -65,7 +65,9 @@ it. This is why our prompts put the page before the question.
 
 The decoder-only layout was refined over the years. The LLaMA paper lists the changes it made to the
 transformer, crediting each to earlier work [@touvron2023llama]. We read the implementation of Qwen3 in
-the Hugging Face library, and it uses the same components, plus one of its own:
+the Hugging Face library, and it uses the same components, plus one of its own. The Qwen3 report lists
+the same ones for its dense models, and adds that it removed the bias terms of the attention projections
+and introduced a normalization of queries and keys for stable training [@yang2025qwen3]:
 
 | | Original transformer | Qwen3-4B |
 |---|---|---|

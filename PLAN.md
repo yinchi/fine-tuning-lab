@@ -229,7 +229,7 @@ These chapters are light on compute (minutes each) and use `freeze: auto`. They 
 
 **2.3 From base model to instruct model** (`203_from_base.qmd`)
 - The training pipeline: pretraining → SFT → preference tuning / RL. Explain what "Instruct-2507" means (a non-thinking variant).
-- Hands-on: the same prompt to `Qwen3-4B-Base` (it continues the text) and to Instruct (it answers).
+- Hands-on: four prompts (three unrelated to finance, plus ConvFinQA turn 1) to `Qwen3-4B-Base` and to Instruct, each as plain text and in the chat template. The base model answers some prompts directly and continues others; with the chat template it echoes the prompt and writes ordinary tokens where the markers belong, because its `<|im_start|>` and `<|im_end|>` embeddings are identical (cosine 1.0000) while the instruct model's differ (0.567). Every output contains 5363 but none is a program the executor accepts.
 - Chat templates: render messages to the raw string, explain the special tokens and the generation prompt, and show how this tokenizes.
 - Multi-turn SFT: teacher forcing, exposure bias, and how later stages (self-generated data, DPO, multi-turn RL) address it. Also why per-turn prompt/completion is the less common layout.
 
@@ -262,7 +262,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - User turn 1: the context (`pre_text`, the markdown table, `post_text`) followed by question 1.
   - Assistant turn 1: gold `turn_program[0]`.
   - Then user turn k: question k, and assistant turn k: gold `turn_program[k]`, for the rest of the conversation.
-- **Loss** is computed on **assistant tokens only**, all turns at once. With causal attention this equals the sum of the losses on each truncated prefix, and so do the gradients; `tests/test_causal_prefix.py` checks both on a tiny Qwen3. Only the end of a conversation can be cut; dropping early tokens changes every later loss. The page is encoded once per conversation, not once per turn, which uses about 3–4× less compute than a per-turn layout.
+- **Loss** is computed on **assistant tokens only**, all turns at once. With causal attention this equals the sum of the losses on each truncated prefix, and so do the gradients; `tests/test_causal_prefix.py` checks both on a tiny Qwen3. Only the end of a conversation can be cut; dropping early tokens changes every later loss. The page is encoded once per conversation, not once per turn, which uses about 3.5× fewer tokens than a per-turn layout (measured on the training split in 2.3: 3,525,034 against 12,333,479).
 - **Masking:**
   - Check whether the Qwen3 chat template has `{% generation %}` tags, which TRL's `assistant_only_loss=True` needs.
   - If it doesn't, have `formatting.py` tokenize message by message and build `labels`, with -100 on system and user tokens. Write these as pre-tokenized `input_ids` and `labels`.
@@ -436,7 +436,7 @@ Mark each item `[x]` when it's done and verified. Add a short note (run id, head
 - [ ] Artifact system (`artifacts.py`, `test_artifacts.py`): needed before the first heavy cell (2.4)
 - [x] 2.1 From text to tokens to next-token probabilities. Qwen3-4B-Instruct-2507: 151,669-token vocabulary, digits are single tokens; the trace on the AAPL turn-1 prompt (1,125 tokens) matches `model(...).logits` exactly; untuned top token is a code fence (p=0.614), gold first token `5` has p=0.024 (rank 5); greedy is repeatable, same-seed sampling is repeatable; a digits-only mask makes greedy output `5363`.
 - [x] 2.2 Anatomy of Qwen3-4B. Every block recomputed by hand from the model's weights and checked against hooked activations of layer 0 (relative differences 0.3-0.5%, bf16 rounding); all 36 layers by hand give the same top-5 tokens as the model; the causal-mask check leaves the first 925 of 1,125 positions unchanged (0.0 difference). 4,022,468,096 parameters (embedding 9.7%, feed-forward 66.9%, attention 23.5%); KV cache 147,456 bytes/token (0.53 GB at max_length 3,584); LoRA `all-linear` selects 7 projections per layer (252 modules), not the output head.
-- [ ] 2.3 From base model to instruct model
+- [x] 2.3 From base model to instruct model. Summary of pretraining and post-training from the Qwen3 report, with a redrawn Figure 1; base vs instruct on four prompts (base answers some, continues others; chat markers untrained in base); chat template vs the original thinking template; one sequence per conversation uses 3.50× fewer tokens than per-turn (3,525,034 vs 12,333,479).
 - [ ] 2.4 Probing the untuned model; val gold-program NLL recorded
 - [ ] 2.5 How fine-tuning works; hand-written loss matches the model's loss
 - [ ] 2.6 LoRA in detail; step-0 equality check passes

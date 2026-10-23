@@ -4,7 +4,7 @@ import xml.dom.minidom
 
 import pytest
 
-from convfinqa.diagrams import attention, decoder, feedforward
+from convfinqa.diagrams import attention, decoder, feedforward, pipeline, posttraining
 from convfinqa.diagrams.svg import Box, Svg, arrowhead, rounded_path, waypoints
 
 
@@ -78,4 +78,19 @@ def test_feedforward_diagram_shows_the_gate():
     out = feedforward.build()
     xml.dom.minidom.parseString(out)
     for word in ["W_gate", "W_up", "W_down", "SiLU", "×", "intermediate_size"]:
+        assert word in out
+
+
+def test_pipeline_diagram_names_the_three_stages():
+    out = pipeline.build()
+    xml.dom.minidom.parseString(out)
+    for word in ["Pretraining", "Post-training", "Our fine-tuning", "base model", "instruct model", "our model"]:
+        assert word in out
+
+
+def test_posttraining_diagram_shows_both_routes():
+    out = posttraining.build()
+    xml.dom.minidom.parseString(out)
+    for word in ["Base models", "Long-CoT cold start", "Reasoning RL", "Thinking mode fusion", "General RL",
+                 "Strong-to-weak distillation", "Flagship models", "Lightweight models", "teachers"]:
         assert word in out

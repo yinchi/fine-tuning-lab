@@ -5,10 +5,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from . import attention, decoder, feedforward
+from . import attention, decoder, feedforward, pipeline, posttraining
 
 FIGURES = Path(__file__).resolve().parents[3] / "docs" / "figures"
-DIAGRAMS = {"decoder": decoder.build, "attention": attention.build, "feedforward": feedforward.build}
+DIAGRAMS = {"decoder": decoder.build, "attention": attention.build, "feedforward": feedforward.build, "pipeline": pipeline.build, "posttraining": posttraining.build}
 
 
 def main(argv: list[str]) -> int:
