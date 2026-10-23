@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Build the book (heavy artifacts included) in a screen session, then preview it.
-# Detach with Ctrl-a d; this script keeps waiting and starts the preview when the render succeeds.
+# Build every stale or missing artifact (heavy ones included, in dependency order), render the book,
+# then preview it. The work runs in a screen session; detach with Ctrl-a d and this script keeps
+# waiting, starting the preview when everything succeeded.
 session=render
 status=artifacts/render.status
 
@@ -12,10 +13,12 @@ fi
 mkdir -p artifacts
 rm -f "$status"
 
-RUN_HEAVY=1 screen -S "$session" bash -c \
-    "quarto render docs/ --log artifacts/render.log; echo \$? > $status"
+# The render runs without RUN_HEAVY: after the build step nothing should be stale, and if something
+# is, it should fail loudly rather than start a hidden training run.
+screen -S "$session" bash -c \
+    "uv run python -m convfinqa.artifacts build --all && quarto render docs/ --log artifacts/render.log; echo \$? > $status"
 
-# Wait for the render's exit status. Give up if the session ended without writing one (e.g. killed).
+# Wait for the exit status of build + render. Give up if the session ended without writing one (e.g. killed).
 while [ ! -f "$status" ]; do
     if ! screen -list | grep -q "\.$session[[:space:]]"; then
         [ -f "$status" ] && break
@@ -26,8 +29,10 @@ while [ ! -f "$status" ]; do
 done
 
 if [ "$(cat "$status")" = 0 ]; then
-    quarto preview docs/    # serve the rendered site, refreshing on changes (no RUN_HEAVY)
+    # Serve the site, re-rendering a chapter when its file changes. ALLOW_STALE lets prose edits keep
+    # working after a code change made an artifact stale (a warning box marks the old result).
+    ALLOW_STALE=1 quarto preview docs/
 else
-    echo "Render failed (exit code $(cat "$status")); see artifacts/render.log" >&2
+    echo "Build or render failed (exit code $(cat "$status")); see artifacts/render.log and artifacts/<name>.tmp/build.log" >&2
     exit 1
 fi

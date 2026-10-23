@@ -14,7 +14,9 @@ See [`PLAN.md`](PLAN.md) for the full plan, progress tracker and decision log.
 uv sync                                   # create .venv with all dependencies
 uv run pytest                             # run the tests
 quarto preview docs/                      # live-preview the book
-quarto render docs/                       # render the whole book (RUN_HEAVY=1 also builds stale heavy artifacts)
+./build.sh                                # build stale/missing artifacts (heavy ones too), render, then preview
+uv run python -m convfinqa.artifacts status   # what is fresh, stale or missing
+quarto render docs/                       # render the whole book (stale heavy artifacts raise an error)
 quarto render docs/<chapter>.qmd          # (re-)execute one chapter
 ```
 

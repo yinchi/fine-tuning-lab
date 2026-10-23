@@ -32,15 +32,24 @@ configuration and the artifacts it was built from. On later renders a chapter lo
 instead of recomputing, so editing a chapter's text stays cheap. If an upstream artifact changes,
 everything built from it counts as stale.
 
-Cells marked `#HEAVY` will fail to recompute if the associated artifacts are missing or stale, unless
-rendered with `RUN_HEAVY=1 quarto render ...`. The error is deliberate: a preview or an ordinary render
-can never start a long run by accident.
+Cells marked `#HEAVY` will not recompute a stale or missing artifact on their own: they raise an
+error that names the build command. The error is deliberate, because a preview or an ordinary render
+can never start a long run by accident. Setting `ALLOW_STALE=1` relaxes this for artifacts that exist
+but are out of date: the cell loads the old result and shows a red warning box above it. A missing
+artifact always raises.
 
-**Building everything.** With the flag set, a full render rebuilds exactly the heavy artifacts that
-are missing or stale, in separate processes that log to `artifacts/<name>/build.log`, and reuses
-everything else. Before each render, a hook (`pre-render` in `docs/_quarto.yml`) marks the chapters
-that used a changed artifact for re-execution, so nothing stale is left in the book. A heavy build can
-take hours, so it has to survive a lost terminal. The recommended way to build the book is the script
+**What makes an artifact stale.** An artifact is rebuilt when any of these changed: its parameters or
+declared input files; the source code of the module that builds it, or of any `convfinqa` module that
+module imports (whitespace, comments and docstrings don't count); its builder's manual `version`; or
+any artifact it was built from, which in turn must itself be fresh. A rebuild that produces identical
+output leaves everything downstream fresh. Every build seeds Python, NumPy and torch from the artifact's
+seed first, so its random draws do not depend on what ran before it. GPU training is still not
+bit-reproducible, so retraining normally yields new weights and the evaluations built on them are
+rebuilt too.
+
+**Building everything.** Before each render, a hook (`pre-render` in `docs/_quarto.yml`) marks the
+chapters that used a changed artifact for re-execution, so nothing stale is left in the book. A heavy
+build can take hours, so it has to survive a lost terminal. The way to build the book is the script
 `build.sh` in the project root:
 
 ```bash
@@ -49,47 +58,40 @@ take hours, so it has to survive a lost terminal. The recommended way to build t
 
 It does four things:
 
-1. Starts `quarto render docs/ --log artifacts/render.log` with `RUN_HEAVY=1` inside a `screen`
-   session named `render`, so the render keeps running if your terminal or connection drops.
-   Detach with `Ctrl-a d` and reattach later with `screen -r render`.
-2. Waits for the render to finish, whether or not you stay attached. The render writes its exit status
-   to `artifacts/render.status`, and the script polls for it.
-3. Starts `quarto preview docs/` only if the render succeeded. The preview runs without `RUN_HEAVY`,
-   so it can never start a long build. A failed render prints its exit code instead, and a killed
-   session is reported rather than waited on forever.
+1. Inside a `screen` session named `render`, builds every missing or stale artifact in dependency
+   order (`python -m convfinqa.artifacts build --all`), each heavy one in its own process that logs to
+   `artifacts/<name>/build.log`; then runs `quarto render docs/ --log artifacts/render.log` without
+   `RUN_HEAVY`, so anything still stale fails loudly instead of starting a hidden run. The session
+   keeps running if your terminal or connection drops. Detach with `Ctrl-a d` and reattach later with
+   `screen -r render`.
+2. Waits for the session to finish, whether or not you stay attached. It writes its exit status to
+   `artifacts/render.status`, and the script polls for it.
+3. Starts `quarto preview docs/` only if that succeeded, with `ALLOW_STALE=1`, so editing prose keeps
+   working after a code change made an artifact stale (the warning box marks the old result). The
+   preview never starts a build. A failure prints its exit code instead, and a killed session is
+   reported rather than waited on forever.
 4. Refuses to start if a `render` session already exists ("Render already in progress"), so two
    builds cannot run at once through the script.
 
 That last guard covers **only builds started through `build.sh`.** It looks for the `screen` session by
-name. A render started some other way, such as `RUN_HEAVY=1 quarto render docs/` typed directly, or a
-`tmux` session, is invisible to it, and nothing stops it from running alongside a build from the
-script. Two renders writing to `docs/_book/` and `artifacts/` at once can corrupt each other, so start
-every heavy build through `build.sh`.
+name. A build started some other way, such as `uv run python -m convfinqa.artifacts build --all` typed
+directly, or a `tmux` session, is invisible to it. A per-artifact lock stops two processes building the
+same artifact, but two renders writing to `docs/_book/` at once can corrupt each other, so start every
+full build through `build.sh`. (`RUN_HEAVY=1 quarto render docs/` also still works, building stale
+heavy artifacts as the chapters reach them, in chapter order rather than dependency order.)
 
 Quarto's `--log` option is used instead of piping through `tee`, because Quarto writes terminal colour
 codes to a pipe and the log file stays free of them. Each render overwrites `artifacts/render.log`,
 so copy it if you want to keep one. The per-artifact build logs in `artifacts/<name>/build.log` are
-separate. If a build fails, the render stops; fix the problem and run `./build.sh` again, and the
-artifacts that were already built are reused.
-
-*Without the script.* The same thing by hand, in `screen` or `tmux`:
-
-```bash
-mkdir -p artifacts
-RUN_HEAVY=1 screen -S render bash -c 'quarto render docs/ --log artifacts/render.log'
-tmux new-session -s render -e RUN_HEAVY=1 'quarto render docs/ --log artifacts/render.log'
-```
-
-Pass `RUN_HEAVY=1` explicitly: `tmux` does not forward the variable from your shell to a session
-started on an existing tmux server, which is why its example uses `-e RUN_HEAVY=1`. `screen` copies the
-environment of the command that starts it, so setting the variable in front of `screen` works. Neither
-command has the guards above.
+separate (a failed build leaves its log in `artifacts/<name>.tmp/`). If a build fails, nothing renders;
+fix the problem and run `./build.sh` again, and the artifacts that were already built are reused.
 
 To see what a full render would build, or to build one artifact without Quarto:
 
 ```bash
 uv run python -m convfinqa.artifacts status           # what is fresh, stale or missing, and why
 uv run python -m convfinqa.artifacts build sft-dsl-0  # build one artifact and anything stale it needs
+uv run python -m convfinqa.artifacts refresh           # re-execute chapters that used outdated artifacts (the pre-render hook does this)
 ```
 
 ## The hardware and the CUDA stack
