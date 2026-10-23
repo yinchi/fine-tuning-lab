@@ -93,7 +93,8 @@ import pandas as pd
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
-from convfinqa import data, executor
+from convfinqa import data
+from convfinqa.dsl import executor
 from convfinqa.formatting import SYSTEM_PROMPT, conversation_messages
 
 names = {"base": "Qwen/Qwen3-4B-Base", "instruct": "Qwen/Qwen3-4B-Instruct-2507"}
@@ -300,7 +301,7 @@ markers the model was post-trained on. Here is our model's template applied to a
 the markers `<|im_start|>` and `<|im_end|>` that the base model could not tell apart:
 
 ```{python}
-from convfinqa.viz import show_tokens
+from convfinqa.book.viz import show_tokens
 
 example = [
     {"role": "system", "content": "Answer with a program."},

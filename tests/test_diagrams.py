@@ -4,8 +4,8 @@ import xml.dom.minidom
 
 import pytest
 
-from convfinqa.diagrams import attention, decoder, feedforward, pipeline, posttraining
-from convfinqa.diagrams.svg import Box, Svg, arrowhead, rounded_path, waypoints
+from convfinqa.book.diagrams import attention, decoder, feedforward, pipeline, posttraining
+from convfinqa.book.diagrams.svg import Box, Svg, arrowhead, rounded_path, waypoints
 
 
 def test_waypoints_follow_the_moves():

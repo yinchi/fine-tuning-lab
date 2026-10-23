@@ -5,8 +5,8 @@ __pycache__/
 .pytest_cache/
 
 # Data and run outputs (large, regenerable)
-data/
-artifacts/
+/data/
+/artifacts/
 
 # Quarto build output (the freeze cache docs/_freeze/ IS committed)
 docs/_book/

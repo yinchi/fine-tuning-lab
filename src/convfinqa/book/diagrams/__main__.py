@@ -1,4 +1,4 @@
-"""``python -m convfinqa.diagrams decoder`` writes docs/figures/decoder.svg."""
+"""``python -m convfinqa.book.diagrams decoder`` writes docs/figures/decoder.svg."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ from pathlib import Path
 
 from . import attention, decoder, feedforward, pipeline, posttraining
 
-FIGURES = Path(__file__).resolve().parents[3] / "docs" / "figures"
+FIGURES = Path(__file__).resolve().parents[4] / "docs" / "figures"
 DIAGRAMS = {"decoder": decoder.build, "attention": attention.build, "feedforward": feedforward.build, "pipeline": pipeline.build, "posttraining": posttraining.build}
 
 

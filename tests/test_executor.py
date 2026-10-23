@@ -1,7 +1,8 @@
 import pytest
 
-from convfinqa import data, executor
-from convfinqa.executor import ProgramError, answers_match, execute, parse_program, trace, try_execute
+from convfinqa import data
+from convfinqa.dsl import executor
+from convfinqa.dsl.executor import ProgramError, answers_match, execute, parse_program, trace, try_execute
 
 
 def test_bare_number():

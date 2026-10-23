@@ -17,7 +17,7 @@ This chapter works with the model we fine-tune later, `Qwen/Qwen3-4B-Instruct-25
 from transformers import AutoTokenizer
 
 from convfinqa import data
-from convfinqa.viz import show_tokens, tokenize
+from convfinqa.book.viz import show_tokens, tokenize
 
 tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
 print(f"vocabulary size: {len(tok):,}")
@@ -327,7 +327,7 @@ are the ten most likely next tokens for the prompt above, and how they change wi
 
 ```{python}
 #| fig-cap: "The ten most likely next tokens at three temperatures."
-from convfinqa.viz import next_token_stats, plot_next_token
+from convfinqa.book.viz import next_token_stats, plot_next_token
 
 plot_next_token(tok, last, temperatures=(0.3, 1.0, 2.0), k=10);
 ```

@@ -5,7 +5,7 @@ title: "The DSL and its executor"
 **You will learn:**
 
 - the grammar of ConvFinQA's program language;
-- how our executor, `src/convfinqa/executor.py`, runs a program, with the conventions it inherits from the official code;
+- how our executor, `src/convfinqa/dsl/executor.py`, runs a program, with the conventions it inherits from the official code;
 - the kinds of error a program can have, which later chapters count when scoring model outputs;
 - that the executor reproduces every gold answer in `train` and `dev` exactly.
 
@@ -36,7 +36,8 @@ The last step's result is the answer.
 ```{python}
 import pandas as pd
 
-from convfinqa import data, executor
+from convfinqa import data
+from convfinqa.dsl import executor
 
 program = "subtract(206588, 181001), divide(#0, 181001)"
 steps = executor.parse_program(program)

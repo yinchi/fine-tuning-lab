@@ -15,7 +15,7 @@ language (DSL) that computes the answer.
 
 ## Getting the data
 
-The code lives in `src/convfinqa/data.py`. The download clones the authors' repository and unzips
+The code lives in `src/convfinqa/data/`. The download clones the authors' repository and unzips
 `data.zip` into `data/raw/`, and does nothing if the data is already there.
 
 ```{python}
@@ -27,6 +27,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from convfinqa import data
+from convfinqa.dsl import steps
 
 data.download_data()
 
@@ -197,10 +198,10 @@ const_use = Counter(
     for p in conv["annotation"]["turn_program"]
     for c in re.findall(r"const_\w+", p)
 )
-assert set(const_use) <= set(data.CONSTANTS)
+assert set(const_use) <= set(steps.CONSTANTS)
 
 pd.Series(
-    {c: const_use.get(c, 0) for c in data.CONSTANTS},
+    {c: const_use.get(c, 0) for c in steps.CONSTANTS},
     name="uses (train + dev)"
 ).to_frame().T
 ```
@@ -224,12 +225,12 @@ FinQANet's generator [@chen2022convfinqa] is restricted: at each step it can emi
 constant from the list, a step reference, or a number **copied from its input**. Its input is the
 question plus the context it is given (supporting text and table rows), split on spaces, and a token counts as a copyable number if, after
 removing commas, it parses as a number *or ends with `%`*. This is the rule, implemented in
-`data.copyable_numbers`:
+`steps.copyable_numbers`:
 
 ```{python}
 row = " ".join(conv_I["table"][-1])
 print(row)
-print(data.copyable_numbers(row))
+print(steps.copyable_numbers(row))
 ```
 
 This works because the page text is pre-tokenized: punctuation and symbols are separated from the
@@ -254,7 +255,7 @@ for split in ["train", "dev"]:
                 "id": c["id"],
                 "type": data.conversation_type(c),
                 "turn": t.index + 1,
-                "number_turn": data.is_number_turn(t.program),
+                "number_turn": steps.is_number_turn(t.program),
                 "program": t.program
             })
 df = pd.DataFrame(rows)
@@ -302,7 +303,7 @@ since each program repeats the earlier steps.
 #| fig-cap: "How often each DSL operation is the new step of a turn (train)."
 ops = Counter()
 for p in df[(df.split == "train") & ~df.number_turn].program:
-    ops[data.split_steps(p)[-1].split("(")[0]] += 1
+    ops[steps.split_steps(p)[-1].split("(")[0]] += 1
 pd.Series(ops).sort_values().plot.barh(figsize=(5, 2.5), xlabel="turns")
 plt.tight_layout()
 ops

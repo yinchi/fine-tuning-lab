@@ -1,6 +1,7 @@
 import pytest
 
 from convfinqa import data
+from convfinqa.dsl import steps
 from convfinqa.formatting import conversation_messages
 
 pytestmark = pytest.mark.skipif(
@@ -33,12 +34,12 @@ def test_conversation_type(train):
 
 
 def test_is_number_turn():
-    assert data.is_number_turn("206588")
-    assert not data.is_number_turn("subtract(206588, 181001)")
+    assert steps.is_number_turn("206588")
+    assert not steps.is_number_turn("subtract(206588, 181001)")
 
 
 def test_split_steps():
-    assert data.split_steps("subtract(206588, 181001), divide(#0, 181001)") == [
+    assert steps.split_steps("subtract(206588, 181001), divide(#0, 181001)") == [
         "subtract(206588, 181001)",
         "divide(#0, 181001)",
     ]
@@ -58,11 +59,11 @@ def test_messages_alternate(train):
 
 def test_copyable_numbers_follow_the_papers_rule():
     text = "net income $ 103102 , up 28% ( 28 % ) from 1,234.5 in june 30 , 2009 ."
-    assert data.copyable_numbers(text) == ["103102", "28%", "28", "%", "1,234.5", "30", "2009"]
+    assert steps.copyable_numbers(text) == ["103102", "28%", "28", "%", "1,234.5", "30", "2009"]
 
 
 def test_gold_constants_are_in_the_official_list(train):
     import re
 
     used = {c for conv in train for p in conv["annotation"]["turn_program"] for c in re.findall(r"const_\w+", p)}
-    assert used <= set(data.CONSTANTS)
+    assert used <= set(steps.CONSTANTS)

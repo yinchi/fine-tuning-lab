@@ -138,19 +138,27 @@ fine-tuning-lab/
   data/raw/                 # unzipped ConvFinQA json (untracked)
   artifacts/                # per-artifact outputs: processed/, runs/<name>/{node.json,build.log,metrics.json,predictions.jsonl,adapter/,tb/}, _chapters/
   src/convfinqa/
-    data.py                 # load raw json, table→markdown, pretty-print a conversation, page-grouped val split
-    executor.py             # parse + execute DSL programs, FinQA tolerance
-    python_format.py        # DSL → straight-line Python translator; AST-whitelisted safe evaluator
-    constrained.py          # EBNF grammars (DSL, Python subset); xgrammar HF logits processor
+    # Layers import downward only (tests/test_layers.py); only llm-facing modules may import torch.
+    dsl/                    # pure Python, imports nothing from the package
+      executor.py           #   parse + execute DSL programs, FinQA tolerance
+      steps.py              #   program text helpers: split steps, number-selection turns, copyable numbers, constants
+      python_format.py      #   (planned) DSL → straight-line Python translator; AST-whitelisted safe evaluator
+    data/                   # imports dsl at most
+      raw.py                #   download, load splits, Turn, turns(); render.py: table→markdown, context, pretty-print
+      splits.py             #   (planned) page-grouped val split
+      authoring.py          #   (planned) schema validation, grounding check, answer filling for new examples
     formatting.py           # conversation → chat messages; assistant-only label mask; per-turn eval prompts
-    train.py                # train(cfg) -> run_dir   (TRL SFTTrainer + PEFT; heavy artifact builder)
-    evaluate.py             # evaluate(model_or_run, split, history_mode, output_format, grammar) -> metrics (heavy artifact builder)
-    authoring.py            # schema validation, grounding check, answer filling for new examples
-    runs.py                 # run ids, config/env capture (git commit, library versions)
+    constrained.py          # EBNF grammars (DSL, Python subset); xgrammar HF logits processor
+    train.py, evaluate.py   # (planned) TRL SFTTrainer + PEFT; evaluation; heavy artifact builders. They and formatting/constrained move
+                            #   into an `llm/` package when train.py arrives.
+    stats.py                # (planned) bootstrap CIs, paired cluster bootstrap over conversations, cross-seed agreement
+    runs.py                 # (planned) run ids, config/env capture (git commit, library versions)
     artifacts.py            # @artifact registry, node.json, recursive freshness, code hash, subprocess builds, build/status/refresh CLI
     builders.py             # registered artifact builders (data, training, evaluation)
     targets.py              # concrete artifact names the book uses (build --all)
-    stats.py                # bootstrap CIs, paired cluster bootstrap over conversations, cross-seed agreement
+    book/                   # presentation helpers for the chapters
+      viz.py                #   token displays and next-token plots
+      diagrams/             #   SVG generators: `python -m convfinqa.book.diagrams`
   scripts/pre_render.py     # Quarto pre-render shim: starts the venv's Python for `artifacts refresh`
   tests/                    # test_executor, test_python_format, test_formatting, test_constrained, test_stats, test_authoring, test_splits
   docs/                     # THE LAB: Quarto book
@@ -479,6 +487,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-21: Math in the book stays as LaTeX through Quarto's default MathJax 4 from a CDN. Vendoring MathJax is deferred until offline reading matters. Single symbols such as a minus infinity may be written as plain text.
 - 2026-10-22: Evaluations fix the batch size and the order of examples. Measured on Qwen3-4B-Instruct-2507 with two prompts (1,348 and 962 tokens) run alone and in a batch of two: the logits differed by up to about 0.9 (logits range from about -20 to 27), the top token was the same, and nothing was bit-identical; the unpadded prompt differed as much as the padded one, so the batch size, not the padding, is the main cause. Greedy decoding is therefore deterministic only for a fixed batch size and order. The default `padding_side` of this tokenizer is `right`; generation uses left padding.
 - 2026-10-22: Artifact system built as planned in the 2026-10-21 entries, with these changes. (1) `./build.sh` builds the artifact DAG first (`build --all`, topological, heavy nodes in subprocesses), then renders **without** `RUN_HEAVY`, then previews with `ALLOW_STALE=1`; `RUN_HEAVY=1 quarto render` stays as a fallback. (2) A stale or missing heavy artifact raises by default; `ALLOW_STALE=1` loads a stale-but-present one with a visible warning (a missing one always raises), and a chapter that used a stale result is always re-executed by `refresh`. (3) Builders take only `out`, `deps` (artifacts), `files` (static files) and their own name fields: no `**extra` parameters, so config lives in declared files or light config artifacts. (4) Freshness adds a `code_hash`: the normalized AST source (`ast.unparse`, docstrings and local annotations dropped) of the builder's module and its `convfinqa.*` import closure, plus modules loaded during the build; `version` stays a manual override; library or Python-version changes warn only. (5) Seeds are part of the config; the framework seeds every build and light builds restore the global RNG state. (6) `src/convfinqa/targets.py` lists the artifact names `build --all` builds. (7) Build directories are `artifacts/<name>.tmp/` (deterministic, kept after a failure for the log) under a per-artifact lock in `artifacts/.locks/`.
+- 2026-10-22: Package restructured into layers: `dsl/` (executor, program-text helpers), `data/` (raw loading, text rendering; `data/__init__` re-exports the common names so `data.load_split` still works), `book/` (viz, diagrams). Layers import downward only and the pure ones never import torch (`tests/test_layers.py`). `formatting.py` and `constrained.py` stay flat until `train.py` arrives, then move into `llm/`. `artifacts.py` stays one file. Moving code changes no artifact: none had been built yet, and the code hash covers module contents, not paths.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.

@@ -1,6 +1,6 @@
 import re
 
-from convfinqa.viz import tokens_html
+from convfinqa.book.viz import tokens_html
 
 
 def test_one_span_per_token_with_ids_as_hover_text():
@@ -31,7 +31,7 @@ def test_next_token_stats_and_plot():
     matplotlib.use("Agg")
     import torch
 
-    from convfinqa.viz import next_token_stats, plot_next_token
+    from convfinqa.book.viz import next_token_stats, plot_next_token
 
     class Tok:
         def decode(self, ids):
