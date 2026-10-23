@@ -1,4 +1,8 @@
-"""``python -m convfinqa.book.diagrams decoder`` writes docs/figures/decoder.svg."""
+""" Main entry point for generating book diagrams as SVG files.
+
+Syntax:
+    python -m convfinqa.book.diagrams [diagram_name ...]
+"""
 
 from __future__ import annotations
 
@@ -7,11 +11,29 @@ from pathlib import Path
 
 from . import attention, decoder, feedforward, pipeline, posttraining
 
+# Directory to output generated SVG figures
 FIGURES = Path(__file__).resolve().parents[4] / "docs" / "figures"
-DIAGRAMS = {"decoder": decoder.build, "attention": attention.build, "feedforward": feedforward.build, "pipeline": pipeline.build, "posttraining": posttraining.build}
+
+# Mapping of diagram names to their corresponding build functions
+DIAGRAMS = {
+    "decoder": decoder.build,
+    "attention": attention.build,
+    "feedforward": feedforward.build,
+    "pipeline": pipeline.build,
+    "posttraining": posttraining.build
+}
 
 
 def main(argv: list[str]) -> int:
+    """Generate specified book diagrams as SVG files.
+
+    Args:
+        argv: List of diagram names to generate. If empty, all diagrams in
+            `DIAGRAMS` are generated.
+
+    Returns:
+        Exit code (0 for success, 1 for unknown diagrams).
+    """
     names = argv or list(DIAGRAMS)
     unknown = [n for n in names if n not in DIAGRAMS]
     if unknown:

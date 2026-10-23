@@ -6,30 +6,33 @@ import re
 
 
 def is_number_turn(program: str) -> bool:
-    """A number-selection turn's program is just a number, with no operation."""
+    """Check if the program is a bare number, i.e. contains no operations."""
     return "(" not in program
 
 
 def split_steps(program: str) -> list[str]:
-    """Split ``"subtract(a, b), divide(#0, c)"`` into its steps."""
+    """Split a program into its steps.
+    
+    Each step is expected to be in the form `op(arg1, arg2)`.
+    """
     return re.findall(r"[a-z_]+\([^)]*\)", program)
 
 
-# The constants the authors' generator may emit (code/finqanet_generator/constant_list.txt).
 CONSTANTS = (
     "const_1", "const_2", "const_3", "const_4", "const_5", "const_6", "const_7", "const_8", "const_9",
     "const_10", "const_100", "const_1000", "const_10000", "const_100000", "const_1000000",
     "const_10000000", "const_1000000000", "const_m1",
 )
+"""The constants the authors' generator may emit (`code/finqanet_generator/constant_list.txt`)."""
 
 
 def is_copyable_number(token: str) -> bool:
-    """The paper's rule for "this token is a number the generator may copy from the page".
+    """Checks if a token is a number the generator may copy from the page.
 
-    Mirrors ``str_to_num`` in the authors' ``finqa_utils.py``: after removing commas, the token parses as
-    a number, or it is a non-empty string ending in ``%``. The page text is pre-tokenized, so symbols and
-    punctuation around a number (``$ 103102``, ``june 30 , 2009``) are separate tokens. A ``%`` written
-    attached to its number (``19%``) stays one token; ``19 %`` splits into ``19`` and ``%``.
+    A token is considered copyable if it can be interpreted as a number after removing commas,
+    or if it is a non-empty string ending with a percent sign ("%"). A malformed token such as
+    "foo%" would be considered copyable since it ends with a percent sign, but would be caught
+    by the executor as an invalid number.
     """
     token = token.replace(",", "")
     try:
@@ -40,5 +43,5 @@ def is_copyable_number(token: str) -> bool:
 
 
 def copyable_numbers(text: str) -> list[str]:
-    """Every space-separated token of ``text`` that passes :func:`is_copyable_number`."""
+    """Every space-separated token of `text` that passes `is_copyable_number`."""
     return [tok for tok in text.split(" ") if is_copyable_number(tok)]

@@ -1,8 +1,11 @@
-"""Inside the feed-forward block (SwiGLU) of Qwen3, with the shape of every tensor."""
+"""Draw the feed-forward block (SwiGLU) of Qwen3, with the shape of every tensor."""
 
 from __future__ import annotations
 
 from .svg import Box, Svg
+
+# Color codes for different types of boxes in the diagram.
+# Pairs represent (fill color, border color) for the boxes in the diagram.
 
 WEIGHTS = ("#ffffff", "#444444")
 PLAIN = ("#f1f1f1", "#888888")
@@ -52,5 +55,9 @@ def build() -> str:
     shape(gate_x + 6, 203, "(b, s, i)")
     shape(up_x + 6, 282, "(b, s, i)")
     shape(cx + 6, 138, "(b, s, i)")
-    svg.text((cx, 542), "b: batch · s: sequence length · h: hidden_size · i: intermediate_size", size=10, colour=GREY)
+    svg.text(
+        (cx, 542),
+        "b: batch · s: sequence length · h: hidden_size · i: intermediate_size",
+        size=10, colour=GREY
+    )
     return svg.to_string()

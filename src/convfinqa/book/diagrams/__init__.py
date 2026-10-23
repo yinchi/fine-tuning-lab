@@ -1,1 +1,1 @@
-"""Diagrams for the book, generated as standalone SVG files in docs/figures/."""
+"""Module for generating SVG diagrams for the book, outputted to docs/figures/."""

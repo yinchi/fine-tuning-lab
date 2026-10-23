@@ -1,8 +1,14 @@
-"""The decoder-only stack of Qwen3-4B: embeddings, 36 identical layers, a final norm and the output head."""
+"""Draws the decoder-only stack of Qwen3-4B.
+
+Includes embeddings, 36 identical layers, a final norm, and the output head.
+"""
 
 from __future__ import annotations
 
 from .svg import Box, Svg
+
+# Color codes for different types of boxes in the diagram.
+# Pairs represent (fill color, border color) for the boxes in the diagram.
 
 NORM = ("#d5e8d4", "#82b366")  # green
 ATTENTION = ("#f8cecc", "#b85450")  # red: the self-attention is causal ("masked")
@@ -42,14 +48,28 @@ def build() -> str:
     svg.text((cx, emb.y + 35), "one learned vector per token", size=10.5, colour="#555555")
     svg.text((cx, attn.y + 20), "Causal self-attention", bold=True)
     svg.text((cx, attn.y + 37), "32 query heads, 8 key/value heads", size=10.5, colour="#555555")
-    svg.text((cx, attn.y + 51), "rotary positions on queries and keys", size=10.5, colour="#555555")
+    svg.text(
+        (cx, attn.y + 51), "rotary positions on queries and keys", size=10.5, colour="#555555"
+    )
     svg.text((cx, mlp.y + 22), "Feed-forward (SwiGLU)", bold=True)
     svg.text((cx, mlp.y + 40), "2,560 → 9,728 → 2,560", size=10.5, colour="#555555")
 
     svg.box(positions, "#ffffff", "#444444")
-    svg.text((positions.x + positions.w / 2, positions.y + 21), "token positions", size=11.5)
-    svg.text((positions.x + positions.w / 2, positions.y + 37), "rotary cos, sin", size=10.5, colour="#555555")
-    svg.text((positions.x + positions.w / 2, positions.y + positions.h + 15), "shared by all layers", size=10, colour="#555555")
+    svg.text(
+        (positions.x + positions.w / 2, positions.y + 21),
+        "token positions",
+        size=11.5
+    )
+    svg.text(
+        (positions.x + positions.w / 2, positions.y + 37),
+        "rotary cos, sin",
+        size=10.5, colour="#555555"
+    )
+    svg.text(
+        (positions.x + positions.w / 2, positions.y + positions.h + 15),
+        "shared by all layers",
+        size=10, colour="#555555"
+    )
     svg.route(positions.right, f"r{attn.x - positions.x - positions.w:g}")
 
     for centre in (add1, add2):

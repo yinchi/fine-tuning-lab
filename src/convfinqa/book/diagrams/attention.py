@@ -1,8 +1,11 @@
-"""Inside one causal self-attention block of Qwen3, with the shape of every tensor."""
+"""Draws one causal self-attention block of Qwen3, with the shape of every tensor."""
 
 from __future__ import annotations
 
 from .svg import Box, Svg
+
+# Color codes for different types of boxes in the diagram.
+# Pairs represent (fill color, border color) for the boxes in the diagram.
 
 WEIGHTS = ("#ffffff", "#444444")  # a learned matrix
 NORM = ("#d5e8d4", "#82b366")  # RMSNorm
@@ -12,10 +15,24 @@ GREY = "#555555"
 
 
 def _label(svg: Svg, box: Box, title: str, note: str | None = None, bold: bool = False) -> None:
+    """Label a box in the SVG diagram.
+
+    Args:
+        svg: The SVG object to draw on.
+        box: The box to label.
+        title: The main title of the label.
+        note: An optional note to display below the title.
+        bold: Whether to render the title in bold.
+    """
     cx = box.x + box.w / 2
     if note is None:
+        # Place the title in the center of the box if there is no note, offset slightly for
+        # visual alignment.
         svg.text((cx, box.y + box.h / 2 + 4.5), title, size=12.5, bold=bold)
     else:
+        # Place the title near the top of the box and the note below it.
+        # The constants 17 and 32 are specific to the visual layout and box contents for
+        # this diagram.
         svg.text((cx, box.y + 17), title, size=12.5, bold=bold)
         svg.text((cx, box.y + 32), note, size=10, colour=GREY)
 
@@ -25,6 +42,7 @@ def build() -> str:
     q_x, k_x, v_x = 215, 345, 495  # the three columns
     mid = (q_x + k_x) / 2  # 280
 
+    # Define the box data structures for each component in the attention block.
     wq, wk, wv = (Box(x - 52, 815, 104, 42) for x in (q_x, k_x, v_x))
     rq, rk, rv = (Box(x - 52, 740, 104, 34) for x in (q_x, k_x, v_x))  # reshape into heads
     norm = Box(150, 650, 260, 40)
@@ -38,11 +56,15 @@ def build() -> str:
     out_proj = Box(295, 95, 180, 40)
     out_x = concat.x + concat.w / 2  # 385
 
-    for box, style in [(wq, WEIGHTS), (wk, WEIGHTS), (wv, WEIGHTS), (rq, PLAIN), (rk, PLAIN), (rv, PLAIN),
-                       (norm, NORM), (rope, PLAIN), (positions, PLAIN), (repeat, PLAIN), (scores, PLAIN),
-                       (softmax, MASK), (weighted, PLAIN), (concat, PLAIN), (out_proj, WEIGHTS)]:
+    # For each defined box, draw it with the appropriate style.
+    for box, style in [
+        (wq, WEIGHTS), (wk, WEIGHTS), (wv, WEIGHTS), (rq, PLAIN), (rk, PLAIN), (rv, PLAIN),
+        (norm, NORM), (rope, PLAIN), (positions, PLAIN), (repeat, PLAIN), (scores, PLAIN),
+        (softmax, MASK), (weighted, PLAIN), (concat, PLAIN), (out_proj, WEIGHTS)
+    ]:
         svg.box(box, *style)
 
+    # Label each box with its corresponding description.
     _label(svg, wq, "W_Q", "matrix multiplication")
     _label(svg, wk, "W_K", "matrix multiplication")
     _label(svg, wv, "W_V", "matrix multiplication")
@@ -105,11 +127,21 @@ def build() -> str:
     shape(out_x + 6, 156, "(b, s, n_Q·d)")
 
     # Legend and notation.
-    for i, (label, (fill, stroke)) in enumerate([("learned matrix", WEIGHTS), ("RMSNorm", NORM),
-                                                 ("no learned weights", PLAIN), ("causal mask, softmax", MASK)]):
+    for i, (label, (fill, stroke)) in enumerate([
+        ("learned matrix", WEIGHTS), ("RMSNorm", NORM),
+        ("no learned weights", PLAIN), ("causal mask, softmax", MASK)
+    ]):
         y = 14 + i * 20
         svg.box(Box(8, y, 16, 12), fill, stroke, radius=3)
         svg.text((30, y + 10), label, size=10.5, align="start", colour=GREY)
-    svg.text((8, 124), ["b: batch · s: sequence length", "h: hidden_size · d: head_dim",
-                        "n_Q: query heads · n_KV: key/value heads"], size=10.5, align="start", colour=GREY, line_height=14)
+
+    svg.text(
+        (8, 124),
+        [
+            "b: batch · s: sequence length",
+            "h: hidden_size · d: head_dim",
+            "n_Q: query heads · n_KV: key/value heads"
+        ],
+        size=10.5, align="start", colour=GREY, line_height=14
+    )
     return svg.to_string()
