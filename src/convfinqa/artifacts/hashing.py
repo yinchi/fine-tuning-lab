@@ -23,12 +23,10 @@ LOG_NAME = "build.log"
 def is_framework(module: str) -> bool:
     """Check if a module is considered a framework module.
     
-    Framework modules include the artifact package itself and `targets`. Edits to these modules do
-    not invalidate artifacts. (Bump a builder's `version` by hand if a framework change should
-    rebuild things.)
+    The framework is the artifact package itself. Edits to it do not invalidate artifacts. (Bump a
+    builder's `version` by hand if a framework change should rebuild things.)
     """
-    return module == "convfinqa.targets" or module == "convfinqa.artifacts" \
-        or module.startswith("convfinqa.artifacts.")
+    return module == "convfinqa.artifacts" or module.startswith("convfinqa.artifacts.")
 
 
 def sha256_file(path: Path) -> str:
@@ -148,20 +146,19 @@ def module_digest(module: str) -> str | None:
     return _norm_cache[key]
 
 
-def _local_imports(module: str) -> set[str]:
-    """The `convfinqa.*` modules a module imports, anywhere in its source."""
-    path = module_path(module)
-    if path is None:
-        return set()
-    spec = importlib.util.find_spec(module)
-    package = module if spec.submodule_search_locations else module.rpartition(".")[0]
+def local_imports(source: str, package: str = "") -> set[str]:
+    """The `convfinqa.*` modules that `source` imports, anywhere in it.
+
+    `package` is the package the source lives in, used to resolve relative imports (empty for code
+    that is not in a module, such as a function defined in a chapter cell).
+    """
     found: set[str] = set()
 
     def add(name: str) -> None:
         if name == "convfinqa" or name.startswith("convfinqa."):
             found.add(name)
 
-    for node in ast.walk(ast.parse(path.read_text())):
+    for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Import):
             for alias in node.names:
                 add(alias.name)
@@ -176,6 +173,16 @@ def _local_imports(module: str) -> set[str]:
                 if module_path(f"{target}.{alias.name}") is not None:
                     add(f"{target}.{alias.name}")
     return found
+
+
+def _local_imports(module: str) -> set[str]:
+    """The `convfinqa.*` modules a module imports, anywhere in its source."""
+    path = module_path(module)
+    if path is None:
+        return set()
+    spec = importlib.util.find_spec(module)
+    package = module if spec.submodule_search_locations else module.rpartition(".")[0]
+    return local_imports(path.read_text(), package)
 
 
 def module_closure(module: str) -> set[str]:
@@ -197,6 +204,24 @@ def module_closure(module: str) -> set[str]:
 def code_hash(modules: set[str] | list[str]) -> str:
     """Compute the SHA-256 hash of the normalized source code for a set of modules."""
     return sha256_json({m: module_digest(m) for m in sorted(modules)})
+
+
+def closure_of_modules(modules: set[str] | list[str]) -> set[str]:
+    """The union of `module_closure` over several modules."""
+    out: set[str] = set()
+    for m in modules:
+        out |= module_closure(m)
+    return out
+
+
+def inline_code_hash(source: str, extra_modules: set[str] | list[str] = ()) -> str:
+    """Hash for a builder defined by source text (a chapter cell) rather than in a module.
+
+    Covers the function's normalized source and the `convfinqa.*` modules it imports (plus
+    `extra_modules`, e.g. modules loaded dynamically during a build).
+    """
+    modules = closure_of_modules(local_imports(source)) | set(extra_modules)
+    return sha256_json({"source": normalized_source(source), "modules": code_hash(modules)})
 
 
 def library_versions() -> dict[str, str | None]:

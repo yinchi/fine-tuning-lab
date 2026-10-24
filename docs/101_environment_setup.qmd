@@ -16,7 +16,7 @@ project interpreter.
 Run these from the project root:
 
 ```bash
-quarto preview docs/     # live preview while you write; re-renders a chapter when you save it
+quarto preview docs/ --no-execute-daemon   # live preview while you write; re-renders a chapter when you save it
 quarto render docs/      # render the whole book (the recommended way to build it)
 ```
 
@@ -24,7 +24,7 @@ quarto render docs/      # render the whole book (the recommended way to build i
 only when its own `.qmd` file changes, and otherwise its saved results in `docs/_freeze/` are reused.
 Quarto does not notice changes to the Python package in `src/convfinqa/`, to `docs/_environment`, or to
 the data. To force a re-run of one chapter, delete its folder `docs/_freeze/<chapter>/`, or run
-`quarto render docs/<chapter>.qmd`.
+`quarto render docs/<chapter>.qmd --no-execute-daemon`.
 
 **Heavy cells.** Some computations, such as training and full evaluation, take minutes to hours.
 Results are stored as named *artifacts* in `artifacts/`, each with a `node.json` that records its
@@ -38,9 +38,19 @@ can never start a long run by accident. Setting `ALLOW_STALE=1` relaxes this for
 but are out of date: the cell loads the old result and shows a red warning box above it. A missing
 artifact always raises.
 
+**Declaring an artifact.** The recipe sits in the chapter, in the cell that uses the result: a function
+decorated with `@artifact(...)`, followed by the call that loads it. Artifact names use letters, digits
+and underscores, and a name template such as `sft_{variant}_{seed}` covers a family
+(`get("sft_dsl_0")` is one member). The function is only a few lines of glue that call the real logic
+in `src/convfinqa/`, and it may use only its own parameters, builtins and imports made inside it, so that
+a build in a separate process finds everything it needs. Quarto never has to run a chapter for the
+build script to know its artifacts: the registry reads the `.qmd` files and finds the recipes and the
+`get("name")` calls by parsing them.
+
 **What makes an artifact stale.** An artifact is rebuilt when any of these changed: its parameters or
-declared input files; the source code of the module that builds it, or of any `convfinqa` module that
-module imports (whitespace, comments and docstrings don't count); its builder's manual `version`; or
+declared input files; the source of its builder function, or of any `convfinqa` module the function
+imports (whitespace, comments and docstrings don't count, and neither do other cells or the chapter's
+prose); its builder's manual `version`; or
 any artifact it was built from, which in turn must itself be fresh. A rebuild that produces identical
 output leaves everything downstream fresh. Every build seeds Python, NumPy and torch from the artifact's
 seed first, so its random draws do not depend on what ran before it. GPU training is still not
@@ -60,7 +70,7 @@ It does four things:
 
 1. Inside a `screen` session named `render`, builds every missing or stale artifact in dependency
    order (`python -m convfinqa.artifacts build --all`), each heavy one in its own process that logs to
-   `artifacts/<name>/build.log`; then runs `quarto render docs/ --log artifacts/render.log` without
+   `artifacts/<name>/build.log`; then runs `quarto render docs/ --no-execute-daemon --log artifacts/render.log` without
    `RUN_HEAVY`, so anything still stale fails loudly instead of starting a hidden run. The session
    keeps running if your terminal or connection drops. Detach with `Ctrl-a d` and reattach later with
    `screen -r render`.
@@ -80,6 +90,14 @@ same artifact, but two renders writing to `docs/_book/` at once can corrupt each
 full build through `build.sh`. (`RUN_HEAVY=1 quarto render docs/` also still works, building stale
 heavy artifacts as the chapters reach them, in chapter order rather than dependency order.)
 
+**Why `--no-execute-daemon`.** By default Quarto keeps a chapter's Jupyter kernel alive for five minutes
+after rendering it, and the next render of that chapter reuses it. A reused kernel keeps the environment
+variables it started with, so a later `RUN_HEAVY=1` or `ALLOW_STALE=1` would be silently ignored, and it
+keeps whatever code it already loaded. The flag gives every render a fresh kernel. (Setting
+`execute: daemon: false` in `_quarto.yml` looked like the same thing but had no effect in Quarto
+1.10.19, which we checked.) The artifact registry also re-reads the chapter files when they change, so an
+edited builder is never served stale even inside a long-lived kernel.
+
 Quarto's `--log` option is used instead of piping through `tee`, because Quarto writes terminal colour
 codes to a pipe and the log file stays free of them. Each render overwrites `artifacts/render.log`,
 so copy it if you want to keep one. The per-artifact build logs in `artifacts/<name>/build.log` are
@@ -90,7 +108,7 @@ To see what a full render would build, or to build one artifact without Quarto:
 
 ```bash
 uv run python -m convfinqa.artifacts status           # what is fresh, stale or missing, and why
-uv run python -m convfinqa.artifacts build sft-dsl-0  # build one artifact and anything stale it needs
+uv run python -m convfinqa.artifacts build sft_dsl_0  # build one artifact and anything stale it needs
 uv run python -m convfinqa.artifacts refresh           # re-execute chapters that used outdated artifacts (the pre-render hook does this)
 ```
 

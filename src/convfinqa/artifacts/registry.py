@@ -19,16 +19,33 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .chapters import ANNOTATION_NAMES, check_pure, compile_builder, scan_chapters
 from .errors import ArtifactError, BuildError, StaleArtifactError
 from .handles import Deps, Files, Handle, InputFile, Status
 from .hashing import (
-    LOG_NAME, code_hash, hash_outputs, is_framework, library_versions, module_closure, sha256_file, sha256_json,
+    LOG_NAME, code_hash, hash_outputs, inline_code_hash, is_framework, library_versions, module_closure,
+    module_path, sha256_file, sha256_json,
 )
 from .seeding import chdir, preserved_rng_state, seed_everything
 
 ROOT = Path(os.environ.get("CONVFINQA_ROOT") or Path(__file__).resolve().parents[3])
+"""The project root.
+
+Read from the environment variable `CONVFINQA_ROOT` if set, otherwise defaults to the
+great-grandparent of the current file's directory.
+"""
+
 ARTIFACTS = Path(os.environ.get("CONVFINQA_ARTIFACTS") or ROOT / "artifacts")
+"""The directory holding built artifacts.
+
+Read from `CONVFINQA_ARTIFACTS` if set, otherwise `ROOT / "artifacts"`.
+"""
+
 DEFAULT_MODULES = ("convfinqa.builders",)
+"""Modules the registry imports to register builders.
+
+Importing these modules runs their `@artifact` decorators.
+"""
 
 
 @dataclass
@@ -42,14 +59,38 @@ class Spec:
     seed: int
     fields: dict[str, type]
     pattern: re.Pattern
+    source: str | None = None  # the function's source, when it is defined in a chapter cell
+    chapter: str | None = None  # the chapter that defines it, if any
+    location: str = ""  # file:line of the definition, for error messages
 
     @property
     def module(self) -> str:
         return self.fn.__module__
 
 
-_SAMPLE = {str: "x", int: "0", float: "0.0"}
+_SAMPLE = {str: "x", int: "0"}
+_NAME = re.compile(r"[A-Za-z0-9_]+")
+_LITERAL = re.compile(r"[A-Za-z0-9_]*")
+# What each kind of name field matches: str is letters and digits, int is canonical digits. Fields are
+# separated by literal text such as "_", and neither kind can contain "_", so matching is unambiguous.
+_FIELD_REGEX = {str: "[A-Za-z0-9]+", int: "0|[1-9][0-9]*"}
 _active: Registry | None = None
+
+
+def _template_parts(template: str) -> list[tuple[str, str | None]]:
+    """Split a name template into (literal, field) pairs, rejecting anything but simple fields."""
+    parts = []
+    for lit, field, spec, conv in string.Formatter().parse(template):
+        if spec or conv or not _LITERAL.fullmatch(lit) or (field is not None and not field.isidentifier()):
+            raise ArtifactError(
+                f"bad name template {template!r}: names use letters, digits and underscores, "
+                "with fields written as {name}"
+            )
+        parts.append((lit, field))
+    for (_, a), (lit, b) in zip(parts, parts[1:]):
+        if a is not None and b is not None and lit == "":
+            raise ArtifactError(f"bad name template {template!r}: two fields need text between them")
+    return parts
 
 
 def artifact(template: str, *, deps=(), files=(), heavy=False, version=1, seed=0):
@@ -58,36 +99,76 @@ def artifact(template: str, *, deps=(), files=(), heavy=False, version=1, seed=0
 
 
 class Registry:
-    def __init__(self, artifacts_dir: Path = ARTIFACTS, *, root: Path = ROOT, modules=(), extra_paths=()):
+    def __init__(
+        self, artifacts_dir: Path = ARTIFACTS, *, root: Path = ROOT, modules=(), extra_paths=(),
+        chapters_dir: Path | None = None,
+    ):
         self.dir = Path(artifacts_dir)
         self.root = Path(root)
         self.modules = list(modules)
         self.extra_paths = [str(p) for p in extra_paths]
+        self.chapters_dir = Path(chapters_dir) if chapters_dir else None
         self.specs: dict[str, Spec] = {}
+        self.target_locations: dict[str, str] = {}  # literal get("name") calls found in chapters
+        self.unparsed_cells: list[str] = []
         self._loaded = False
+        self._loading = False
+        self._scan_signature: tuple = ()  # (name, mtime, size) of the chapter files last scanned
         self._chapter_seen: dict[str, str] = {}
         self._chapter_stale: set[str] = set()
 
     # registration ...............................................................................
 
     def artifact(self, template: str, *, deps=(), files=(), heavy=False, version=1, seed=0):
+        """Decorator registering a builder. In a chapter cell that the scan already registered, it is a no-op."""
+        if not self._loading:
+            self._ensure_loaded()
+            existing = self.specs.get(template)
+            if existing is not None and existing.chapter is not None:
+                return lambda fn: fn  # the chapter's scanned definition is the registered one
+
         def decorate(fn: Callable) -> Callable:
-            fields = [f for _, f, _, _ in string.Formatter().parse(template) if f]
-            hints = typing.get_type_hints(fn)
-            spec_fields = {f: hints.get(f) for f in fields}
-            self._check_signature(template, fn, spec_fields, bool(files))
-            regex = "".join(
-                re.escape(lit) + (f"(?P<{f}>.+?)" if f else "")
-                for lit, f, _, _ in string.Formatter().parse(template)
-            )
-            spec = Spec(template, fn, list(deps), list(files), heavy, version, seed, spec_fields, re.compile(regex))
-            old = self.specs.get(template)
-            if old and (old.fn.__module__, old.fn.__qualname__) != (fn.__module__, fn.__qualname__):
-                raise ArtifactError(f"artifact template {template!r} is registered twice")
-            self.specs[template] = spec
+            self._register(template, fn, deps=deps, files=files, heavy=heavy, version=version, seed=seed)
             return fn
 
         return decorate
+
+    def _register(
+        self, template: str, fn: Callable, *, deps, files, heavy, version, seed,
+        chapter: str | None = None, source: str | None = None, location: str = "",
+    ) -> None:
+        parts = _template_parts(template)
+        fields = [f for _, f in parts if f is not None]
+        try:
+            hints = typing.get_type_hints(fn)
+        except NameError as e:
+            raise ArtifactError(
+                f"builder for {template!r}: annotation uses an unknown name ({e}). "
+                f"Annotations may use only {', '.join(ANNOTATION_NAMES)}, builtins and the module's own imports."
+            ) from None
+        spec_fields = {f: hints.get(f) for f in fields}
+        self._check_signature(template, fn, spec_fields, bool(files))
+        if chapter is None and module_path(fn.__module__) is None:
+            raise ArtifactError(
+                f"builder for {template!r} must live in an importable module or in a chapter code cell "
+                "(a function defined elsewhere, such as an interactive session, cannot be rebuilt in a subprocess)"
+            )
+        for d in deps:
+            unknown = {f for _, f in _template_parts(d) if f is not None} - set(fields)
+            if unknown:
+                raise ArtifactError(f"{template!r}: dependency {d!r} uses fields {sorted(unknown)} the name lacks")
+        regex = "".join(
+            re.escape(lit) + (f"(?P<{f}>{_FIELD_REGEX[spec_fields[f]]})" if f else "") for lit, f in parts
+        )
+        spec = Spec(
+            template, fn, list(deps), list(files), heavy, version, seed, spec_fields, re.compile(regex),
+            source, chapter, location,
+        )
+        old = self.specs.get(template)
+        if old and (old.fn.__module__, old.fn.__qualname__) != (fn.__module__, fn.__qualname__):
+            where = f" (also at {old.location})" if old.location else ""
+            raise ArtifactError(f"artifact template {template!r} is registered twice{where}")
+        self.specs[template] = spec
 
     @staticmethod
     def _check_signature(template, fn, fields, has_files):
@@ -106,32 +187,81 @@ class Registry:
             )
         for f, t in fields.items():
             if t not in _SAMPLE:
-                raise ArtifactError(f"builder for {template!r}: field {f!r} needs a str, int or float annotation")
+                raise ArtifactError(f"builder for {template!r}: field {f!r} needs a str or int annotation")
 
     def load(self, modules=None) -> Registry:
-        """Import the builder modules, registering their artifacts here, then validate the graph."""
+        """Register builders from the modules and the chapters' code cells, then validate the graph."""
         global _active
         previous, _active = _active, self
+        self._loading = True
         try:
             for m in self.modules if modules is None else modules:
                 if m in sys.modules:
                     importlib.reload(sys.modules[m])
                 else:
                     importlib.import_module(m)
+            if self.chapters_dir is not None:
+                self._load_chapters()
         finally:
             _active = previous
+            self._loading = False
         self._loaded = True
         self.validate()
         return self
 
+    def _chapters_signature(self) -> tuple:
+        if self.chapters_dir is None:
+            return ()
+        return tuple(
+            (p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in sorted(self.chapters_dir.glob("*.qmd"))
+        )
+
+    def _load_chapters(self) -> None:
+        # Forget what an earlier scan registered, so builders removed from a chapter disappear.
+        self.specs = {t: sp for t, sp in self.specs.items() if sp.chapter is None}
+        self.target_locations = {}
+        self._scan_signature = self._chapters_signature()
+        scan = scan_chapters(self.chapters_dir)
+        self.unparsed_cells = scan.unparsed
+        for name, where in scan.gets:
+            self.target_locations.setdefault(name, where)
+        for b in scan.builders:
+            check_pure(b)
+            namespace = {"__name__": f"convfinqa_chapters.{b.chapter}", "Path": Path, "Deps": Deps, "Files": Files}
+            fn = compile_builder(b, namespace)
+            self._register(
+                b.template, fn, deps=b.options.get("deps", ()), files=b.options.get("files", ()),
+                heavy=b.options.get("heavy", False), version=b.options.get("version", 1),
+                seed=b.options.get("seed", 0), chapter=b.chapter, source=b.source, location=b.location,
+            )
+
+    def targets(self) -> list[str]:
+        """The artifact names chapters ask for with `get("literal")`: what `build --all` builds."""
+        self._ensure_loaded()
+        return sorted(self.target_locations)
+
     def _ensure_loaded(self) -> None:
+        """Load on first use. A long-lived process (a Jupyter kernel that Quarto keeps alive between renders)
+        also re-reads the chapters when their files change, so an edited builder is never served stale."""
         if not self._loaded:
             self.load()
+        elif self.chapters_dir is not None and self._scan_signature != self._chapters_signature():
+            global _active
+            previous, _active = _active, self
+            self._loading = True
+            try:
+                self._load_chapters()
+            finally:
+                _active = previous
+                self._loading = False
+            self.validate()
 
     # names ......................................................................................
 
     def resolve(self, name: str) -> tuple[Spec, dict[str, Any]]:
         self._ensure_loaded()
+        if not _NAME.fullmatch(name):
+            raise ArtifactError(f"{name!r} is not a valid artifact name (letters, digits and underscores only)")
         matches = []
         for spec in self.specs.values():
             m = spec.pattern.fullmatch(name)
@@ -179,7 +309,11 @@ class Registry:
         for node in graph:
             visit(node, [])
         for name in targets:
-            self._walk(name)
+            try:
+                self._walk(name)
+            except ArtifactError as e:
+                where = self.target_locations.get(name)
+                raise ArtifactError(f"{where}: {e}" if where else str(e)) from None
 
     def _walk(self, name: str) -> list[str]:
         """`name` and everything it depends on, dependencies first (concrete names)."""
@@ -220,6 +354,12 @@ class Registry:
     def _config(self, spec: Spec, params: dict[str, Any]) -> dict:
         return {"params": params, "seed": self._seed(spec, params), "files": self._input_hashes(spec)}
 
+    @staticmethod
+    def _code_hash(spec: Spec, dynamic=()) -> str:
+        if spec.source is not None:
+            return inline_code_hash(spec.source, dynamic)
+        return code_hash(module_closure(spec.module) | set(dynamic))
+
     def status(self, name: str) -> Status:
         spec, params = self.resolve(name)
         node = self._read_node(name)
@@ -234,8 +374,7 @@ class Registry:
         if node.get("config") != config:
             changed = [k for k in config if node.get("config", {}).get(k) != config[k]]
             return Status("stale", f"config changed ({', '.join(changed)})")
-        modules = module_closure(spec.module) | set(node.get("dynamic_modules", []))
-        if node.get("code_hash") != code_hash(modules):
+        if node.get("code_hash") != self._code_hash(spec, node.get("dynamic_modules", [])):
             return Status("stale", "code changed")
         deps = self.dep_names(spec, params)
         if sorted(node.get("deps", {})) != sorted(deps):
@@ -295,6 +434,7 @@ class Registry:
     def _spawn(self, name: str, *, force: bool) -> None:
         spec, params = self.resolve(name)
         cmd = [sys.executable, "-m", "convfinqa.artifacts", "--artifacts-dir", str(self.dir), "--root", str(self.root)]
+        cmd += [f"--chapters-dir={self.chapters_dir or ''}"]
         for m in self.modules:
             cmd += ["--import", m]
         cmd += ["_run", name] + (["--force"] if force else [])
@@ -358,7 +498,7 @@ class Registry:
                 "deps": {d: h.hash for d, h in dep_handles.items()},
                 "outputs": outputs,
                 "output_hash": sha256_json(outputs),
-                "code_hash": code_hash(module_closure(spec.module) | set(dynamic)),
+                "code_hash": self._code_hash(spec, dynamic),
                 "dynamic_modules": dynamic,
                 "git_commit": _git(self.root, "rev-parse", "HEAD"),
                 "git_dirty": bool(_git(self.root, "status", "--porcelain")),
@@ -469,7 +609,7 @@ def _show_stale_warning(name: str, reason: str) -> None:
     print(f"WARNING: {msg}", file=sys.stderr)
 
 
-DEFAULT = Registry(modules=DEFAULT_MODULES)
+DEFAULT = Registry(modules=DEFAULT_MODULES, chapters_dir=ROOT / "docs")
 
 
 def get(name: str) -> Handle:

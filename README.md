@@ -13,11 +13,11 @@ See [`PLAN.md`](PLAN.md) for the full plan, progress tracker and decision log.
 ```bash
 uv sync                                   # create .venv with all dependencies
 uv run pytest                             # run the tests
-quarto preview docs/                      # live-preview the book
+quarto preview docs/ --no-execute-daemon   # live-preview the book
 ./build.sh                                # build stale/missing artifacts (heavy ones too), render, then preview
 uv run python -m convfinqa.artifacts status   # what is fresh, stale or missing
 quarto render docs/                       # render the whole book (stale heavy artifacts raise an error)
-quarto render docs/<chapter>.qmd          # (re-)execute one chapter
+quarto render docs/<chapter>.qmd --no-execute-daemon   # (re-)execute one chapter
 ```
 
 Hardware used: NVIDIA DGX Spark (GB10, 128 GB unified memory, aarch64, CUDA 13.2).

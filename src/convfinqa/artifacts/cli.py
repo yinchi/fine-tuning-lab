@@ -10,12 +10,6 @@ from .errors import ArtifactError
 from .registry import ARTIFACTS, DEFAULT_MODULES, ROOT, Registry
 
 
-def _targets() -> list[str]:
-    from convfinqa.targets import TARGETS
-
-    return list(TARGETS)
-
-
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m convfinqa.artifacts", description="Build, inspect and refresh cached artifacts.")
     p.add_argument(
@@ -25,6 +19,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--root", type=Path, default=ROOT,
         help="The root directory of the project (default read from registry module)",
+    )
+    p.add_argument(
+        "--chapters-dir", default=None,
+        help="Where the chapters' .qmd files are (default: ROOT/docs; give an empty value for none)",
     )
     p.add_argument(
         "--import", dest="imports", action="append", default=[], metavar="MODULE",
@@ -44,7 +42,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     b.add_argument(
         "--all", action="store_true",
-        help="Build every target in targets.py"
+        help="Build every artifact the chapters ask for with get(\"name\")"
     )
     b.add_argument(
         "--force", action="store_true",
@@ -75,14 +73,23 @@ def main(argv: list[str] | None = None) -> int:
     args = p.parse_args(argv)
 
     # Initialize the registry with the specified artifacts directory, root, and imported modules
-    reg = Registry(args.artifacts_dir, root=args.root, modules=args.imports or DEFAULT_MODULES)
+    chapters = (
+        args.root / "docs" if args.chapters_dir is None
+        else (Path(args.chapters_dir) if args.chapters_dir else None)
+    )
+    reg = Registry(
+        args.artifacts_dir,
+        root=args.root,
+        modules=args.imports or DEFAULT_MODULES,
+        chapters_dir=chapters
+    )
 
     # Interact with the registry based on the command-line arguments
     try:
         if args.cmd == "_run":
             reg.execute(args.name, force=args.force, redirect_output=True)
         elif args.cmd == "build":
-            names = _targets() if args.all else args.names
+            names = reg.targets() if args.all else args.names
             if not names and not args.all:
                 p.error("give artifact names or --all")
             reg.validate(names)
@@ -90,7 +97,7 @@ def main(argv: list[str] | None = None) -> int:
                 reg.ensure(n, allow_heavy=True, force=args.force)
             print(f"[artifacts] {len(names)} target(s) fresh")
         elif args.cmd == "status":
-            print("\n".join(reg.tree(args.names or _targets())) or "(no targets)")
+            print("\n".join(reg.tree(args.names or reg.targets())) or "(no targets)")
         elif args.cmd == "refresh":
             removed = reg.refresh(args.root / "docs" / "_freeze")
             if removed:
