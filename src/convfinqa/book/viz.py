@@ -11,13 +11,13 @@ _HUES = (210, 30, 130, 330, 50, 270, 170, 0)
 def tokens_html(pieces: list[str], ids: list[int] | None = None) -> str:
     """Render tokens as coloured spans, like the OpenAI tokenizer page.
 
-    Adjacent tokens get different colours. A newline is drawn as ``↵`` (and still breaks the line),
-    a tab as ``→``, and the token id is the hover text. A token that is only a space keeps its
+    Adjacent tokens get different colours. A newline is drawn as `↵` (and still breaks the line),
+    a tab as `→`, and the token id is the hover text. A token that is only a space keeps its
     coloured background, so spaces are visible.
 
     Args:
         pieces: The list of token strings to render.
-        ids: The list of token ids corresponding to ``pieces``. If ``None``, no hover text is shown.
+        ids: The list of token ids corresponding to `pieces`. If `None`, no hover text is shown.
     """
     spans = []
     for i, piece in enumerate(pieces):
@@ -49,7 +49,7 @@ def tokenize(tok, text: str) -> tuple[list[int], list[str]]:
 
 
 def show_tokens(tok, text: str):
-    """A displayable (IPython) colour-coded tokenization of ``text``.
+    """A displayable (IPython) colour-coded tokenization of `text`.
     
     Args:
         tok: The tokenizer instance (e.g. via `transformers.AutoTokenizer.from_pretrained(...)`).
@@ -90,7 +90,7 @@ def next_token_stats(logits, temperature: float = 1.0, k: int = 10) -> dict:
 def plot_next_token(tok, logits, temperatures=(0.3, 1.0, 2.0), k: int = 10):
     """Bar charts of one next-token distribution at several temperatures.
 
-    The bars are the ``k`` most likely tokens at temperature 1.0, so the same tokens appear
+    The bars are the `k` most likely tokens at temperature 1.0, so the same tokens appear
     in every panel; however, their probabilities depend on the selected temperature.
 
     Args:

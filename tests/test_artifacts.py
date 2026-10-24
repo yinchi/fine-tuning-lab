@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from convfinqa import artifacts as A
+from convfinqa.artifacts import cli, hashing
 
 TOY = '''
 import os, random, time
@@ -256,9 +257,9 @@ def test_build_command_builds_heavy_artifact(toy, monkeypatch):
     monkeypatch.setenv("PYTHONPATH", str(toy.root))
     reg = toy.registry()
     argv = ["--artifacts-dir", str(reg.dir), "--root", str(toy.root), "--import", toy.module_name]
-    assert A.main(argv + ["build", "heavy-7"]) == 0
+    assert cli.main(argv + ["build", "heavy-7"]) == 0
     assert reg.status("heavy-7").fresh
-    assert A.main(argv + ["status", "heavy-7"]) == 0
+    assert cli.main(argv + ["status", "heavy-7"]) == 0
 
 
 # --- interrupted builds -------------------------------------------------------------------------
@@ -430,7 +431,7 @@ def f(x):
 
 
 def test_code_hash_ignores_cosmetic_edits():
-    ref = A.normalized_source(BASE)
+    ref = hashing.normalized_source(BASE)
     cosmetic = '''
 def f( x ):
     """A totally different docstring."""
@@ -441,19 +442,19 @@ def f( x ):
     return y * \\
         2
 '''
-    assert A.normalized_source(cosmetic) == ref
-    assert A.normalized_source(BASE.replace('"Doc."', "'Doc.'")) == ref
+    assert hashing.normalized_source(cosmetic) == ref
+    assert hashing.normalized_source(BASE.replace('"Doc."', "'Doc.'")) == ref
 
 
 @pytest.mark.parametrize("old, new", [("x + 1", "x + 2"), ("y * 2", "y / 2"), ("return y", "return -y")])
 def test_code_hash_sees_behavioural_edits(old, new):
-    assert A.normalized_source(BASE.replace(old, new)) != A.normalized_source(BASE)
+    assert hashing.normalized_source(BASE.replace(old, new)) != hashing.normalized_source(BASE)
 
 
 def test_module_closure_follows_local_imports_and_skips_framework(tmp_path, monkeypatch):
-    closure = A.module_closure("convfinqa.formatting")
+    closure = hashing.module_closure("convfinqa.formatting")
     assert "convfinqa.formatting" in closure
-    assert "convfinqa.artifacts" not in closure
+    assert not any(hashing.is_framework(m) for m in closure)
     for m in closure:
         assert m == "convfinqa" or m.startswith("convfinqa.")
 
@@ -461,10 +462,10 @@ def test_module_closure_follows_local_imports_and_skips_framework(tmp_path, monk
 def test_code_hash_changes_when_a_helper_module_changes(monkeypatch):
     mods = {"convfinqa.a", "convfinqa.b"}
     digests = {"convfinqa.a": "1", "convfinqa.b": "1"}
-    monkeypatch.setattr(A, "_module_digest", lambda m: digests[m])
-    before = A.code_hash(mods)
+    monkeypatch.setattr(hashing, "module_digest", lambda m: digests[m])
+    before = hashing.code_hash(mods)
     digests["convfinqa.b"] = "2"
-    assert A.code_hash(mods) != before
+    assert hashing.code_hash(mods) != before
 
 
 # --- chapter records and refresh ----------------------------------------------------------------
@@ -528,3 +529,16 @@ def test_every_artifact_name_used_in_chapters_is_a_target():
     for qmd in docs.glob("*.qmd"):
         used |= set(re.findall(r"""artifacts\.get\(\s*["']([^"'{}]+)["']""", qmd.read_text()))
     assert used <= set(TARGETS), f"add to convfinqa/targets.py: {sorted(used - set(TARGETS))}"
+
+
+@pytest.mark.parametrize("module, expected", [
+    ("convfinqa.artifacts", True),
+    ("convfinqa.artifacts.registry", True),
+    ("convfinqa.artifacts.hashing", True),
+    ("convfinqa.targets", True),
+    ("convfinqa.artifacts_extra", False),  # a prefix match must respect the dot
+    ("convfinqa.builders", False),
+    ("convfinqa.data.raw", False),
+])
+def test_framework_modules_do_not_enter_the_code_hash(module, expected):
+    assert hashing.is_framework(module) is expected

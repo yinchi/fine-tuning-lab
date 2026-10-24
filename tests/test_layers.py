@@ -5,7 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from convfinqa import artifacts as A
+from convfinqa.artifacts import hashing
 
 # module -> the only convfinqa packages it may depend on
 ALLOWED = {
@@ -16,7 +16,7 @@ ALLOWED = {
 
 
 def _packages(module: str) -> set[str]:
-    return {".".join(m.split(".")[:2]) for m in A.module_closure(module)} - {"convfinqa"}
+    return {".".join(m.split(".")[:2]) for m in hashing.module_closure(module)} - {"convfinqa"}
 
 
 def test_layers_import_only_downward():

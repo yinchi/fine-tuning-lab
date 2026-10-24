@@ -59,7 +59,7 @@ def _unit(a: Point, b: Point) -> Point:
 
 
 def rounded_path(points: list[Point], radius: float) -> str:
-    """An SVG path through ``points`` with each interior corner rounded.
+    """An SVG path through `points` with each interior corner rounded.
 
     The radius shrinks at a corner when a neighbouring segment is too short to hold it
     (each segment gives at most half its length to each end), so short segments never produce kinks.
@@ -171,7 +171,7 @@ class Svg:
         self, anchor: Point, lines: list[str] | str, size: float = 13, bold: bool = False,
             align: str = "middle", colour: str | None = None, line_height: float | None = None
     ) -> None:
-        """Text with its first line's baseline at ``anchor``; extra lines go below it."""
+        """Text with its first line's baseline at `anchor`; extra lines go below it."""
         if isinstance(lines, str):
             lines = [lines]
         step = line_height or size * 1.3
@@ -195,7 +195,7 @@ class Svg:
         self, start: Point, moves: str, radius: float = 10, arrow: bool = True,
         dashed: bool = False, colour: str | None = None
     ) -> Point:
-        """Draw an arrow along ``moves`` (see :func:`waypoints`) with rounded corners.
+        """Draw an arrow along `moves` (see `waypoints`) with rounded corners.
         
         Returns the end point.
         """

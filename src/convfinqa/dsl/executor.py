@@ -81,7 +81,7 @@ def parse_number(token: str) -> float:
 
 
 def parse_program(program: str) -> list[Step]:
-    """Split ``"op(a, b), op(#0, c)"`` into steps. A bare number returns an empty list."""
+    """Split `"op(a, b), op(#0, c)"` into steps. A bare number returns an empty list."""
     text = program.strip()
     if not text:
         raise ProgramError(EMPTY, "empty program")

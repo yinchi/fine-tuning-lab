@@ -1,38 +1,11 @@
-"""Named, cached results ("artifacts") with recursive freshness.
-
-An artifact is a directory ``artifacts/<name>/`` produced by a registered builder::
-
-    @artifact("sft-{variant}-{seed}", deps=["tokenized-{variant}"], files=["configs/sft.json"],
-              heavy=True, version=1)
-    def build_sft(out: Path, deps: Deps, files: Files, *, variant: str, seed: int) -> None: ...
-
-Builder purity: a builder receives only ``out`` (a scratch directory it fills), the handles of its
-declared dependencies (``deps``), its declared static input files (``files``), and the fields of its
-own name (its identity). Hyperparameters live in a declared file or a light config artifact.
-
-An artifact is *fresh* when ``node.json`` exists and matches: the builder's ``version``, its config
-(name fields, input-file hashes, seed), a hash of the normalized source of the modules it uses, and
-the output hashes of its dependencies, each of which must itself be fresh. Bump ``version`` when a
-change this cannot see (a library upgrade, a changed external resource) should invalidate results.
-
-Heavy artifacts build in a subprocess, and only with ``RUN_HEAVY=1`` or the ``build`` command;
-otherwise a stale or missing one raises :class:`StaleArtifactError`. ``ALLOW_STALE=1`` additionally
-lets a stale-but-present heavy artifact load, with a visible warning.
-"""
+"""The registry: builder registration, freshness, building (in process or in a subprocess), and `get`."""
 
 from __future__ import annotations
 
-import argparse
-import ast
-import contextlib
 import fcntl
-import hashlib
 import importlib
-import importlib.metadata
-import importlib.util
 import json
 import os
-import random
 import re
 import shutil
 import string
@@ -41,315 +14,21 @@ import sys
 import time
 import typing
 import warnings
-from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass, field
-from pathlib import Path, PurePosixPath
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
-ROOT = Path(os.environ.get("CONVFINQA_ROOT") or Path(__file__).resolve().parents[2])
+from .errors import ArtifactError, BuildError, StaleArtifactError
+from .handles import Deps, Files, Handle, InputFile, Status
+from .hashing import (
+    LOG_NAME, code_hash, hash_outputs, is_framework, library_versions, module_closure, sha256_file, sha256_json,
+)
+from .seeding import chdir, preserved_rng_state, seed_everything
+
+ROOT = Path(os.environ.get("CONVFINQA_ROOT") or Path(__file__).resolve().parents[3])
 ARTIFACTS = Path(os.environ.get("CONVFINQA_ARTIFACTS") or ROOT / "artifacts")
 DEFAULT_MODULES = ("convfinqa.builders",)
-# Modules whose edits do not invalidate artifacts (the framework itself; bump `version` by hand).
-_FRAMEWORK = {"convfinqa.artifacts", "convfinqa.targets"}
-_TRACKED_LIBRARIES = ("torch", "transformers", "peft", "trl")
-_LOG_NAME = "build.log"
-
-
-class ArtifactError(Exception):
-    """Base class for artifact-system errors."""
-
-
-class StaleArtifactError(ArtifactError):
-    """A heavy artifact is stale or missing and heavy builds are not enabled."""
-
-
-class BuildError(ArtifactError):
-    """A builder failed."""
-
-
-# --- handles passed to builders and chapters ---------------------------------------------------
-
-
-@dataclass(frozen=True)
-class Handle:
-    """One resolved artifact. ``stale`` is True only for a stale result loaded under ALLOW_STALE."""
-
-    name: str
-    path: Path
-    hash: str
-    stale: bool = False
-    _outputs: frozenset[str] = field(default_factory=frozenset, repr=False, compare=False)
-
-    def file(self, rel: str) -> Path:
-        """Path of a recorded output (logs and TensorBoard files are not outputs)."""
-        p = PurePosixPath(rel)
-        if p.is_absolute() or ".." in p.parts:
-            raise ValueError(f"{rel!r}: path must be relative and stay inside the artifact")
-        if rel not in self._outputs:
-            raise FileNotFoundError(f"{rel!r} is not a recorded output of artifact {self.name!r}")
-        return self.path / rel
-
-    def json(self, rel: str) -> Any:
-        return json.loads(self.file(rel).read_text())
-
-    def jsonl(self, rel: str) -> Iterator[dict]:
-        with self.file(rel).open() as f:
-            for line in f:
-                if line.strip():
-                    yield json.loads(line)
-
-
-@dataclass(frozen=True)
-class InputFile:
-    """One declared static input file."""
-
-    path: Path
-    hash: str
-
-    def read_text(self) -> str:
-        return self.path.read_text()
-
-    def json(self) -> Any:
-        return json.loads(self.path.read_text())
-
-    def jsonl(self) -> Iterator[dict]:
-        with self.path.open() as f:
-            for line in f:
-                if line.strip():
-                    yield json.loads(line)
-
-
-class _ReadOnlyMapping(Mapping):
-    _kind = "entry"
-
-    def __init__(self, items: dict[str, Any]):
-        self._items = dict(items)
-
-    def __getitem__(self, key: str) -> Any:
-        try:
-            return self._items[key]
-        except KeyError:
-            raise KeyError(f"{key!r} was not declared; declared {self._kind}s: {sorted(self._items)}") from None
-
-    def __iter__(self) -> Iterator[str]:
-        return iter(self._items)
-
-    def __len__(self) -> int:
-        return len(self._items)
-
-
-class Deps(_ReadOnlyMapping):
-    """Handles of the declared dependencies, keyed by concrete artifact name."""
-
-    _kind = "dependency"
-
-
-class Files(_ReadOnlyMapping):
-    """Declared input files, keyed by the path as declared (relative to the project root)."""
-
-    _kind = "file"
-
-
-@dataclass(frozen=True)
-class Status:
-    kind: str  # "fresh" | "stale" | "missing"
-    reason: str = ""
-    output_hash: str | None = None
-    notes: tuple[str, ...] = ()
-
-    @property
-    def fresh(self) -> bool:
-        return self.kind == "fresh"
-
-
-# --- hashing -----------------------------------------------------------------------------------
-
-
-def _sha256_file(path: Path) -> str:
-    h = hashlib.sha256()
-    with path.open("rb") as f:
-        for block in iter(lambda: f.read(1 << 20), b""):
-            h.update(block)
-    return h.hexdigest()
-
-
-def _sha256_json(obj: Any) -> str:
-    return hashlib.sha256(json.dumps(obj, sort_keys=True).encode()).hexdigest()
-
-
-def _is_output(rel: str) -> bool:
-    """Logs and TensorBoard files are not significant outputs (they never invalidate dependents)."""
-    p = PurePosixPath(rel)
-    return not (rel == "node.json" or p.name == _LOG_NAME or p.suffix == ".log" or "tb" in p.parts)
-
-
-def _hash_outputs(directory: Path) -> dict[str, str]:
-    outputs = {}
-    for dirpath, dirnames, filenames in os.walk(directory):
-        dirnames.sort()
-        for fn in sorted(filenames):
-            full = Path(dirpath) / fn
-            rel = full.relative_to(directory).as_posix()
-            if _is_output(rel):
-                outputs[rel] = _sha256_file(full)
-    return outputs
-
-
-class _Normalize(ast.NodeTransformer):
-    """Drop what cannot change behaviour: docstrings and annotations on local variables."""
-
-    def _strip_docstring(self, node):
-        body = node.body
-        if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
-                and isinstance(body[0].value.value, str):
-            node.body = body[1:] or [ast.Pass()]
-        return self.generic_visit(node)
-
-    visit_Module = visit_FunctionDef = visit_AsyncFunctionDef = visit_ClassDef = _strip_docstring
-
-    def visit_AnnAssign(self, node):
-        node = self.generic_visit(node)
-        if node.value is None:
-            return ast.Pass()
-        return ast.copy_location(ast.Assign(targets=[node.target], value=node.value), node)
-
-
-_norm_cache: dict[tuple[str, int, int], str] = {}
-
-
-def normalized_source(source: str) -> str:
-    """Source text with whitespace, comments, line continuations, docstrings and local annotations
-    removed, so only behavioural edits change it."""
-    tree = _Normalize().visit(ast.parse(source))
-    return ast.unparse(ast.fix_missing_locations(tree))
-
-
-def _module_path(module: str) -> Path | None:
-    try:
-        spec = importlib.util.find_spec(module)
-    except (ImportError, ValueError):
-        return None
-    if spec is None or not spec.origin or not spec.origin.endswith(".py"):
-        return None
-    return Path(spec.origin)
-
-
-def _module_digest(module: str) -> str | None:
-    path = _module_path(module)
-    if path is None:
-        return None
-    st = path.stat()
-    key = (str(path), st.st_mtime_ns, st.st_size)
-    if key not in _norm_cache:
-        _norm_cache[key] = hashlib.sha256(normalized_source(path.read_text()).encode()).hexdigest()
-    return _norm_cache[key]
-
-
-def _local_imports(module: str) -> set[str]:
-    """The ``convfinqa.*`` modules a module imports, anywhere in its source."""
-    path = _module_path(module)
-    if path is None:
-        return set()
-    spec = importlib.util.find_spec(module)
-    package = module if spec.submodule_search_locations else module.rpartition(".")[0]
-    found: set[str] = set()
-
-    def add(name: str) -> None:
-        if name == "convfinqa" or name.startswith("convfinqa."):
-            found.add(name)
-
-    for node in ast.walk(ast.parse(path.read_text())):
-        if isinstance(node, ast.Import):
-            for alias in node.names:
-                add(alias.name)
-        elif isinstance(node, ast.ImportFrom):
-            if node.level:
-                base = package.rsplit(".", node.level - 1)[0] if node.level > 1 else package
-                target = f"{base}.{node.module}" if node.module else base
-            else:
-                target = node.module or ""
-            add(target)
-            for alias in node.names:  # `from convfinqa import data` imports a submodule
-                if _module_path(f"{target}.{alias.name}") is not None:
-                    add(f"{target}.{alias.name}")
-    return found
-
-
-def module_closure(module: str) -> set[str]:
-    """``module`` plus every ``convfinqa.*`` module it imports, transitively (framework excluded)."""
-    seen: set[str] = set()
-    todo = [module]
-    while todo:
-        m = todo.pop()
-        if m in seen or m in _FRAMEWORK:
-            continue
-        seen.add(m)
-        todo.extend(_local_imports(m))
-    return seen
-
-
-def code_hash(modules: set[str] | list[str]) -> str:
-    return _sha256_json({m: _module_digest(m) for m in sorted(modules)})
-
-
-def library_versions() -> dict[str, str | None]:
-    out = {}
-    for lib in _TRACKED_LIBRARIES:
-        try:
-            out[lib] = importlib.metadata.version(lib)
-        except importlib.metadata.PackageNotFoundError:
-            out[lib] = None
-    return out
-
-
-# --- seeding -----------------------------------------------------------------------------------
-
-
-def seed_everything(seed: int) -> None:
-    """Seed Python, NumPy and torch (CPU and CUDA) so a build does not depend on earlier RNG use."""
-    random.seed(seed)
-    if importlib.util.find_spec("numpy") is not None:
-        import numpy as np
-
-        np.random.seed(seed % (2**32))
-    if importlib.util.find_spec("torch") is not None:
-        import torch
-
-        torch.manual_seed(seed)
-        torch.cuda.manual_seed_all(seed)
-
-
-@contextlib.contextmanager
-def _preserved_rng_state() -> Iterator[None]:
-    """Restore the global RNG state afterwards, so an in-kernel build never perturbs a chapter."""
-    py = random.getstate()
-    np_state = sys.modules["numpy"].random.get_state() if "numpy" in sys.modules else None
-    torch = sys.modules.get("torch")
-    torch_state = torch.get_rng_state() if torch else None
-    cuda_state = torch.cuda.get_rng_state_all() if torch and torch.cuda.is_initialized() else None
-    try:
-        yield
-    finally:
-        random.setstate(py)
-        if np_state is not None:
-            sys.modules["numpy"].random.set_state(np_state)
-        if torch_state is not None:
-            torch.set_rng_state(torch_state)
-        if cuda_state is not None:
-            torch.cuda.set_rng_state_all(cuda_state)
-
-
-@contextlib.contextmanager
-def _chdir(path: Path) -> Iterator[None]:
-    old = os.getcwd()
-    os.chdir(path)
-    try:
-        yield
-    finally:
-        os.chdir(old)
-
-
-# --- registry ----------------------------------------------------------------------------------
 
 
 @dataclass
@@ -374,7 +53,7 @@ _active: Registry | None = None
 
 
 def artifact(template: str, *, deps=(), files=(), heavy=False, version=1, seed=0):
-    """Register a builder with the active registry (the default one outside :meth:`Registry.load`)."""
+    """Register a builder with the active registry (the default one outside `Registry.load`)."""
     return (_active or DEFAULT).artifact(template, deps=deps, files=files, heavy=heavy, version=version, seed=seed)
 
 
@@ -472,7 +151,7 @@ class Registry:
         return [d.format(**params) for d in spec.deps]
 
     def validate(self, targets=()) -> None:
-        """Every dependency template resolves, there are no cycles; ``targets`` are resolved fully."""
+        """Every dependency template resolves, there are no cycles; `targets` are resolved fully."""
         graph: dict[str, list[str]] = {}
         for tpl, spec in self.specs.items():
             sample = {f: _SAMPLE[t] for f, t in spec.fields.items()}
@@ -503,7 +182,7 @@ class Registry:
             self._walk(name)
 
     def _walk(self, name: str) -> list[str]:
-        """``name`` and everything it depends on, dependencies first (concrete names)."""
+        """`name` and everything it depends on, dependencies first (concrete names)."""
         order: list[str] = []
 
         def visit(n: str) -> None:
@@ -535,7 +214,7 @@ class Registry:
         out = {}
         for rel in spec.files:
             p = self.root / rel
-            out[rel] = _sha256_file(p) if p.is_file() else None
+            out[rel] = sha256_file(p) if p.is_file() else None
         return out
 
     def _config(self, spec: Spec, params: dict[str, Any]) -> dict:
@@ -589,7 +268,7 @@ class Registry:
         return f"uv run python -m convfinqa.artifacts build {name}"
 
     def ensure(self, name: str, *, allow_heavy: bool, force: bool = False) -> Handle:
-        """Make ``name`` fresh (building it and its stale dependencies) and return its handle."""
+        """Make `name` fresh (building it and its stale dependencies) and return its handle."""
         spec, params = self.resolve(name)
         for dep in self.dep_names(spec, params):
             self.ensure(dep, allow_heavy=allow_heavy)
@@ -624,7 +303,7 @@ class Registry:
         env["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
         if self.extra_paths:
             env["PYTHONPATH"] = os.pathsep.join(self.extra_paths + [env.get("PYTHONPATH", "")])
-        log = self.dir / f"{name}.tmp" / _LOG_NAME
+        log = self.dir / f"{name}.tmp" / LOG_NAME
         print(f"[artifacts] building {name} in a subprocess (log: {log})", file=sys.stderr, flush=True)
         t0 = time.time()
         proc = subprocess.run(cmd, env=env, cwd=self.root)
@@ -654,31 +333,31 @@ class Registry:
                 shutil.rmtree(p, ignore_errors=True)
             tmp.mkdir(parents=True)
             if redirect_output:
-                fd = os.open(tmp / _LOG_NAME, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
+                fd = os.open(tmp / LOG_NAME, os.O_WRONLY | os.O_CREAT | os.O_APPEND)
                 os.dup2(fd, 1)
                 os.dup2(fd, 2)
             files = Files({
-                rel: InputFile(self.root / rel, _sha256_file(self.root / rel)) for rel in spec.files
+                rel: InputFile(self.root / rel, sha256_file(self.root / rel)) for rel in spec.files
             })
             args = [tmp, Deps(dep_handles)] + ([files] if spec.files else [])
             config = self._config(spec, params)
             before = set(sys.modules)
             t0 = time.time()
-            with _preserved_rng_state(), _chdir(tmp):
+            with preserved_rng_state(), chdir(tmp):
                 seed_everything(config["seed"])
                 spec.fn(*args, **params)
             dynamic = sorted(
                 m for m in set(sys.modules) - before
-                if (m == "convfinqa" or m.startswith("convfinqa.")) and m not in _FRAMEWORK
+                if (m == "convfinqa" or m.startswith("convfinqa.")) and not is_framework(m)
             )
-            outputs = _hash_outputs(tmp)
+            outputs = hash_outputs(tmp)
             node = {
                 "name": name,
                 "version": spec.version,
                 "config": config,
                 "deps": {d: h.hash for d, h in dep_handles.items()},
                 "outputs": outputs,
-                "output_hash": _sha256_json(outputs),
+                "output_hash": sha256_json(outputs),
                 "code_hash": code_hash(module_closure(spec.module) | set(dynamic)),
                 "dynamic_modules": dynamic,
                 "git_commit": _git(self.root, "rev-parse", "HEAD"),
@@ -699,7 +378,7 @@ class Registry:
     # what chapters call .........................................................................
 
     def get(self, name: str) -> Handle:
-        """Return the artifact ``name``, building it if the rules allow (see the module docstring)."""
+        """Return the artifact `name`, building it if the rules allow (see the module docstring)."""
         spec, _ = self.resolve(name)
         st = self.status(name)
         if st.fresh:
@@ -794,64 +473,5 @@ DEFAULT = Registry(modules=DEFAULT_MODULES)
 
 
 def get(name: str) -> Handle:
-    """Chapter entry point: ``artifacts.get("split-v1")``."""
+    """Chapter entry point: `artifacts.get("split-v1")`."""
     return DEFAULT.get(name)
-
-
-# --- command line ------------------------------------------------------------------------------
-
-
-def _targets() -> list[str]:
-    from convfinqa.targets import TARGETS
-
-    return list(TARGETS)
-
-
-def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="python -m convfinqa.artifacts", description=__doc__.splitlines()[0])
-    p.add_argument("--artifacts-dir", type=Path, default=ARTIFACTS)
-    p.add_argument("--root", type=Path, default=ROOT)
-    p.add_argument("--import", dest="imports", action="append", default=[], metavar="MODULE")
-    sub = p.add_subparsers(dest="cmd", required=True)
-    b = sub.add_parser("build", help="build artifacts (heavy ones in subprocesses) and anything stale they need")
-    b.add_argument("names", nargs="*")
-    b.add_argument("--all", action="store_true", help="build every target in targets.py")
-    b.add_argument("--force", action="store_true", help="rebuild the named artifacts even if fresh")
-    s = sub.add_parser("status", help="show a fresh/stale/missing tree")
-    s.add_argument("names", nargs="*", help="default: every target")
-    sub.add_parser("refresh", help="delete the freeze folders of chapters that used outdated artifacts")
-    r = sub.add_parser("_run", help=argparse.SUPPRESS)  # build one artifact in this process
-    r.add_argument("name")
-    r.add_argument("--force", action="store_true")
-    args = p.parse_args(argv)
-
-    reg = Registry(args.artifacts_dir, root=args.root, modules=args.imports or DEFAULT_MODULES)
-    try:
-        if args.cmd == "_run":
-            reg.execute(args.name, force=args.force, redirect_output=True)
-        elif args.cmd == "build":
-            names = _targets() if args.all else args.names
-            if not names and not args.all:
-                p.error("give artifact names or --all")
-            reg.validate(names)
-            for n in names:
-                reg.ensure(n, allow_heavy=True, force=args.force)
-            print(f"[artifacts] {len(names)} target(s) fresh")
-        elif args.cmd == "status":
-            print("\n".join(reg.tree(args.names or _targets())) or "(no targets)")
-        elif args.cmd == "refresh":
-            removed = reg.refresh(args.root / "docs" / "_freeze")
-            if removed:
-                print(f"[artifacts] chapters marked for re-execution: {', '.join(removed)}")
-    except ArtifactError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 1
-    return 0
-
-
-if __name__ == "__main__":
-    # Run as `-m`, this file is `__main__`; builders import `convfinqa.artifacts`, a second copy with its
-    # own registry. Delegate to the canonical module so both see the same one.
-    from convfinqa.artifacts import main as _main
-
-    sys.exit(_main())
