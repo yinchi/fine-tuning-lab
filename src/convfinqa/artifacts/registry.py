@@ -50,35 +50,95 @@ Importing these modules runs their `@artifact` decorators.
 
 @dataclass
 class Spec:
+    """A specification for an artifact builder.
+    
+    A builder allows a group of related artifacts to be grouped under a common template,
+    which contains placeholders for variable parts of the artifact names.
+    """
     template: str
+    """The template string for the artifact names, with placeholders for variable parts.
+    
+    For example, a template like "foo_{variant}_{seed}" has two variable parts: "variant" and
+    "seed".  The `seed` field has special meaning; if absent, a default value is used.
+    """
+
     fn: Callable
+    """The function associated with this artifact builder.
+    
+    Must accept the same keyword arguments as the placeholders in the template.
+    """
+
     deps: list[str]
+    """Template strings for the dependencies of this artifact. Allowed placeholders are
+    those defined in `template`."""
+
     files: list[str]
+    """Declared static input files, as literal paths relative to the project root (no placeholders).
+    Their content hashes are part of the artifact's config."""
+
     heavy: bool
+    """Whether the build runs in a subprocess and needs RUN_HEAVY=1 or the build command."""
+
     version: int
+    """The version of this artifact builder. Incrementing this forces rebuilds of artifacts."""
+
     seed: int
+    """A default seed value for this artifact builder. Used to generate reproducible artifacts
+    when `seed` is not provided in the template."""
+
     fields: dict[str, type]
+    """Type annotations for the fields in the template.
+    
+    The only allowed types are the keys of `_FIELD_REGEX`, i.e., `str` and `int`. The same
+    keys are present in `_SAMPLE` as well, which supplies example values for each field type.
+    """
+
     pattern: re.Pattern
-    source: str | None = None  # the function's source, when it is defined in a chapter cell
-    chapter: str | None = None  # the chapter that defines it, if any
-    location: str = ""  # file:line of the definition, for error messages
+    """The compiled regular expression pattern for matching artifact names based on the template."""
+
+    source: str | None = None
+    """The source code of the function defining this artifact, if available (i.e., when
+    defined in a chapter cell)."""
+
+    chapter: str | None = None
+    """The chapter that defines this artifact, if available."""
+
+    location: str = ""
+    """`file:line` of the definition in the chapter file, for error messages. Empty for builders
+    defined in modules."""
 
     @property
     def module(self) -> str:
+        """Return the module in which the artifact's function is defined."""
         return self.fn.__module__
 
 
 _SAMPLE = {str: "x", int: "0"}
+"""Sample values for each allowed field type."""
+
 _NAME = re.compile(r"[A-Za-z0-9_]+")
+"""Regular expression for valid artifact names."""
+
 _LITERAL = re.compile(r"[A-Za-z0-9_]*")
-# What each kind of name field matches: str is letters and digits, int is canonical digits. Fields are
-# separated by literal text such as "_", and neither kind can contain "_", so matching is unambiguous.
+"""Regular expression for valid literal parts of artifact names, which may be empty.
+
+See `_template_parts` for how templates are split into parts.
+"""
+
 _FIELD_REGEX = {str: "[A-Za-z0-9]+", int: "0|[1-9][0-9]*"}
+"""Regular expressions for each allowed field value, keyed by the field type."""
+
 _active: Registry | None = None
 
 
 def _template_parts(template: str) -> list[tuple[str, str | None]]:
-    """Split a name template into (literal, field) pairs, rejecting anything but simple fields."""
+    """Split a name template into (literal, field) pairs, rejecting anything but simple fields.
+    
+    Templates are split into parts as pairs: each field name and the literal text before it. Any
+    trailing literal part after the last field is also included as a pair with `None` as the field
+    name. For example, the template "file_{name}_{version}_suffix" would be split into:
+    `[("file_", "name"), ("_", "version"), ("_suffix", None)]`.
+    """
     parts = []
     for lit, field, spec, conv in string.Formatter().parse(template):
         if spec or conv or not _LITERAL.fullmatch(lit) or (field is not None and not field.isidentifier()):
@@ -188,6 +248,8 @@ class Registry:
         for f, t in fields.items():
             if t not in _SAMPLE:
                 raise ArtifactError(f"builder for {template!r}: field {f!r} needs a str or int annotation")
+        if fields.get("seed", int) is not int:
+            raise ArtifactError(f"builder for {template!r}: the `seed` field is the build seed, so it must be an int")
 
     def load(self, modules=None) -> Registry:
         """Register builders from the modules and the chapters' code cells, then validate the graph."""
@@ -501,7 +563,7 @@ class Registry:
                 "code_hash": self._code_hash(spec, dynamic),
                 "dynamic_modules": dynamic,
                 "git_commit": _git(self.root, "rev-parse", "HEAD"),
-                "git_dirty": bool(_git(self.root, "status", "--porcelain")),
+                "git_dirty": _git_dirty(self.root),
                 "library_versions": library_versions(),
                 "python": sys.version.split()[0].rpartition(".")[0],
                 "built_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
@@ -586,13 +648,30 @@ class Registry:
 
 
 def _git(root: Path, *args: str) -> str | None:
+    """Run a git command in the given root directory and return its output as a string.
+
+    Used to obtain the current commit hash when updating an artifact result.
+    """
     try:
-        return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=True).stdout.strip()
+        return subprocess.run(
+            ["git", *args], cwd=root, capture_output=True, text=True, check=True
+        ).stdout.strip()
     except (OSError, subprocess.CalledProcessError):
         return None
 
 
+def _git_dirty(root: Path) -> bool | None:
+    """Whether the working tree has uncommitted changes, or `None` if that cannot be determined."""
+    status = _git(root, "status", "--porcelain")
+    return None if status is None else bool(status)
+
+
 def _show_stale_warning(name: str, reason: str) -> None:
+    """Show a warning for a stale artifact.
+    
+    Uses `IPython.display` if available to show a styled warning message in notebooks. Otherwise,
+    prints to `stderr`.
+    """
     msg = f"STALE artifact {name!r} ({reason}). Showing the old result; rebuild with ./build.sh."
     try:
         from IPython import get_ipython
@@ -610,8 +689,13 @@ def _show_stale_warning(name: str, reason: str) -> None:
 
 
 DEFAULT = Registry(modules=DEFAULT_MODULES, chapters_dir=ROOT / "docs")
+"""The default registry instance used by the `get` function."""
 
 
 def get(name: str) -> Handle:
-    """Chapter entry point: `artifacts.get("split-v1")`."""
+    """Get a handle to an artifact by name.
+    
+    Uses the default registry instance. If the rules allow, also builds the artifact if it is stale
+    or missing.  If the artifact cannot be found or built, an `ArtifactError` is raised.
+    """
     return DEFAULT.get(name)

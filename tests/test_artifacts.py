@@ -516,3 +516,32 @@ def test_status_tree_lists_dependencies(toy):
     lines = reg.tree(["leaf"])
     assert [l.strip().split()[0] for l in lines] == ["leaf", "mid", "base_2"]
     assert all("missing" in l for l in lines)
+
+
+def test_seed_field_must_be_an_int():
+    reg = A.Registry(modules=[])
+
+    def as_text(out: Path, deps: A.Deps, *, seed: str):
+        pass
+
+    def as_number(out: Path, deps: A.Deps, *, seed: int):
+        pass
+
+    with pytest.raises(A.ArtifactError, match="seed.*must be an int"):
+        reg.artifact("m_{seed}")(as_text)
+    reg.artifact("m_{seed}")(as_number)  # fine
+    assert reg.resolve("m_7")[1] == {"seed": 7}
+
+
+def test_git_provenance_is_unknown_outside_a_repository_not_clean(tmp_path):
+    from convfinqa.artifacts.registry import _git, _git_dirty
+
+    assert _git(tmp_path, "rev-parse", "HEAD") is None
+    assert _git_dirty(tmp_path) is None  # not False: "clean" would claim something we do not know
+
+    import subprocess
+
+    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+    assert _git_dirty(tmp_path) is False
+    (tmp_path / "new.txt").write_text("x")
+    assert _git_dirty(tmp_path) is True
