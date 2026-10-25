@@ -43,9 +43,11 @@ decorated with `@artifact(...)`, followed by the call that loads it. Artifact na
 and underscores, and a name template such as `sft_{variant}_{seed}` covers a family
 (`get("sft_dsl_0")` is one member). The function is only a few lines of glue that call the real logic
 in `src/convfinqa/`, and it may use only its own parameters, builtins and imports made inside it, so that
-a build in a separate process finds everything it needs. Quarto never has to run a chapter for the
-build script to know its artifacts: the registry reads the `.qmd` files and finds the recipes and the
-`get("name")` calls by parsing them.
+a build in a separate process finds everything it needs. The function must be a plain `def` at the top
+level of its cell (not inside an `if` or a function), and a cell marked `#| eval: false` is ignored, so
+use a plain `python` fence to show an example. Quarto never has to run a chapter for the build script
+to know its artifacts: the registry reads the `.qmd` files and finds the recipes and the `get("name")`
+calls by parsing them (a `get` may appear anywhere in a cell, inside flow control too).
 
 **What makes an artifact stale.** An artifact is rebuilt when any of these changed: its parameters or
 declared input files; the source of its builder function, or of any `convfinqa` module the function
