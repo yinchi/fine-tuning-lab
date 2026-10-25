@@ -105,6 +105,26 @@ def test_scan_rejects_bad_decorators(book, decorator, message):
         chapters.scan_chapters(book.root / "docs")
 
 
+def test_an_unknown_name_mentions_the_cells_that_did_not_parse(book):
+    path = book.write("301_a", SETUP, """
+        %matplotlib inline
+        @artifact("sq_{n}")
+        def build_sq(out: Path, deps: Deps, *, n: int):
+            pass
+    """)
+    reg = book.registry()
+    cell_line = line_of(path, "%matplotlib inline")
+    with pytest.raises(A.ArtifactError, match=rf"'sq_3'; these chapter cells could not be parsed.*301_a\.qmd:{cell_line}$"):
+        reg.catalog.resolve("sq_3")
+    assert reg.catalog.unparsed_cells == [f"{path}:{cell_line}"]  # the cell's first code line
+
+
+def test_an_unknown_name_has_no_hint_when_every_cell_parsed(book):
+    book.write("301_a", SETUP, SQUARE)
+    with pytest.raises(A.ArtifactError, match=r"for the name 'nothing'$"):
+        book.registry().catalog.resolve("nothing")
+
+
 def test_cells_that_do_not_parse_are_reported_not_fatal(book):
     book.write("301_a", """
         %matplotlib inline
@@ -396,3 +416,222 @@ def test_the_state_is_loading_while_builders_register(book):
     reg.catalog._register = spy
     reg.catalog.load()
     assert seen == [LoadState.LOADING] and reg.catalog.load_state is LoadState.LOADED
+
+
+def test_the_builder_namespace_provides_exactly_the_annotation_names():
+    namespace = chapters.builder_namespace("301_a")
+    assert namespace["__name__"] == "convfinqa_chapters.301_a"
+    assert set(namespace) - {"__name__"} == set(chapters.ANNOTATION_NAMES)
+    assert namespace is not chapters.builder_namespace("301_a")  # a fresh dict each time
+
+
+def test_unpacked_options_get_a_specific_message(book):
+    book.write("301_a", SETUP, """
+        opts = {}
+
+        @artifact("sq_{n}", **opts)
+        def build_sq(out: Path, deps: Deps, *, n: int):
+            pass
+    """)
+    with pytest.raises(A.ArtifactError, match=r"does not accept \*\*options"):
+        chapters.scan_chapters(book.root / "docs")
+
+
+# --- which cells and functions count ----------------------------------------------------------------
+
+
+def test_cells_marked_eval_false_are_ignored(book):
+    book.write("301_a", SETUP, """
+        #| eval: false
+        @artifact("shown_{n}")
+        def build_shown(out: Path, deps: Deps, *, n: int):
+            pass
+
+        x = get("shown_1")
+    """, """
+        #| echo: false
+        #| eval: False
+        %matplotlib inline
+        y = get("also_ignored")
+    """)
+    scan = chapters.scan_chapters(book.root / "docs")
+    assert scan.builders == [] and scan.gets == [] and scan.unparsed == []  # not even as an unparsed cell
+
+
+def test_only_leading_option_lines_can_disable_a_cell(book):
+    book.write("301_a", SETUP, """
+        #| eval: true
+        # eval: false
+        x = get("one")
+    """, """
+        y = get("two")
+        #| eval: false
+    """)
+    assert [name for name, _ in chapters.scan_chapters(book.root / "docs").gets] == ["one", "two"]
+
+
+@pytest.mark.parametrize("wrapper", [
+    "if True:\n    {builder}",
+    "for _ in range(1):\n    {builder}",
+    "with open('/dev/null'):\n    {builder}",
+    "class Holder:\n    {builder}",
+    "def outer():\n    {builder}",
+])
+def test_a_builder_that_is_not_top_level_is_an_error(book, wrapper):
+    builder = '@artifact("sq_{n}")\n    def build_sq(out: Path, deps: Deps, *, n: int):\n        pass'
+    path = book.write("301_a", SETUP, wrapper.format(builder=builder))
+    cell_line = line_of(path, "def build_sq")
+    with pytest.raises(A.ArtifactError, match=rf"301_a\.qmd:{cell_line}: a builder must be a plain `def` at the top level"):
+        chapters.scan_chapters(book.root / "docs")
+
+
+def test_an_async_builder_is_an_error(book):
+    book.write("301_a", SETUP, """
+        @artifact("sq_{n}")
+        async def build_sq(out: Path, deps: Deps, *, n: int):
+            pass
+    """)
+    with pytest.raises(A.ArtifactError, match="plain `def`"):
+        chapters.scan_chapters(book.root / "docs")
+
+
+def test_a_get_may_be_nested_in_flow_control(book):
+    book.write("301_a", SETUP, """
+        for n in range(2):
+            if n:
+                value = get("nested_one")
+        try:
+            other = artifacts.get("nested_two")
+        except Exception:
+            pass
+    """)
+    assert [name for name, _ in chapters.scan_chapters(book.root / "docs").gets] == ["nested_one", "nested_two"]
+
+
+def test_gets_are_reported_in_source_order_not_tree_order(book):
+    path = book.write("301_a", SETUP, """
+        if True:
+            for _ in range(1):
+                first = get("deeply_nested")
+        second = get("top_level")
+    """)
+    scan = chapters.scan_chapters(book.root / "docs")
+    assert [name for name, _ in scan.gets] == ["deeply_nested", "top_level"]
+    assert scan.gets[0][1] == f"{path}:{line_of(path, 'get(\"deeply_nested\")')}"
+
+
+# --- fences ---------------------------------------------------------------------------------------
+
+def raw_qmd(book, name, text):
+    path = book.root / "docs" / f"{name}.qmd"
+    path.write_text(textwrap.dedent(text).lstrip("\n"))
+    return path
+
+
+def test_a_cell_shown_inside_a_longer_fence_is_not_a_cell(book):
+    path = raw_qmd(book, "301_a", """
+        Here is how to write one:
+
+        ````markdown
+        ```{python}
+        @artifact("shown_{n}")
+        def build_shown(out: Path, deps: Deps, *, n: int):
+            pass
+        x = get("shown_1")
+        ```
+        ````
+
+        ```{python}
+        y = get("real")
+        ```
+    """)
+    scan = chapters.scan_chapters(book.root / "docs")
+    assert scan.builders == []
+    assert scan.gets == [("real", f"{path}:{line_of(path, 'get(\"real\")')}")]
+
+
+def test_a_cell_shown_inside_a_tilde_fence_is_not_a_cell(book):
+    raw_qmd(book, "301_a", """
+        ~~~markdown
+        ```{python}
+        x = get("shown")
+        ```
+        ~~~
+
+        ```{python}
+        y = get("real")
+        ```
+    """)
+    assert [n for n, _ in chapters.scan_chapters(book.root / "docs").gets] == ["real"]
+
+
+def test_a_shorter_fence_inside_a_block_does_not_close_it(book):
+    raw_qmd(book, "301_a", """
+        ````text
+        ```
+        still text
+        ```{python}
+        x = get("inside")
+        ```
+        ````
+        ```{python}
+        y = get("after")
+        ```
+    """)
+    assert [n for n, _ in chapters.scan_chapters(book.root / "docs").gets] == ["after"]
+
+
+def test_a_display_only_python_fence_is_not_a_cell(book):
+    raw_qmd(book, "301_a", """
+        ```python
+        x = get("displayed")
+        ```
+    """)
+    assert chapters.scan_chapters(book.root / "docs").gets == []
+
+
+def test_a_cell_may_be_indented_up_to_three_spaces_and_carry_attributes(book):
+    raw_qmd(book, "301_a", """
+           ```{python .cell-output}
+        x = get("indented")
+           ```
+    """)
+    assert [n for n, _ in chapters.scan_chapters(book.root / "docs").gets] == ["indented"]
+
+
+def test_an_unclosed_outer_fence_hides_the_rest_of_the_file(book):
+    raw_qmd(book, "301_a", """
+        ````markdown
+        ```{python}
+        x = get("hidden")
+        ```
+    """)
+    assert chapters.scan_chapters(book.root / "docs").gets == []
+
+
+def test_line_numbers_stay_right_after_nested_blocks(book):
+    path = raw_qmd(book, "301_a", """
+        ````markdown
+        ```{python}
+        a = 1
+        ```
+        ````
+
+        ```{python}
+        #| echo: false
+        value = get("late")
+        ```
+    """)
+    [(name, where)] = chapters.scan_chapters(book.root / "docs").gets
+    assert where == f"{path}:{line_of(path, 'get(\"late\")')}"
+
+
+def test_backticks_in_an_info_string_are_inline_code_not_a_fence(book):
+    raw_qmd(book, "301_a", """
+        ```{python} is how a `cell` opens, written as inline code.
+
+        ```{python}
+        y = get("real")
+        ```
+    """)
+    assert [n for n, _ in chapters.scan_chapters(book.root / "docs").gets] == ["real"]

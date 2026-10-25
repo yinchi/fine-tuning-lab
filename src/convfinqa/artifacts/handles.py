@@ -6,7 +6,7 @@ import json
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, Literal
 
 
 @dataclass(frozen=True)
@@ -16,19 +16,25 @@ class Handle:
     name: str
     """The name of the artifact."""
     path: Path
-    """The path to the artifact's directory."""
+    """The artifact's directory. Unlike `file()`, it also reaches files that are not recorded
+    outputs, such as `build.log` and TensorBoard logs."""
     hash: str
-    """The hash of the artifact's contents."""
+    """The artifact's output hash: a hash of the file hashes of its recorded outputs (logs and
+    TensorBoard files excluded). A rebuild with identical outputs has the same hash, which keeps
+    what was built from it fresh."""
     stale: bool = False
-    """Whether the artifact is stale."""
+    """True only when this handle is a stale result that was loaded on purpose (`ALLOW_STALE=1`). A
+    fresh artifact is never marked stale, and a stale one that was not loaded has no handle."""
     _outputs: frozenset[str] = field(default_factory=frozenset, repr=False, compare=False)
-    """The set of recorded output files."""
+    """The recorded outputs as relative paths with forward slashes, e.g. `"sub/w.txt"`. Set by the
+    store; not part of equality or `repr`."""
 
     def file(self, rel: str) -> Path:
         """Path of a recorded output (logs and TensorBoard files are not outputs).
 
         Args:
-            rel: The relative path of the output file within the artifact directory.
+            rel: The output's path within the artifact directory, written as recorded: relative,
+                with forward slashes and no leading `./`.
 
         Returns:
             The full path to the output file.
@@ -56,6 +62,7 @@ class Handle:
         Raises:
             ValueError: If the path is absolute or attempts to escape the artifact directory.
             FileNotFoundError: If the path is not a recorded output of the artifact.
+            json.JSONDecodeError: If the file is not valid JSON.
         """
         return json.loads(self.file(rel).read_text())
 
@@ -85,7 +92,8 @@ class InputFile:
     path: Path
     """The path to the input file."""
     hash: str
-    """The hash of the input file."""
+    """The SHA-256 of the file's content when the build started. It is the hash recorded in the
+    artifact's config, so a change to the file makes the artifact stale."""
 
     def read_text(self) -> str:
         """Read the contents of the input file as text."""
@@ -108,16 +116,18 @@ class InputFile:
 
 
 class _ReadOnlyMapping(Mapping):
-    """Wrapper for a Mapping that enforces read-only access and provides custom error messages.
-    
-    Prevents access to the underlying mapping's `__setitem__` and `__delitem__` methods,
-    enforcing read-only behavior (except if directly accessing the underlying mapping via
-    `self._items`).
+    """A read-only mapping from names to entries, with an error message that lists what was declared.
 
-    Python 3.15 has `frozendict`, but we declare Python 3.14 compatibility for our project.
+    It is a `Mapping`, which has no way to add or remove entries, and it keeps its own copy of the
+    dict it is given, so changing that dict later has no effect. A `frozendict` would do the same if
+    the project's minimum Python version ever has one.
     """
 
     _kind = "entry"
+    """What the entries are called, singular, in error messages."""
+
+    _kinds = "entries"
+    """What the entries are called, plural, in error messages."""
 
     def __init__(self, items: dict[str, Any]):
         self._items = dict(items)
@@ -127,7 +137,8 @@ class _ReadOnlyMapping(Mapping):
         try:
             return self._items[key]
         except KeyError:
-            raise KeyError(f"{key!r} was not declared; declared {self._kind}s: {sorted(self._items)}") from None
+            declared = sorted(self._items)
+            raise KeyError(f"{key!r} was not declared; declared {self._kinds}: {declared}") from None
 
     def __iter__(self) -> Iterator[str]:
         return iter(self._items)
@@ -140,40 +151,36 @@ class Deps(_ReadOnlyMapping):
     """Handles of the declared dependencies, keyed by concrete artifact name."""
 
     _kind = "dependency"
+    _kinds = "dependencies"
 
 
 class Files(_ReadOnlyMapping):
     """Declared input files, keyed by the path as declared (relative to the project root)."""
 
     _kind = "file"
+    _kinds = "files"
 
 
 @dataclass(frozen=True)
 class Status:
-    """Represents the status of an artifact, indicating whether it is fresh, stale, or missing."""
-    kind: str  # "fresh" | "stale" | "missing"
-    """The status kind, one of "fresh", "stale", or "missing"."""
-    
+    """Whether an artifact is fresh, stale (and why), or missing."""
+
+    kind: Literal["fresh", "stale", "missing"]
+    """Fresh: built and up to date. Stale: built, but something it depends on changed. Missing
+    never built."""
+
     reason: str = ""
-    """The reason for the status, if any."""
-    
+    """Why the artifact is stale (`"code changed"`, `"dependency x was rebuilt"`, ...), or
+    `"not built"` if it is missing. Empty when fresh."""
+
     output_hash: str | None = None
-    """The hash of the output, if available."""
+    """The recorded output hash. Set only when fresh; `None` for stale and missing."""
 
     notes: tuple[str, ...] = ()
-    """Additional notes about the status."""
+    """Warnings about a fresh artifact: the libraries or Python it was built with differ from the
+    current ones. They never make it stale."""
 
     @property
     def fresh(self) -> bool:
         """Return True if the status is 'fresh', else False."""
         return self.kind == "fresh"
-
-    @property
-    def stale(self) -> bool:
-        """Return True if the status is 'stale', else False."""
-        return self.kind == "stale"
-
-    @property
-    def missing(self) -> bool:
-        """Return True if the status is 'missing', else False."""
-        return self.kind == "missing"

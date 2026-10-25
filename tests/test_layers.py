@@ -48,7 +48,7 @@ ARTIFACT_IMPORTS = {
     "hashing": set(),
     "seeding": set(),
     "provenance": set(),
-    "chapters": {"errors"},
+    "chapters": {"errors", "handles"},
     "spec": {"chapters", "errors", "hashing"},
     "catalog": {"chapters", "errors", "handles", "spec"},  # what exists: no disk, no building
     "store": {"errors", "handles", "hashing"},  # the disk layout: no catalog, no building

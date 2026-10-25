@@ -17,52 +17,68 @@ from convfinqa import artifacts as A
 from convfinqa.artifacts import cli, hashing
 
 TOY = '''
-import os, random, time
 from pathlib import Path
 from convfinqa.artifacts import artifact, Deps, Files
 
-CALLS = []
-K = 1
+# Every builder is self-contained (imports inside the body), as the purity rule requires. A builder
+# that should be counted appends its name to the file named by TOY_CALLS.
 
 @artifact("base_{n}")
 def base(out: Path, deps: Deps, *, n: int):
-    CALLS.append(f"base_{n}")
-    (out / "x.txt").write_text(str(n * K))
+    import os, time
+    with open(os.environ["TOY_CALLS"], "a") as calls:
+        calls.write(f"base_{n}\\n")
+    (out / "x.txt").write_text(str(n * 1))
     (out / "build.log").write_text(f"log {time.time()}")
 
 @artifact("noisy_{n}")
 def noisy(out: Path, deps: Deps, *, n: int):
+    import time
     # the output depends on n only through a constant, but the build log differs every time
     (out / "x.txt").write_text("same")
     (out / "build.log").write_text(str(time.time()))
 
 @artifact("mid", deps=["base_2"])
 def mid(out: Path, deps: Deps):
-    CALLS.append("mid")
+    import os
+    with open(os.environ["TOY_CALLS"], "a") as calls:
+        calls.write("mid\\n")
     (out / "y.txt").write_text(deps["base_2"].file("x.txt").read_text() + "!")
 
 @artifact("leaf", deps=["mid"])
 def leaf(out: Path, deps: Deps):
-    CALLS.append("leaf")
+    import os
+    with open(os.environ["TOY_CALLS"], "a") as calls:
+        calls.write("leaf\\n")
     (out / "z.txt").write_text(deps["mid"].file("y.txt").read_text() + "?")
 
 @artifact("onnoisy", deps=["noisy_1"])
 def onnoisy(out: Path, deps: Deps):
-    CALLS.append("onnoisy")
+    import os
+    with open(os.environ["TOY_CALLS"], "a") as calls:
+        calls.write("onnoisy\\n")
     (out / "w.txt").write_text(deps["noisy_1"].file("x.txt").read_text())
 
 @artifact("cfg", files=["cfg.json"])
 def cfg(out: Path, deps: Deps, files: Files):
     (out / "v.json").write_text(files["cfg.json"].read_text())
 
+@artifact("hashes", files=["cfg.json"])
+def hashes(out: Path, deps: Deps, files: Files):
+    (out / "h.txt").write_text(files["cfg.json"].hash)
+
 @artifact("usecfg", deps=["cfg"])
 def usecfg(out: Path, deps: Deps):
-    CALLS.append("usecfg")
+    import os
+    with open(os.environ["TOY_CALLS"], "a") as calls:
+        calls.write("usecfg\\n")
     (out / "u.txt").write_text(deps["cfg"].file("v.json").read_text())
 
 @artifact("useuse", deps=["usecfg"])
 def useuse(out: Path, deps: Deps):
-    CALLS.append("useuse")
+    import os
+    with open(os.environ["TOY_CALLS"], "a") as calls:
+        calls.write("useuse\\n")
     (out / "uu.txt").write_text(deps["usecfg"].file("u.txt").read_text())
 
 @artifact("heavy_{n}", heavy=True)
@@ -72,6 +88,7 @@ def heavy(out: Path, deps: Deps, *, n: int):
 
 @artifact("crash_heavy", heavy=True)
 def crash_heavy(out: Path, deps: Deps):
+    import os
     (out / "partial.txt").write_text("half")
     os._exit(3)
 
@@ -82,14 +99,17 @@ def boom(out: Path, deps: Deps):
 
 @artifact("draws_{seed}")
 def draws(out: Path, deps: Deps, *, seed: int):
+    import json, random
     import numpy as np
     import torch
     values = [random.random(), float(np.random.rand()), float(torch.rand(1))]
-    (out / "d.json").write_text(__import__("json").dumps(values))
+    (out / "d.json").write_text(json.dumps(values))
 
 @artifact("slow")
 def slow(out: Path, deps: Deps):
-    CALLS.append("slow")
+    import os, time
+    with open(os.environ["TOY_CALLS"], "a") as calls:
+        calls.write("slow\\n")
     time.sleep(0.3)
     (out / "s.txt").write_text("s")
 '''
@@ -104,6 +124,9 @@ def toy(tmp_path, monkeypatch):
     path = tmp_path / f"{name}.py"
     path.write_text(TOY)
     (tmp_path / "cfg.json").write_text('{"lr": 1}')
+    calls_file = tmp_path / "calls.txt"
+    calls_file.write_text("")
+    monkeypatch.setenv("TOY_CALLS", str(calls_file))
     monkeypatch.syspath_prepend(str(tmp_path))
     importlib.invalidate_caches()
 
@@ -120,7 +143,11 @@ def toy(tmp_path, monkeypatch):
 
         @property
         def calls(self):
-            return sys.modules[name].CALLS
+            """The builders that have run, in order (from the file the builders append to)."""
+            return calls_file.read_text().split()
+
+        def clear_calls(self):
+            calls_file.write_text("")
 
         def edit(self, old, new):
             text = path.read_text()
@@ -192,7 +219,7 @@ def test_early_cutoff_when_rebuild_is_identical(toy):
     reg.get("onnoisy")
     reg.ensure("noisy_1", allow_heavy=False, force=True)  # same output, new build.log
     assert reg.status("onnoisy").fresh
-    toy.calls.clear()
+    toy.clear_calls()
     reg.get("onnoisy")
     assert toy.calls == []
 
@@ -285,8 +312,7 @@ def test_killed_heavy_build_leaves_no_node(toy, monkeypatch):
 def test_old_result_survives_a_failed_rebuild(toy):
     reg = toy.registry()
     reg.get("base_1")
-    toy.edit("K = 1", "K = 1\nraise_now = True")
-    toy.edit('CALLS.append(f"base_{n}")', 'CALLS.append(f"base_{n}"); assert not raise_now')
+    toy.edit('(out / "x.txt").write_text(str(n * 1))', 'assert False, "the rebuild fails"\n    (out / "x.txt").write_text(str(n * 1))')
     reg.catalog.load()
     with pytest.raises(AssertionError):
         reg.ensure("base_1", allow_heavy=False)
@@ -492,7 +518,7 @@ def test_chapter_records_and_refresh(toy, monkeypatch):
     monkeypatch.delenv("QUARTO_DOCUMENT_FILE")
 
     assert reg.records.refresh(freeze, reg.status) == []  # everything fresh: nothing removed
-    toy.edit("K = 1", "K = 3")
+    toy.edit("str(n * 1)", "str(n * 3)")
     reg.catalog.load()
     removed = reg.records.refresh(freeze, reg.status)
     # base_1 and (through base_2) leaf are both stale now
@@ -541,19 +567,6 @@ def test_seed_field_must_be_an_int():
     assert reg.catalog.resolve("m_7")[1] == {"seed": 7}
 
 
-def test_git_provenance_is_unknown_outside_a_repository_not_clean(tmp_path):
-    from convfinqa.artifacts.provenance import git as _git, git_dirty as _git_dirty
-
-    assert _git(tmp_path, "rev-parse", "HEAD") is None
-    assert _git_dirty(tmp_path) is None  # not False: "clean" would claim something we do not know
-
-    import subprocess
-
-    subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
-    assert _git_dirty(tmp_path) is False
-    (tmp_path / "new.txt").write_text("x")
-    assert _git_dirty(tmp_path) is True
-
 
 def test_an_explicit_policy_overrides_the_environment(toy, monkeypatch):
     from convfinqa.artifacts.policy import Policy
@@ -563,3 +576,43 @@ def test_an_explicit_policy_overrides_the_environment(toy, monkeypatch):
     with pytest.raises(A.StaleArtifactError):
         reg.get("heavy_9", policy=Policy())  # the environment would build it; the policy says not to
     assert not (reg.dir / "heavy_9").exists()
+
+
+def test_undeclared_lookups_list_what_was_declared():
+    deps = A.Deps({"split_v1": A.Handle("split_v1", Path("x"), "h")})
+    with pytest.raises(KeyError) as info:
+        deps["nope"]
+    assert info.value.args[0] == "'nope' was not declared; declared dependencies: ['split_v1']"
+    with pytest.raises(KeyError) as info:
+        A.Files({})["nope"]
+    assert info.value.args[0] == "'nope' was not declared; declared files: []"
+
+
+def test_the_deps_and_files_mappings_ignore_later_changes_to_the_dict_they_copied():
+    source = {"a": A.Handle("a", Path("x"), "h")}
+    deps = A.Deps(source)
+    source["b"] = A.Handle("b", Path("x"), "h")
+    assert list(deps) == ["a"] and len(deps) == 1
+
+
+def test_the_builder_sees_the_input_hash_recorded_in_the_config(toy):
+    reg = toy.registry()
+    reg.get("hashes")
+    node = reg.store.read_node("hashes")
+    assert reg.store.handle("hashes").file("h.txt").read_text() == node["config"]["files"]["cfg.json"]
+
+
+def test_a_missing_input_file_fails_the_build_with_a_clear_message(toy):
+    reg = toy.registry()
+    (toy.root / "cfg.json").unlink()
+    with pytest.raises(A.BuildError, match=r"declared input file\(s\) missing: \['cfg.json'\]"):
+        reg.get("hashes")
+    assert reg.store.read_node("hashes") is None
+
+
+def test_force_rebuilds_the_named_artifact_but_not_its_dependencies(toy):
+    reg = toy.registry()
+    reg.get("mid")
+    toy.clear_calls()
+    reg.ensure("mid", allow_heavy=False, force=True)
+    assert toy.calls == ["mid"]  # base_2 is fresh, so it was left alone

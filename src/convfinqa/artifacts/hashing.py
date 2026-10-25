@@ -10,19 +10,17 @@ import os
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-"""Tracked libraries for hashing purposes.
-
-If any of these libraries are updated, artifacts depending on them are declared stale.
-"""
-
 LOG_NAME = "build.log"
+"""The file name of a build's log. The build subprocess writes it in the artifact's directory; it is
+never one of the artifact's outputs (see `is_output`)."""
 
 
 def is_framework(module: str) -> bool:
-    """Check if a module is considered a framework module.
-    
-    The framework is the artifact package itself. Edits to it do not invalidate artifacts. (Bump a
-    builder's `version` by hand if a framework change should rebuild things.)
+    """Whether `module` is part of the artifact framework: `convfinqa.artifacts` and its submodules.
+
+    The framework is left out of every builder's import closure, so editing it never makes an
+    artifact stale. (Bump a builder's `version` by hand if a framework change should rebuild
+    things.)
     """
     return module == "convfinqa.artifacts" or module.startswith("convfinqa.artifacts.")
 
@@ -58,22 +56,28 @@ def sha256_json(obj: Any) -> str:
 
 
 def is_output(rel: str) -> bool:
-    """Check if a relative path corresponds to a significant output.
+    """Compute whether a relative path counts as an output of an artifact.
 
-    Logs and TensorBoard files are not significant outputs (they never invalidate dependents).
+    Not outputs, so they never invalidate dependents: `node.json`, `build.log`, any `*.log` file, and
+    anything under a directory named `tb` (TensorBoard logs). That applies to a builder's real results
+    too: a deliberately written `.log` file, or a result directory called `tb`, is not hashed.
     """
     p = PurePosixPath(rel)
     return not (rel == "node.json" or p.name == LOG_NAME or p.suffix == ".log" or "tb" in p.parts)
 
 
 def hash_outputs(directory: Path) -> dict[str, str]:
-    """Compute the SHA-256 hashes of all significant output files in a directory.
+    """Compute the SHA-256 hashes of all output files (see `is_output`) in a directory.
+
+    Only files are recorded; an empty directory leaves no trace.
 
     Args:
         directory: The root directory containing output files.
 
     Returns:
-        A dictionary mapping relative paths of significant output files to their SHA-256 hashes.
+        A dictionary mapping relative paths (with forward slashes) to their SHA-256 hashes, in a
+        deterministic order: each directory's files by name, then its subdirectories by name. The
+        order does not matter to `sha256_json`, which sorts keys.
     """
     outputs = {}
     for dirpath, dirnames, filenames in os.walk(directory):
@@ -87,24 +91,48 @@ def hash_outputs(directory: Path) -> dict[str, str]:
 
 
 class _Normalize(ast.NodeTransformer):
-    """AST node transformer that normalizes source code.
-    
-    Drops what cannot change behaviour: docstrings and annotations on local variables.
+    """AST transformer that drops what cannot change behaviour: docstrings, and annotations on
+    variables inside functions.
+
+    Annotations on class and module variables are kept: they define the fields of dataclasses, named
+    tuples and typed dicts, and they fill `__annotations__`, so adding, removing or retyping one is
+    a behavioural change. Inside a function an annotation is never evaluated or stored.
     """
 
-    def _strip_docstring(self, node):
-        """Remove the docstring from a node if it exists."""
+    def __init__(self) -> None:
+        self._scopes: list[str] = []  # "module" | "class" | "function": the enclosing scopes, innermost last
+
+    def _scope(self, kind: str, node):
+        """Visit `node` as a scope of the given kind, after removing its docstring."""
         body = node.body
         if body and isinstance(body[0], ast.Expr) and isinstance(body[0].value, ast.Constant) \
                 and isinstance(body[0].value.value, str):
             node.body = body[1:] or [ast.Pass()]
-        return self.generic_visit(node)
+        self._scopes.append(kind)
+        try:
+            return self.generic_visit(node)
+        finally:
+            self._scopes.pop()
 
-    visit_Module = visit_FunctionDef = visit_AsyncFunctionDef = visit_ClassDef = _strip_docstring
+    def visit_Module(self, node):
+        return self._scope("module", node)
+
+    def visit_ClassDef(self, node):
+        return self._scope("class", node)
+
+    def visit_FunctionDef(self, node):
+        return self._scope("function", node)
+
+    visit_AsyncFunctionDef = visit_FunctionDef
 
     def visit_AnnAssign(self, node):
-        """Normalize annotated assignments by removing the annotation if the value is present."""
+        """Inside a function, turn `x: T = v` into `x = v` and a bare `x: T` into `pass`.
+
+        Elsewhere (class and module bodies) the statement is kept as it is.
+        """
         node = self.generic_visit(node)
+        if not self._scopes or self._scopes[-1] != "function":
+            return node
         if node.value is None:
             return ast.Pass()
         return ast.copy_location(ast.Assign(targets=[node.target], value=node.value), node)
@@ -115,14 +143,17 @@ _norm_cache: dict[tuple[str, int, int], str] = {}
 
 
 def normalized_source(source: str) -> str:
-    """Source text with whitespace, comments, line continuations, docstrings and local annotations
-    removed, so only behavioural edits change it."""
+    """Source text with whitespace, comments, line continuations, docstrings and annotations on
+    function variables removed, so only behavioural edits change it."""
     tree = _Normalize().visit(ast.parse(source))
     return ast.unparse(ast.fix_missing_locations(tree))
 
 
 def module_path(module: str) -> Path | None:
-    """Compute the file path of a module if it exists and is a Python source file."""
+    """The source file of a module, or `None` if it has none (built-in, namespace package, not found).
+
+    Looking a module up imports its parent packages, as `importlib.util.find_spec` does.
+    """
     try:
         spec = importlib.util.find_spec(module)
     except (ImportError, ValueError):
@@ -149,6 +180,10 @@ def local_imports(source: str, package: str = "") -> set[str]:
 
     `package` is the package the source lives in, used to resolve relative imports (empty for code
     that is not in a module, such as a function defined in a chapter cell).
+
+    Only the imported modules themselves are returned. Importing `convfinqa.data.raw` also runs the
+    `__init__` of `convfinqa.data`, but that package is not included unless it is imported by name
+    (`from convfinqa.data import ...`, or `from convfinqa import data`).
     """
     found: set[str] = set()
 
@@ -178,8 +213,8 @@ def _local_imports(module: str) -> set[str]:
     path = module_path(module)
     if path is None:
         return set()
-    spec = importlib.util.find_spec(module)
-    package = module if spec.submodule_search_locations else module.rpartition(".")[0]
+    # `__init__.py` is the package itself; any other file lives in the package named by its parent
+    package = module if path.name == "__init__.py" else module.rpartition(".")[0]
     return local_imports(path.read_text(), package)
 
 
@@ -200,7 +235,10 @@ def module_closure(module: str) -> set[str]:
 
 
 def code_hash(modules: set[str] | list[str]) -> str:
-    """Compute the SHA-256 hash of the normalized source code for a set of modules."""
+    """Compute the SHA-256 hash of the normalized source code for a set of modules.
+
+    A module without a source file contributes `None`, so the hash changes if one appears.
+    """
     return sha256_json({m: module_digest(m) for m in sorted(modules)})
 
 

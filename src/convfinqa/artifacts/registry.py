@@ -1,8 +1,15 @@
-"""The registry: the coordinator. It joins the catalog (what exists), the store (what is on disk) and the
-records (what chapters used), and decides freshness, builds (in process or in a subprocess), and `get`."""
+"""The registry: joins catalog, store and chapter records to check freshness, build, and answer `get`.
+
+The catalog knows what artifacts exist, the store what is on disk, and the records what each chapter
+used. The registry decides whether an artifact is fresh (`status`), makes it fresh (`ensure`, which
+builds in this process with `execute` or in a subprocess with `_spawn`), and serves chapters (`get`).
+
+Module-level `artifact` and `get` work on the default registry, `DEFAULT`.
+"""
 
 from __future__ import annotations
 
+import contextlib
 import os
 import sys
 import time
@@ -13,11 +20,11 @@ from . import subprocess_build
 from .catalog import Catalog, active_catalog
 from .errors import BuildError, StaleArtifactError
 from .handles import Deps, Files, Handle, InputFile, Status
-from .hashing import is_framework, sha256_file
-from .policy import Action, Policy, show_stale_warning, stale_message
+from .hashing import is_framework
+from .policy import Action, Policy, refusal_message, show_stale_warning
 from .provenance import drift_notes, provenance
 from .records import ChapterRecords
-from .seeding import chdir, preserved_rng_state, seed_everything
+from .seeding import preserved_rng_state, seed_everything
 from .store import Store
 
 ROOT = Path(os.environ.get("CONVFINQA_ROOT") or Path(__file__).resolve().parents[3])
@@ -39,8 +46,12 @@ DEFAULT_MODULES = ("convfinqa.builders",)
 Importing these modules runs their `@artifact` decorators.
 """
 
+
 def artifact(template: str, *, deps=(), files=(), heavy=False, version=1, seed=0):
-    """Register a builder with the catalog that is loading (the default one outside `Catalog.load`)."""
+    """Return the decorator that registers a builder, with the catalog that is loading builders.
+
+    Outside a load (a chapter cell running in a kernel) that is the default registry's catalog.
+    """
     return (active_catalog() or DEFAULT.catalog).artifact(
         template, deps=deps, files=files, heavy=heavy, version=version, seed=seed
     )
@@ -50,25 +61,56 @@ class Registry:
     """Joins the catalog (what exists), the store (what is on disk) and the chapter records.
 
     It decides whether an artifact is fresh, builds the ones that are not (in this process or in a
-    subprocess), and answers `get` for chapters. The catalog is `registry.catalog`; ask it directly
-    to resolve names, list targets or validate the graph.
+    subprocess), and answers `get` for chapters. Ask the parts directly for anything that is theirs:
+    `registry.catalog` to resolve names, list targets or validate the graph, `registry.store` for
+    handles and paths, `registry.records` for what chapters used.
     """
 
     def __init__(
         self, artifacts_dir: Path = ARTIFACTS, *, root: Path = ROOT, modules=(), extra_paths=(),
         chapters_dir: Path | None = None,
     ):
-        self.dir = Path(artifacts_dir)
-        self.root = Path(root)
-        self.extra_paths = [str(p) for p in extra_paths]
-        self.catalog = Catalog(modules, chapters_dir)
-        self.store = Store(self.dir)
-        self.records = ChapterRecords(self.dir / "_chapters")
+        """Initialize the registry with the given directories and modules.
 
-    # freshness ..................................................................................
+        Args:
+            artifacts_dir: Where built artifacts are stored.
+            root: The project root; declared input files are resolved against it.
+            modules: Modules to import to register builders (see `Catalog`).
+            extra_paths: Directories put on `PYTHONPATH` of build subprocesses, so that they can import
+                modules that are not installed (used by tests).
+            chapters_dir: Where the chapters' `.qmd` files are scanned for builders, if anywhere.
+        """
+        self.dir = Path(artifacts_dir)
+        """The artifacts directory."""
+
+        self.root = Path(root)
+        """The project root."""
+
+        self.extra_paths = [str(p) for p in extra_paths]
+        """Extra `PYTHONPATH` entries for build subprocesses."""
+
+        self.catalog = Catalog(modules, chapters_dir)
+        """What artifacts exist."""
+
+        self.store = Store(self.dir)
+        """What is on disk."""
+
+        self.records = ChapterRecords(self.dir / "_chapters")
+        """What chapters used."""
 
     def status(self, name: str) -> Status:
-        """Whether `name` is fresh, stale (and why), or missing; dependencies are checked recursively."""
+        """Whether `name` is fresh, stale (and why), or missing.
+
+        The checks run in this order, and the first to fail decides: never built (missing); the
+        builder's `version` changed; a declared input file is missing; the config differs (name
+        fields, seed, input file contents); the code hash differs; the list of dependencies differs;
+        then each dependency in turn, which must itself be fresh and have the same output hash as when
+        this artifact was built.
+
+        Dependencies are checked recursively, so a stale artifact deep in the
+        graph makes everything built from it stale. A fresh result carries `notes` about drift in the
+        environment (see `provenance.drift_notes`), which never make it stale.
+        """
         spec, params = self.catalog.resolve(name)
         if (node := self.store.read_node(name)) is None:
             return Status("missing", "not built")
@@ -97,10 +139,15 @@ class Registry:
 
         return Status("fresh", output_hash=node["output_hash"], notes=tuple(drift_notes(node)))
 
-    # building ...................................................................................
-
     def ensure(self, name: str, *, allow_heavy: bool, force: bool = False) -> Handle:
-        """Make `name` fresh (building it and its stale dependencies) and return its handle."""
+        """Make `name` fresh and return its handle, building whatever is stale or missing.
+
+        The dependencies are ensured first, in dependency order, so one that is rebuilt with identical
+        output leaves `name` fresh (early cutoff). A light artifact is built in this process
+        (`execute`), a heavy one in a subprocess (`_spawn`) and only if `allow_heavy` is set;
+        otherwise `StaleArtifactError` is raised, also when the stale heavy artifact is a dependency.
+        `force` rebuilds `name` itself even if it is fresh; it is not passed on to its dependencies.
+        """
         spec, params = self.catalog.resolve(name)
         for dep in spec.dep_names(params):
             self.ensure(dep, allow_heavy=allow_heavy)
@@ -109,13 +156,21 @@ class Registry:
             return self.store.handle(name)
         if spec.heavy:
             if not allow_heavy:
-                raise StaleArtifactError(stale_message(name, st))
+                raise StaleArtifactError(refusal_message(name, st))
             self._spawn(name, force=force)
         else:
             self.execute(name, force=force)
         return self.store.handle(name)
 
     def _spawn(self, name: str, *, force: bool) -> None:
+        """Build `name` in a child process (`python -m convfinqa.artifacts _run <name>`) and wait for it.
+
+        The child gets this registry's directories, builder modules and chapters directory, so it
+        registers the same builders, and an environment that pins its random seed
+        (`subprocess_build.child_environment`). Its output goes to the build log in the artifact's
+        scratch directory; this process only prints progress. The child takes the artifact's lock itself.
+        Raises `BuildError`, with the end of the log, if the child fails.
+        """
         spec, params = self.catalog.resolve(name)
         cmd = subprocess_build.child_command(
             name, artifacts_dir=self.dir, root=self.root, chapters_dir=self.catalog.chapters_dir,
@@ -125,7 +180,28 @@ class Registry:
         subprocess_build.run(name, cmd, env, cwd=self.root, log=self.store.log_path(name))
 
     def execute(self, name: str, *, force: bool = False, redirect_output: bool = False) -> None:
-        """Run the builder in this process. Takes the lock, then re-checks freshness."""
+        """Build `name` in this process: run its builder and store the result.
+
+        Normally reached through `ensure` for light artifacts, and by the build subprocess for heavy
+        ones. It holds the artifact's lock for the whole build and, once it has the lock, checks again
+        that the artifact needs building (another process may have built it while this one waited),
+        unless `force`.
+
+        The steps: collect the handles of the dependencies (all must be fresh, else `BuildError`);
+        open a fresh scratch directory; check that the declared input files exist (else `BuildError`);
+        call the builder as `fn(out, deps, [files], **fields)` with the random state seeded from the
+        build seed (and restored afterwards) and the working directory set to the scratch directory;
+        then commit `node.json` with the config, the dependencies' output hashes, the code hash, the
+        provenance and the timing. `dynamic_modules` lists `convfinqa` modules the builder loaded that
+        were not imported before; it adds to the static import analysis, which already covers imports
+        written in the builder.
+
+        A builder that raises leaves no `node.json`, so the artifact still counts as missing or stale,
+        and its scratch directory, with the log, is kept for inspection.
+
+        `redirect_output` points this process's stdout and stderr at the build log for good, so use it
+        only in a process dedicated to the build (the build subprocess does).
+        """
         spec, params = self.catalog.resolve(name)
         with self.store.lock(name):
             if not force and self.status(name).fresh:
@@ -140,14 +216,15 @@ class Registry:
                 fd = os.open(self.store.log_path(name), os.O_WRONLY | os.O_CREAT | os.O_APPEND)
                 os.dup2(fd, 1)
                 os.dup2(fd, 2)
-            files = Files({
-                rel: InputFile(self.root / rel, sha256_file(self.root / rel)) for rel in spec.files
-            })
-            args = [out, Deps(dep_handles)] + ([files] if spec.files else [])
             config = spec.config(params, self.root)
+            if missing := [rel for rel, h in config["files"].items() if h is None]:
+                raise BuildError(f"cannot build {name!r}: declared input file(s) missing: {missing}")
+            # The builder sees the very hashes recorded in the config, read once.
+            files = Files({rel: InputFile(self.root / rel, h) for rel, h in config["files"].items()})
+            args = [out, Deps(dep_handles)] + ([files] if spec.files else [])
             before = set(sys.modules)
             started = time.time()
-            with preserved_rng_state(), chdir(out):
+            with preserved_rng_state(), contextlib.chdir(out):
                 seed_everything(config["seed"])
                 spec.fn(*args, **params)
             dynamic = sorted(
@@ -166,15 +243,38 @@ class Registry:
                 "duration_s": round(time.time() - started, 1),
             })
 
-    # what chapters call .........................................................................
+    def _refresh_light_inputs(self, name: str) -> None:
+        """Rebuild, in this process, the stale or missing light artifacts that `name` is built from.
+
+        This is done before judging `name`, so that it is judged against up-to-date inputs. A light
+        input that is rebuilt with identical output leaves `name` fresh (early cutoff), and a heavy
+        artifact is not refused over an input that rebuilding would have settled. Anything whose
+        rebuild needs a heavy build that is not allowed is left as it is.
+        """
+        spec, params = self.catalog.resolve(name)
+        for dep in spec.dep_names(params):
+            self._refresh_light_inputs(dep)  # its own inputs first
+            if not self.catalog.resolve(dep)[0].heavy and not self.status(dep).fresh:
+                try:
+                    self.ensure(dep, allow_heavy=False)
+                except StaleArtifactError:
+                    pass  # blocked by a stale heavy input of its own
 
     def get(self, name: str, policy: Policy | None = None) -> Handle:
-        """Return the artifact `name`, building it if the policy allows (see `policy.py`).
+        """Return a handle to the artifact `name`, building it if the policy allows (see `policy.py`).
 
-        `policy` defaults to the one the environment asks for (`RUN_HEAVY`, `ALLOW_STALE`).
+        `policy` defaults to the one the environment asks for (`RUN_HEAVY`, `ALLOW_STALE`). The light
+        artifacts `name` is built from are brought up to date first. If `name` is light and cannot be
+        rebuilt because a heavy input is stale, `allow_stale` loads its old result, like a heavy one;
+        that handle has `stale=True`.
+
+        The use is recorded for the running chapter (`records`), so that the chapter is executed again
+        when the artifact changes. Raises `StaleArtifactError` if the policy refuses, `BuildError` if
+        a build fails, and `ArtifactError` if `name` is not a registered artifact.
         """
         policy = policy or Policy.from_env()
         spec, _ = self.catalog.resolve(name)
+        self._refresh_light_inputs(name)
         st = self.status(name)
         match policy.decide(heavy=spec.heavy, status=st):
             case Action.USE:
@@ -182,24 +282,31 @@ class Registry:
                     warnings.warn(f"artifact {name}: {note}", stacklevel=2)
                 h = self.store.handle(name)
             case Action.BUILD:
-                h = self.ensure(name, allow_heavy=policy.run_heavy)
+                try:
+                    h = self.ensure(name, allow_heavy=policy.run_heavy)
+                except StaleArtifactError:
+                    # Only a light artifact gets here: its rebuild needs a heavy input that is not allowed.
+                    if not (policy.allow_stale and st.kind == "stale"):
+                        raise
+                    h = self.store.handle(name, stale=True)
+                    show_stale_warning(name, st.reason)
             case Action.USE_STALE:
                 h = self.store.handle(name, stale=True)
                 show_stale_warning(name, st.reason)
             case Action.REFUSE:
-                raise StaleArtifactError(stale_message(name, st))
+                raise StaleArtifactError(refusal_message(name, st))
         self.records.note_use(h)
         return h
 
 
 DEFAULT = Registry(modules=DEFAULT_MODULES, chapters_dir=ROOT / "docs")
-"""The default registry instance used by the `get` function."""
+"""The default registry, with the project's directories. The module-level `get` and `artifact` use it."""
 
 
 def get(name: str) -> Handle:
-    """Get a handle to an artifact by name.
-    
-    Uses the default registry instance. If the rules allow, also builds the artifact if it is stale
-    or missing.  If the artifact cannot be found or built, an `ArtifactError` is raised.
+    """Return a handle to the artifact `name` from the default registry: what chapters call.
+
+    The environment decides what may be built (`RUN_HEAVY`) or loaded stale (`ALLOW_STALE`); see
+    `Registry.get` for the rules and the errors.
     """
     return DEFAULT.get(name)

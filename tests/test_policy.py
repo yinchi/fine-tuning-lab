@@ -5,7 +5,7 @@ import itertools
 import pytest
 
 from convfinqa.artifacts import Status
-from convfinqa.artifacts.policy import Action, Policy, show_stale_warning, stale_message
+from convfinqa.artifacts.policy import Action, Policy, show_stale_warning, refusal_message
 
 FRESH = Status("fresh", output_hash="h")
 STALE = Status("stale", "code changed")
@@ -50,14 +50,14 @@ def test_from_env(monkeypatch, run_heavy, allow_stale, expected):
     assert Policy.from_env() == expected
 
 
-def test_the_stale_message_names_the_build_command_and_the_reason():
-    message = stale_message("sft_dsl_0", STALE)
+def test_the_refusal_message_names_the_build_command_and_the_reason():
+    message = refusal_message("sft_dsl_0", STALE)
     assert "uv run python -m convfinqa.artifacts build sft_dsl_0" in message
     assert "stale (code changed)" in message and "ALLOW_STALE=1" in message
 
 
 def test_the_missing_message_does_not_offer_to_load_the_old_result():
-    message = stale_message("sft_dsl_0", MISSING)
+    message = refusal_message("sft_dsl_0", MISSING)
     assert "is missing" in message and "ALLOW_STALE" not in message
 
 
@@ -65,3 +65,17 @@ def test_the_stale_warning_goes_to_stderr_outside_a_notebook(capsys):
     show_stale_warning("sft_dsl_0", "code changed")
     err = capsys.readouterr().err
     assert "STALE artifact 'sft_dsl_0' (code changed)" in err
+
+
+def test_the_notebook_warning_is_html_with_the_text_escaped(monkeypatch):
+    import IPython
+    import IPython.display
+
+    shown = []
+    monkeypatch.setattr(IPython, "get_ipython", lambda: object())
+    monkeypatch.setattr(IPython.display, "display", lambda obj: shown.append(obj))
+    show_stale_warning("sft_dsl_0", "input file missing: ['a<b&c.json']")
+    [widget] = shown
+    assert "STALE artifact 'sft_dsl_0'" in widget.data.replace("&#x27;", "'")
+    assert "a&lt;b&amp;c.json" in widget.data and "a<b&c.json" not in widget.data
+    assert widget.data.startswith('<div style="border:2px solid #c0392b')
