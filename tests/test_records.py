@@ -120,3 +120,44 @@ def test_refresh_only_touches_the_outdated_chapters(records, tmp_path):
     hashes = {"a": "h1", "b": "changed"}
     assert records.refresh(freeze, lambda name: fresh(hashes[name])) == ["drop"]
     assert (freeze / "keep").exists() and (freeze / "untracked").exists() and not (freeze / "drop").exists()
+
+
+# --- records that cannot be trusted ----------------------------------------------------------------
+
+
+@pytest.mark.parametrize("content", ["", "{", '{"artifacts": ', "[]", "{}", '{"artifacts": 3}'])
+def test_an_unreadable_record_marks_its_chapter_instead_of_stopping_the_render(records, tmp_path, content):
+    records.directory.mkdir(parents=True)
+    (records.directory / "c.json").write_text(content)
+    freeze = tmp_path / "_freeze"
+    (freeze / "c").mkdir(parents=True)
+    assert records.refresh(freeze, lambda name: fresh("h1")) == ["c"]
+    assert not (freeze / "c").exists() and not (records.directory / "c.json").exists()
+
+
+def test_a_record_is_written_atomically_and_leaves_no_part_file(records):
+    records.note_use(handle("a", "h1"), document="c.qmd")
+    records.note_use(handle("b", "h2"), document="c.qmd")
+    assert sorted(p.name for p in records.directory.iterdir()) == ["c.json"]
+    assert ChapterRecord.load(records.directory / "c.json").artifacts == {"a": "h1", "b": "h2"}
+
+
+def test_a_leftover_part_file_does_not_disturb_refresh(records, tmp_path):
+    records.note_use(handle("a", "h1"), document="c.qmd")
+    (records.directory / "c.json.part").write_text("{ half written")  # a crash during a write
+    assert records.refresh(tmp_path / "_freeze", lambda name: fresh("h1")) == []
+    assert (records.directory / "c.json").exists()
+
+
+def test_refresh_reports_chapters_in_file_name_order_even_without_a_freeze_folder(records, tmp_path):
+    for document in ("203_c.qmd", "201_a.qmd", "202_b.qmd"):
+        records.note_use(handle("a", "h1"), document=document)
+    stale = lambda name: Status("stale", "code changed")  # noqa: E731
+    assert records.refresh(tmp_path / "_freeze", stale) == ["201_a", "202_b", "203_c"]
+
+
+def test_the_record_file_has_the_documented_shape(records):
+    records.note_use(handle("split_v1", "89ab"), document="c.qmd")
+    records.note_use(handle("sft_dsl_0", "ec8a", stale=True), document="c.qmd")
+    data = json.loads((records.directory / "c.json").read_text())
+    assert data == {"artifacts": {"split_v1": "89ab", "sft_dsl_0": "ec8a"}, "stale": ["sft_dsl_0"]}

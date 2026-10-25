@@ -1,6 +1,9 @@
 """The artifacts directory: nodes, handles, scratch directories, the atomic commit, and the lock."""
 
 import json
+import os
+import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -113,3 +116,162 @@ def test_the_lock_serialises_holders(store):
     [t.join() for t in threads]
     # never two starts in a row: each holder finishes before the next begins
     assert all(log[i].startswith("start") and log[i + 1].startswith("end") for i in range(0, 6, 2))
+
+
+# --- damaged or odd state on disk --------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("content", [
+    b"\xff\xfe\x00",  # not text
+    b"{not json",
+    b"[1, 2]",  # JSON, but not a node
+    b"3",
+    b'{"name": "a"}',  # a dict without output_hash
+    b'{"output_hash": "h", "outputs": ["v.txt"]}',  # outputs must be a mapping
+    b"",
+])
+def test_a_node_that_cannot_be_trusted_counts_as_not_built(store, content):
+    store.path("a").mkdir(parents=True)
+    (store.path("a") / "node.json").write_bytes(content)
+    assert store.read_node("a") is None
+    with pytest.raises(A.ArtifactError, match="has not been built"):
+        store.handle("a")
+
+
+def test_an_artifact_path_that_is_a_file_counts_as_not_built(store):
+    store.directory.mkdir(parents=True)
+    store.path("a").write_text("not a directory")
+    assert store.read_node("a") is None
+
+
+@pytest.mark.parametrize("name", ["", ".", "..", "../outside", "a/b", "/abs", "a\0b"])
+def test_names_that_are_not_plain_file_names_never_reach_the_disk(store, name):
+    for call in (store.path, store.scratch_path, store.old_path, store.log_path, store.read_node,
+                 store.handle, store.scratch, lambda n: store.commit(n, {}), lambda n: store.lock(n).__enter__()):
+        with pytest.raises(A.ArtifactError, match="not a plain artifact name"):
+            call(name)
+    assert not store.directory.exists()
+
+
+def test_commit_needs_a_build_in_progress(store):
+    with pytest.raises(A.ArtifactError, match="no build of 'a' is in progress"):
+        store.commit("a", {})
+
+
+# --- the swap ------------------------------------------------------------------------------------------
+
+
+def test_a_leftover_old_directory_does_not_lose_a_finished_build(store):
+    build(store, "a", {"v.txt": "first"})
+    out = store.scratch("a")
+    (out / "v.txt").write_text("second")
+    store.old_path("a").mkdir()  # something left behind by an earlier swap
+    (store.old_path("a") / "junk").write_text("x")
+    store.commit("a", {"name": "a"})
+    assert (store.path("a") / "v.txt").read_text() == "second"
+    assert not store.old_path("a").exists()
+
+
+def test_a_failed_second_rename_keeps_the_previous_version_and_the_finished_build(store, monkeypatch):
+    build(store, "a", {"v.txt": "first"})
+    out = store.scratch("a")
+    (out / "v.txt").write_text("second")
+    real_replace = os.replace
+
+    def fail_moving_into_place(src, dst):
+        if Path(src) == store.scratch_path("a") and Path(dst) == store.path("a"):
+            raise OSError("disk trouble")
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", fail_moving_into_place)
+    with pytest.raises(OSError, match="disk trouble"):
+        store.commit("a", {"name": "a"})
+    assert (store.path("a") / "v.txt").read_text() == "first"  # the old version is back
+    assert store.read_node("a") is not None
+    assert (store.scratch_path("a") / "v.txt").read_text() == "second"  # the new one was not thrown away
+    assert not store.old_path("a").exists()
+
+
+def test_a_crash_between_the_two_renames_leaves_the_artifact_missing_and_the_next_build_recovers(store, monkeypatch):
+    build(store, "a", {"v.txt": "first"})
+    out = store.scratch("a")
+    (out / "v.txt").write_text("second")
+    real_replace = os.replace
+
+    def die_between_the_renames(src, dst):
+        if Path(src) == store.scratch_path("a") and Path(dst) == store.path("a"):
+            raise SystemExit("killed")  # not an OSError: no rollback, as if the process had died
+        return real_replace(src, dst)
+
+    monkeypatch.setattr(os, "replace", die_between_the_renames)
+    with pytest.raises(SystemExit):
+        store.commit("a", {"name": "a"})
+    monkeypatch.setattr(os, "replace", real_replace)
+    assert store.read_node("a") is None  # counts as not built, so it will be rebuilt
+    assert (store.old_path("a") / "v.txt").read_text() == "first"
+    assert (store.scratch_path("a") / "v.txt").read_text() == "second"
+    build(store, "a", {"v.txt": "third"})  # the next build starts clean and succeeds
+    assert (store.path("a") / "v.txt").read_text() == "third" and not store.old_path("a").exists()
+
+
+# --- the lock across processes -------------------------------------------------------------------------
+
+HOLD_THE_LOCK = """
+import sys, time
+from pathlib import Path
+from convfinqa.artifacts.store import Store
+with Store(Path(sys.argv[1])).lock("a"):
+    print("locked", flush=True)
+    time.sleep(60)
+"""
+
+
+def start_holder(store):
+    proc = subprocess.Popen(
+        [sys.executable, "-c", HOLD_THE_LOCK, str(store.directory)], stdout=subprocess.PIPE, text=True,
+    )
+    assert proc.stdout.readline().strip() == "locked"
+    return proc
+
+
+def acquire_in_a_thread(store):
+    acquired = threading.Event()
+
+    def take():
+        with store.lock("a"):
+            acquired.set()
+
+    thread = threading.Thread(target=take, daemon=True)
+    thread.start()
+    return thread, acquired
+
+
+def test_another_process_holding_the_lock_makes_us_wait(store):
+    holder = start_holder(store)
+    try:
+        thread, acquired = acquire_in_a_thread(store)
+        assert not acquired.wait(0.7)  # still waiting while the other process holds it
+    finally:
+        holder.kill()
+        holder.wait()
+    thread.join(5)
+    assert acquired.is_set()
+
+
+def test_a_process_killed_while_holding_the_lock_leaves_no_stale_lock(store):
+    holder = start_holder(store)
+    holder.kill()
+    holder.wait()
+    thread, acquired = acquire_in_a_thread(store)
+    assert acquired.wait(5)
+    thread.join(5)
+
+
+def test_locks_for_different_artifacts_do_not_block_each_other(store):
+    holder = start_holder(store)  # holds "a"
+    try:
+        with store.lock("b"):
+            pass
+    finally:
+        holder.kill()
+        holder.wait()

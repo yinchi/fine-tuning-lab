@@ -1,4 +1,19 @@
-"""Command line: `python -m convfinqa.artifacts build|status|refresh`."""
+"""Command line: `python -m convfinqa.artifacts build|status|refresh`.
+
+    python -m convfinqa.artifacts status                 # what is fresh, stale or missing, and why
+    python -m convfinqa.artifacts build --all            # build everything the chapters ask for
+    python -m convfinqa.artifacts build sft_dsl_0        # build one artifact, and what it needs
+    python -m convfinqa.artifacts refresh                # mark chapters that used outdated artifacts
+
+`build` is the one place heavy artifacts are built on request: it allows subprocess builds, unlike a
+chapter's `get`. The options before the command (`--artifacts-dir`, `--root`, `--chapters-dir`,
+`--import`) describe the project and are meant for tests and the build subprocesses; by default they
+describe this checkout. A `_run <name>` command, hidden from the help, builds one artifact in the
+calling process: it is what a heavy build's subprocess runs.
+
+Exit codes: 0 on success, 1 when an `ArtifactError` is reported (printed as `error: ...`), 2 for a
+mistake in the command line. `status --check` exits 1 if any artifact it shows is not fresh.
+"""
 
 from __future__ import annotations
 
@@ -11,7 +26,11 @@ from .registry import ARTIFACTS, DEFAULT_MODULES, ROOT, Registry
 
 
 def status_tree(reg: Registry, names: list[str]) -> list[str]:
-    """Lines showing each artifact's status, with what it is built from indented beneath it."""
+    """Lines showing each named artifact's status, with what it is built from indented beneath it.
+
+    Each line is `name  [kind: reason]`, followed by `note:` lines for environment drift. An artifact
+    that several others use is shown under each of them.
+    """
     lines: list[str] = []
 
     def show(name: str, depth: int) -> None:
@@ -29,7 +48,16 @@ def status_tree(reg: Registry, names: list[str]) -> list[str]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(prog="python -m convfinqa.artifacts", description="Build, inspect and refresh cached artifacts.")
+    """Run the command line (see the module docstring) and return its exit code.
+
+    `argv` defaults to `sys.argv[1:]`. A mistake in the command line makes `argparse` raise
+    `SystemExit(2)`; an `ArtifactError` is printed as `error: ...` and gives exit code 1.
+    """
+    p = argparse.ArgumentParser(
+        prog="python -m convfinqa.artifacts",
+        description="Build, inspect and refresh cached artifacts."
+    )
+
     p.add_argument(
         "--artifacts-dir", type=Path, default=ARTIFACTS,
         help="The directory to store artifacts in (default read from registry module)",
@@ -44,10 +72,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--import", dest="imports", action="append", default=[], metavar="MODULE",
-        help="Modules to import (can be specified multiple times)"
+        help="Modules to import to register builders, repeatable (default: convfinqa.builders; "
+             "give an empty value for none)",
     )
 
-    sub = p.add_subparsers(dest="cmd", required=True)
+    # The metavar lists the commands by hand, because argparse would put `_run` in the usage line.
+    sub = p.add_subparsers(dest="cmd", required=True, metavar="{build,status,refresh}")
 
     # Build command
     b = sub.add_parser(
@@ -73,17 +103,21 @@ def main(argv: list[str] | None = None) -> int:
         "names", nargs="*",
         help="The artifact names to check status for (default: every target)"
     )
+    s.add_argument(
+        "--check", action="store_true",
+        help="Exit with code 1 if any artifact shown is not fresh (for scripts)"
+    )
 
     # Refresh command
     sub.add_parser(
         "refresh",
-        help="delete the freeze folders of chapters that used outdated artifacts"
+        help="Delete the freeze folders of chapters that used outdated artifacts"
     )
 
     # Hidden command for internal use: run a single artifact in this process
-    r = sub.add_parser(
-        "_run", help=argparse.SUPPRESS
-    )  # build one artifact in this process
+    # No `help=`: that is what keeps a command out of the list
+    # (`help=SUPPRESS` would list it, with the text "==SUPPRESS==").
+    r = sub.add_parser("_run")
     r.add_argument("name")
     r.add_argument("--force", action="store_true")
 
@@ -98,7 +132,7 @@ def main(argv: list[str] | None = None) -> int:
     reg = Registry(
         args.artifacts_dir,
         root=args.root,
-        modules=args.imports or DEFAULT_MODULES,
+        modules=[m for m in args.imports if m] if args.imports else DEFAULT_MODULES,
         chapters_dir=chapters
     )
 
@@ -107,6 +141,8 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "_run":
             reg.execute(args.name, force=args.force, redirect_output=True)
         elif args.cmd == "build":
+            if args.all and args.names:
+                p.error("give artifact names or --all, not both")
             names = reg.catalog.targets() if args.all else args.names
             if not names and not args.all:
                 p.error("give artifact names or --all")
@@ -115,8 +151,12 @@ def main(argv: list[str] | None = None) -> int:
                 reg.ensure(n, allow_heavy=True, force=args.force)
             print(f"[artifacts] {len(names)} target(s) fresh")
         elif args.cmd == "status":
-            print("\n".join(status_tree(reg, args.names or reg.catalog.targets())) or "(no targets)")
+            names = args.names or reg.catalog.targets()
+            print("\n".join(status_tree(reg, names)) or "(no targets)")
+            if args.check and not all(reg.status(n).fresh for n in names):
+                return 1
         elif args.cmd == "refresh":
+            # Quarto keeps a chapter's saved results in docs/_freeze/<chapter>/
             removed = reg.records.refresh(args.root / "docs" / "_freeze", reg.status)
             if removed:
                 print(f"[artifacts] chapters marked for re-execution: {', '.join(removed)}")
