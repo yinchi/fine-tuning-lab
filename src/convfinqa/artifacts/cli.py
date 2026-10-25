@@ -10,6 +10,24 @@ from .errors import ArtifactError
 from .registry import ARTIFACTS, DEFAULT_MODULES, ROOT, Registry
 
 
+def status_tree(reg: Registry, names: list[str]) -> list[str]:
+    """Lines showing each artifact's status, with what it is built from indented beneath it."""
+    lines: list[str] = []
+
+    def show(name: str, depth: int) -> None:
+        st = reg.status(name)
+        label = st.kind + (f": {st.reason}" if st.reason else "")
+        lines.append(f"{'  ' * depth}{name}  [{label}]")
+        for note in st.notes:
+            lines.append(f"{'  ' * depth}  note: {note}")
+        for dep in reg.dependencies(name):
+            show(dep, depth + 1)
+
+    for name in names:
+        show(name, 0)
+    return lines
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m convfinqa.artifacts", description="Build, inspect and refresh cached artifacts.")
     p.add_argument(
@@ -97,7 +115,7 @@ def main(argv: list[str] | None = None) -> int:
                 reg.ensure(n, allow_heavy=True, force=args.force)
             print(f"[artifacts] {len(names)} target(s) fresh")
         elif args.cmd == "status":
-            print("\n".join(reg.tree(args.names or reg.targets())) or "(no targets)")
+            print("\n".join(status_tree(reg, args.names or reg.targets())) or "(no targets)")
         elif args.cmd == "refresh":
             removed = reg.refresh(args.root / "docs" / "_freeze")
             if removed:

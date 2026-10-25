@@ -155,7 +155,10 @@ fine-tuning-lab/
     stats.py                # (planned) bootstrap CIs, paired cluster bootstrap over conversations, cross-seed agreement
     runs.py                 # (planned) run ids, config/env capture (git commit, library versions)
     artifacts/              # the artifact system; `python -m convfinqa.artifacts build|status|refresh`
-      registry.py           #   @artifact, Registry (freshness, builds, subprocesses, get, chapter records), DEFAULT
+      spec.py               #   Spec and the declaration rules: name templates, builder signature, field types (make_spec)
+      registry.py           #   @artifact, Registry (freshness, builds, subprocesses, get), DEFAULT
+      records.py            #   ChapterRecords: which artifacts each chapter used; refresh clears outdated freeze folders
+      subprocess_build.py   #   child_command, child_environment, run: one heavy build in a child process
       handles.py            #   Handle, InputFile, Deps, Files, Status;  errors.py: the exceptions
       chapters.py           #   scan .qmd files for @artifact cells and get() calls; purity check; compile with qmd line numbers
       hashing.py            #   file/output hashes, normalized source, module closure, code hash, framework exclusion

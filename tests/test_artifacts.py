@@ -316,6 +316,14 @@ def test_lock_serialises_concurrent_builders(toy):
 # --- graph validation and builder purity --------------------------------------------------------
 
 
+def test_dependencies_and_dep_names(toy):
+    reg = toy.registry()
+    assert reg.dependencies("leaf") == ["mid"]
+    assert reg.dependencies("base_3") == []
+    spec, params = reg.resolve("usecfg")
+    assert spec.dep_names(params) == ["cfg"] == reg.dependencies("usecfg")
+
+
 def test_default_registry_graph_is_valid():
     A.DEFAULT.load()
     A.DEFAULT.validate(A.DEFAULT.targets())
@@ -513,7 +521,7 @@ def test_stale_use_is_recorded_and_always_refreshed(toy, monkeypatch):
 
 def test_status_tree_lists_dependencies(toy):
     reg = toy.registry()
-    lines = reg.tree(["leaf"])
+    lines = cli.status_tree(reg, ["leaf"])
     assert [l.strip().split()[0] for l in lines] == ["leaf", "mid", "base_2"]
     assert all("missing" in l for l in lines)
 

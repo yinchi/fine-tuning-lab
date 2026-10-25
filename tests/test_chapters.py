@@ -8,6 +8,7 @@ import pytest
 
 from convfinqa import artifacts as A
 from convfinqa.artifacts import chapters
+from convfinqa.artifacts.registry import LoadState
 
 FENCE = "```"
 
@@ -323,3 +324,73 @@ def test_float_fields_are_not_allowed():
 
     with pytest.raises(A.ArtifactError, match="str or int"):
         reg.artifact("a_{x}")(f)
+
+
+# --- load state -------------------------------------------------------------------------------------
+
+IMPURE = """
+    LIMIT = 3
+
+    @artifact("sq_{n}")
+    def build_sq(out: Path, deps: Deps, *, n: int):
+        (out / "v.txt").write_text(str(n * LIMIT))
+"""
+
+
+def unloaded_registry(book):
+    return A.Registry(book.root / "artifacts", root=book.root, chapters_dir=book.root / "docs")
+
+
+def test_a_failed_first_load_can_be_retried(book):
+    path = book.write("301_a", SETUP, IMPURE)
+    reg = unloaded_registry(book)
+    assert reg.load_state is LoadState.UNLOADED
+    for _ in range(2):  # the same error each time, until the chapter is fixed
+        with pytest.raises(A.ArtifactError, match="LIMIT"):
+            reg.status("sq_3")
+        assert reg.load_state is LoadState.UNLOADED
+    path.write_text(qmd(SETUP, SQUARE))
+    assert reg.status("sq_3").kind == "missing"
+    assert reg.load_state is LoadState.LOADED
+
+
+def test_a_failed_rescan_leaves_the_registry_loaded_and_is_retried(book):
+    path = book.write("301_a", SETUP, SQUARE)
+    reg = unloaded_registry(book)
+    reg.get("sq_3")
+    path.write_text(qmd(SETUP, IMPURE))  # an edit that breaks the chapter
+    with pytest.raises(A.ArtifactError, match="LIMIT"):
+        reg.status("sq_3")
+    assert reg.load_state is LoadState.LOADED
+    with pytest.raises(A.ArtifactError, match="LIMIT"):  # still broken, so still reported
+        reg.status("sq_3")
+    path.write_text(qmd(SETUP, SQUARE))
+    assert reg.status("sq_3").fresh
+
+
+def test_an_invalid_graph_keeps_being_reported(book):
+    book.write("301_a", SETUP, """
+        @artifact("needs_{n}", deps=["nothing_{n}"])
+        def build_needs(out: Path, deps: Deps, *, n: int):
+            pass
+    """)
+    reg = unloaded_registry(book)
+    for _ in range(2):
+        with pytest.raises(A.ArtifactError, match="does not resolve"):
+            reg.resolve("needs_1")
+        assert reg.load_state is LoadState.UNLOADED
+
+
+def test_the_state_is_loading_while_builders_register(book):
+    book.write("301_a", SETUP, SQUARE)
+    reg = unloaded_registry(book)
+    seen = []
+    original = reg._register
+
+    def spy(*args, **kwargs):
+        seen.append(reg.load_state)
+        return original(*args, **kwargs)
+
+    reg._register = spy
+    reg.load()
+    assert seen == [LoadState.LOADING] and reg.load_state is LoadState.LOADED

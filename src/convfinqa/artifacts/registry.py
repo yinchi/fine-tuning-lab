@@ -2,31 +2,29 @@
 
 from __future__ import annotations
 
+import contextlib
+import enum
 import fcntl
 import importlib
 import json
 import os
-import re
 import shutil
-import string
 import subprocess
 import sys
 import time
-import typing
 import warnings
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from .chapters import ANNOTATION_NAMES, check_pure, compile_builder, scan_chapters
+from .chapters import check_pure, compile_builder, scan_chapters
 from .errors import ArtifactError, BuildError, StaleArtifactError
 from .handles import Deps, Files, Handle, InputFile, Status
-from .hashing import (
-    LOG_NAME, code_hash, hash_outputs, inline_code_hash, is_framework, library_versions, module_closure,
-    module_path, sha256_file, sha256_json,
-)
+from .hashing import LOG_NAME, hash_outputs, is_framework, library_versions, sha256_file, sha256_json
+from .records import ChapterRecords
+from . import subprocess_build
 from .seeding import chdir, preserved_rng_state, seed_everything
+from .spec import NAME, SAMPLE, Spec, make_spec
 
 ROOT = Path(os.environ.get("CONVFINQA_ROOT") or Path(__file__).resolve().parents[3])
 """The project root.
@@ -47,115 +45,22 @@ DEFAULT_MODULES = ("convfinqa.builders",)
 Importing these modules runs their `@artifact` decorators.
 """
 
-
-@dataclass
-class Spec:
-    """A specification for an artifact builder.
-    
-    A builder allows a group of related artifacts to be grouped under a common template,
-    which contains placeholders for variable parts of the artifact names.
-    """
-    template: str
-    """The template string for the artifact names, with placeholders for variable parts.
-    
-    For example, a template like "foo_{variant}_{seed}" has two variable parts: "variant" and
-    "seed".  The `seed` field has special meaning; if absent, a default value is used.
-    """
-
-    fn: Callable
-    """The function associated with this artifact builder.
-    
-    Must accept the same keyword arguments as the placeholders in the template.
-    """
-
-    deps: list[str]
-    """Template strings for the dependencies of this artifact. Allowed placeholders are
-    those defined in `template`."""
-
-    files: list[str]
-    """Declared static input files, as literal paths relative to the project root (no placeholders).
-    Their content hashes are part of the artifact's config."""
-
-    heavy: bool
-    """Whether the build runs in a subprocess and needs RUN_HEAVY=1 or the build command."""
-
-    version: int
-    """The version of this artifact builder. Incrementing this forces rebuilds of artifacts."""
-
-    seed: int
-    """A default seed value for this artifact builder. Used to generate reproducible artifacts
-    when `seed` is not provided in the template."""
-
-    fields: dict[str, type]
-    """Type annotations for the fields in the template.
-    
-    The only allowed types are the keys of `_FIELD_REGEX`, i.e., `str` and `int`. The same
-    keys are present in `_SAMPLE` as well, which supplies example values for each field type.
-    """
-
-    pattern: re.Pattern
-    """The compiled regular expression pattern for matching artifact names based on the template."""
-
-    source: str | None = None
-    """The source code of the function defining this artifact, if available (i.e., when
-    defined in a chapter cell)."""
-
-    chapter: str | None = None
-    """The chapter that defines this artifact, if available."""
-
-    location: str = ""
-    """`file:line` of the definition in the chapter file, for error messages. Empty for builders
-    defined in modules."""
-
-    @property
-    def module(self) -> str:
-        """Return the module in which the artifact's function is defined."""
-        return self.fn.__module__
-
-
-_SAMPLE = {str: "x", int: "0"}
-"""Sample values for each allowed field type."""
-
-_NAME = re.compile(r"[A-Za-z0-9_]+")
-"""Regular expression for valid artifact names."""
-
-_LITERAL = re.compile(r"[A-Za-z0-9_]*")
-"""Regular expression for valid literal parts of artifact names, which may be empty.
-
-See `_template_parts` for how templates are split into parts.
-"""
-
-_FIELD_REGEX = {str: "[A-Za-z0-9]+", int: "0|[1-9][0-9]*"}
-"""Regular expressions for each allowed field value, keyed by the field type."""
-
 _active: Registry | None = None
 
 
-def _template_parts(template: str) -> list[tuple[str, str | None]]:
-    """Split a name template into (literal, field) pairs, rejecting anything but simple fields.
-    
-    Templates are split into parts as pairs: each field name and the literal text before it. Any
-    trailing literal part after the last field is also included as a pair with `None` as the field
-    name. For example, the template "file_{name}_{version}_suffix" would be split into:
-    `[("file_", "name"), ("_", "version"), ("_suffix", None)]`.
-    """
-    parts = []
-    for lit, field, spec, conv in string.Formatter().parse(template):
-        if spec or conv or not _LITERAL.fullmatch(lit) or (field is not None and not field.isidentifier()):
-            raise ArtifactError(
-                f"bad name template {template!r}: names use letters, digits and underscores, "
-                "with fields written as {name}"
-            )
-        parts.append((lit, field))
-    for (_, a), (lit, b) in zip(parts, parts[1:]):
-        if a is not None and b is not None and lit == "":
-            raise ArtifactError(f"bad name template {template!r}: two fields need text between them")
-    return parts
+class LoadState(enum.Enum):
+    """Whether a registry has read its builders (from modules and chapters) yet."""
+
+    UNLOADED = "unloaded"  # not loaded, or a load failed (so the next use tries again)
+    LOADING = "loading"  # builders are being registered; `@artifact` must register, not look up
+    LOADED = "loaded"
 
 
 def artifact(template: str, *, deps=(), files=(), heavy=False, version=1, seed=0):
     """Register a builder with the active registry (the default one outside `Registry.load`)."""
-    return (_active or DEFAULT).artifact(template, deps=deps, files=files, heavy=heavy, version=version, seed=seed)
+    return (_active or DEFAULT).artifact(
+        template, deps=deps, files=files, heavy=heavy, version=version, seed=seed
+    )
 
 
 class Registry:
@@ -171,24 +76,27 @@ class Registry:
         self.specs: dict[str, Spec] = {}
         self.target_locations: dict[str, str] = {}  # literal get("name") calls found in chapters
         self.unparsed_cells: list[str] = []
-        self._loaded = False
-        self._loading = False
+        self.load_state = LoadState.UNLOADED
         self._scan_signature: tuple = ()  # (name, mtime, size) of the chapter files last scanned
-        self._chapter_seen: dict[str, str] = {}
-        self._chapter_stale: set[str] = set()
+        self.records = ChapterRecords(self.dir / "_chapters")
 
     # registration ...............................................................................
 
     def artifact(self, template: str, *, deps=(), files=(), heavy=False, version=1, seed=0):
-        """Decorator registering a builder. In a chapter cell that the scan already registered, it is a no-op."""
-        if not self._loading:
+        """Decorator registering a builder.
+        
+        In a chapter cell that the scan already registered, it is a no-op.
+        """
+        if self.load_state is not LoadState.LOADING:
             self._ensure_loaded()
             existing = self.specs.get(template)
             if existing is not None and existing.chapter is not None:
                 return lambda fn: fn  # the chapter's scanned definition is the registered one
 
         def decorate(fn: Callable) -> Callable:
-            self._register(template, fn, deps=deps, files=files, heavy=heavy, version=version, seed=seed)
+            self._register(
+                template, fn, deps=deps, files=files, heavy=heavy, version=version, seed=seed
+            )
             return fn
 
         return decorate
@@ -197,32 +105,9 @@ class Registry:
         self, template: str, fn: Callable, *, deps, files, heavy, version, seed,
         chapter: str | None = None, source: str | None = None, location: str = "",
     ) -> None:
-        parts = _template_parts(template)
-        fields = [f for _, f in parts if f is not None]
-        try:
-            hints = typing.get_type_hints(fn)
-        except NameError as e:
-            raise ArtifactError(
-                f"builder for {template!r}: annotation uses an unknown name ({e}). "
-                f"Annotations may use only {', '.join(ANNOTATION_NAMES)}, builtins and the module's own imports."
-            ) from None
-        spec_fields = {f: hints.get(f) for f in fields}
-        self._check_signature(template, fn, spec_fields, bool(files))
-        if chapter is None and module_path(fn.__module__) is None:
-            raise ArtifactError(
-                f"builder for {template!r} must live in an importable module or in a chapter code cell "
-                "(a function defined elsewhere, such as an interactive session, cannot be rebuilt in a subprocess)"
-            )
-        for d in deps:
-            unknown = {f for _, f in _template_parts(d) if f is not None} - set(fields)
-            if unknown:
-                raise ArtifactError(f"{template!r}: dependency {d!r} uses fields {sorted(unknown)} the name lacks")
-        regex = "".join(
-            re.escape(lit) + (f"(?P<{f}>{_FIELD_REGEX[spec_fields[f]]})" if f else "") for lit, f in parts
-        )
-        spec = Spec(
-            template, fn, list(deps), list(files), heavy, version, seed, spec_fields, re.compile(regex),
-            source, chapter, location,
+        spec = make_spec(
+            template, fn, deps=deps, files=files, heavy=heavy, version=version, seed=seed,
+            chapter=chapter, source=source, location=location,
         )
         old = self.specs.get(template)
         if old and (old.fn.__module__, old.fn.__qualname__) != (fn.__module__, fn.__qualname__):
@@ -230,33 +115,30 @@ class Registry:
             raise ArtifactError(f"artifact template {template!r} is registered twice{where}")
         self.specs[template] = spec
 
-    @staticmethod
-    def _check_signature(template, fn, fields, has_files):
-        import inspect
+    @contextlib.contextmanager
+    def _loading(self):
+        """Make this the registry that `@artifact` registers into, while builders are being loaded.
 
-        params = list(inspect.signature(fn).parameters.values())
-        expected = ["out", "deps"] + (["files"] if has_files else [])
-        names = [p.name for p in params]
-        pos = [p for p in params if p.kind is not inspect.Parameter.KEYWORD_ONLY]
-        kw = {p.name for p in params if p.kind is inspect.Parameter.KEYWORD_ONLY}
-        if [p.name for p in pos] != expected or kw != set(fields):
-            raise ArtifactError(
-                f"builder for {template!r} must have the signature "
-                f"({', '.join(expected)}, *, {', '.join(sorted(fields))}); got ({', '.join(names)}). "
-                "Builders take only out, deps, files and the fields of their own name."
-            )
-        for f, t in fields.items():
-            if t not in _SAMPLE:
-                raise ArtifactError(f"builder for {template!r}: field {f!r} needs a str or int annotation")
-        if fields.get("seed", int) is not int:
-            raise ArtifactError(f"builder for {template!r}: the `seed` field is the build seed, so it must be an int")
+        On success the state becomes `LOADED`. If anything raises, the previous state is restored: a
+        failed first load stays `UNLOADED` (the next use tries again, and raises the same error until
+        it is fixed), and a failed re-scan leaves a registry that was loaded still loaded.
+        """
+        global _active
+        previous_active, previous_state = _active, self.load_state
+        _active, self.load_state = self, LoadState.LOADING
+        try:
+            yield
+        except BaseException:
+            self.load_state = previous_state
+            raise
+        else:
+            self.load_state = LoadState.LOADED
+        finally:
+            _active = previous_active
 
     def load(self, modules=None) -> Registry:
         """Register builders from the modules and the chapters' code cells, then validate the graph."""
-        global _active
-        previous, _active = _active, self
-        self._loading = True
-        try:
+        with self._loading():
             for m in self.modules if modules is None else modules:
                 if m in sys.modules:
                     importlib.reload(sys.modules[m])
@@ -264,38 +146,42 @@ class Registry:
                     importlib.import_module(m)
             if self.chapters_dir is not None:
                 self._load_chapters()
-        finally:
-            _active = previous
-            self._loading = False
-        self._loaded = True
-        self.validate()
+            self.validate()
         return self
 
     def _chapters_signature(self) -> tuple:
         if self.chapters_dir is None:
             return ()
         return tuple(
-            (p.name, p.stat().st_mtime_ns, p.stat().st_size) for p in sorted(self.chapters_dir.glob("*.qmd"))
+            (p.name, p.stat().st_mtime_ns, p.stat().st_size)
+            for p in sorted(self.chapters_dir.glob("*.qmd"))
         )
 
     def _load_chapters(self) -> None:
         # Forget what an earlier scan registered, so builders removed from a chapter disappear.
         self.specs = {t: sp for t, sp in self.specs.items() if sp.chapter is None}
         self.target_locations = {}
-        self._scan_signature = self._chapters_signature()
+        signature = self._chapters_signature()  # taken before scanning: a change during the scan is seen next time
         scan = scan_chapters(self.chapters_dir)
         self.unparsed_cells = scan.unparsed
         for name, where in scan.gets:
             self.target_locations.setdefault(name, where)
         for b in scan.builders:
             check_pure(b)
-            namespace = {"__name__": f"convfinqa_chapters.{b.chapter}", "Path": Path, "Deps": Deps, "Files": Files}
+            namespace = {
+                "__name__": f"convfinqa_chapters.{b.chapter}",
+                "Path": Path,
+                "Deps": Deps,
+                "Files": Files
+            }
             fn = compile_builder(b, namespace)
             self._register(
                 b.template, fn, deps=b.options.get("deps", ()), files=b.options.get("files", ()),
                 heavy=b.options.get("heavy", False), version=b.options.get("version", 1),
-                seed=b.options.get("seed", 0), chapter=b.chapter, source=b.source, location=b.location,
+                seed=b.options.get("seed", 0), chapter=b.chapter, source=b.source,
+                location=b.location,
             )
+        self._scan_signature = signature  # only after success, so a failed scan is retried
 
     def targets(self) -> list[str]:
         """The artifact names chapters ask for with `get("literal")`: what `build --all` builds."""
@@ -303,31 +189,27 @@ class Registry:
         return sorted(self.target_locations)
 
     def _ensure_loaded(self) -> None:
-        """Load on first use. A long-lived process (a Jupyter kernel that Quarto keeps alive between renders)
-        also re-reads the chapters when their files change, so an edited builder is never served stale."""
-        if not self._loaded:
+        """Load on first use. A long-lived process (a Jupyter kernel that Quarto keeps alive between
+        renders) also re-reads the chapters when their files change, so an edited builder is never
+        served stale."""
+        if self.load_state is LoadState.LOADING:
+            return
+        if self.load_state is LoadState.UNLOADED:
             self.load()
         elif self.chapters_dir is not None and self._scan_signature != self._chapters_signature():
-            global _active
-            previous, _active = _active, self
-            self._loading = True
-            try:
+            with self._loading():
                 self._load_chapters()
-            finally:
-                _active = previous
-                self._loading = False
-            self.validate()
+                self.validate()
 
     # names ......................................................................................
 
     def resolve(self, name: str) -> tuple[Spec, dict[str, Any]]:
         self._ensure_loaded()
-        if not _NAME.fullmatch(name):
+        if not NAME.fullmatch(name):
             raise ArtifactError(f"{name!r} is not a valid artifact name (letters, digits and underscores only)")
         matches = []
         for spec in self.specs.values():
-            m = spec.pattern.fullmatch(name)
-            if m:
+            if (m := spec.pattern.fullmatch(name)):
                 try:
                     params = {f: spec.fields[f](v) for f, v in m.groupdict().items()}
                 except ValueError:
@@ -339,14 +221,16 @@ class Registry:
             raise ArtifactError(f"the name {name!r} matches several templates: {[s.template for s, _ in matches]}")
         return matches[0]
 
-    def dep_names(self, spec: Spec, params: dict[str, Any]) -> list[str]:
-        return [d.format(**params) for d in spec.deps]
+    def dependencies(self, name: str) -> list[str]:
+        """The concrete names of the artifacts that the artifact `name` is built from."""
+        spec, params = self.resolve(name)
+        return spec.dep_names(params)
 
     def validate(self, targets=()) -> None:
         """Every dependency template resolves, there are no cycles; `targets` are resolved fully."""
         graph: dict[str, list[str]] = {}
         for tpl, spec in self.specs.items():
-            sample = {f: _SAMPLE[t] for f, t in spec.fields.items()}
+            sample = {f: SAMPLE[t] for f, t in spec.fields.items()}
             sample = {f: spec.fields[f](v) for f, v in sample.items()}
             edges = []
             for d in spec.deps:
@@ -384,8 +268,7 @@ class Registry:
         def visit(n: str) -> None:
             if n in order:
                 return
-            spec, params = self.resolve(n)
-            for d in self.dep_names(spec, params):
+            for d in self.dependencies(n):
                 visit(d)
             order.append(n)
 
@@ -394,41 +277,30 @@ class Registry:
 
     # freshness ..................................................................................
 
-    def _node_path(self, name: str) -> Path:
-        return self.dir / name / "node.json"
-
     def _read_node(self, name: str) -> dict | None:
         try:
-            return json.loads(self._node_path(name).read_text())
+            node_path = self.dir / name / "node.json"
+            return json.loads(node_path.read_text())
         except (FileNotFoundError, json.JSONDecodeError):
             return None
 
     def _seed(self, spec: Spec, params: dict[str, Any]) -> int:
         return int(params.get("seed", spec.seed))
 
-    def _input_hashes(self, spec: Spec) -> dict[str, str | None]:
-        out = {}
-        for rel in spec.files:
-            p = self.root / rel
-            out[rel] = sha256_file(p) if p.is_file() else None
-        return out
-
     def _config(self, spec: Spec, params: dict[str, Any]) -> dict:
-        return {"params": params, "seed": self._seed(spec, params), "files": self._input_hashes(spec)}
-
-    @staticmethod
-    def _code_hash(spec: Spec, dynamic=()) -> str:
-        if spec.source is not None:
-            return inline_code_hash(spec.source, dynamic)
-        return code_hash(module_closure(spec.module) | set(dynamic))
+        input_hashes = {
+            rel: sha256_file(p) if (p := self.root / rel).is_file() else None
+            for rel in spec.files
+        }
+        return {"params": params, "seed": self._seed(spec, params), "files": input_hashes}
 
     def status(self, name: str) -> Status:
         spec, params = self.resolve(name)
-        node = self._read_node(name)
-        if node is None:
+        if (node := self._read_node(name)) is None:
             return Status("missing", "not built")
         if node.get("version") != spec.version:
             return Status("stale", f"version changed ({node.get('version')} -> {spec.version})")
+
         config = self._config(spec, params)
         if any(h is None for h in config["files"].values()):
             missing = [f for f, h in config["files"].items() if h is None]
@@ -436,9 +308,10 @@ class Registry:
         if node.get("config") != config:
             changed = [k for k in config if node.get("config", {}).get(k) != config[k]]
             return Status("stale", f"config changed ({', '.join(changed)})")
-        if node.get("code_hash") != self._code_hash(spec, node.get("dynamic_modules", [])):
+        if node.get("code_hash") != spec.code_hash(node.get("dynamic_modules", [])):
             return Status("stale", "code changed")
-        deps = self.dep_names(spec, params)
+
+        deps = spec.dep_names(params)
         if sorted(node.get("deps", {})) != sorted(deps):
             return Status("stale", "dependencies changed")
         for d in deps:
@@ -447,6 +320,7 @@ class Registry:
                 return Status("stale", f"dependency {d} is {ds.kind}")
             if ds.output_hash != node["deps"][d]:
                 return Status("stale", f"dependency {d} was rebuilt")
+
         notes = []
         built = node.get("library_versions", {})
         for lib, ver in library_versions().items():
@@ -457,21 +331,16 @@ class Registry:
         return Status("fresh", output_hash=node["output_hash"], notes=tuple(notes))
 
     def handle(self, name: str, *, stale: bool = False) -> Handle:
-        node = self._read_node(name)
-        if node is None:
+        if (node := self._read_node(name)) is None:
             raise ArtifactError(f"artifact {name!r} has not been built")
         return Handle(name, self.dir / name, node["output_hash"], stale, frozenset(node["outputs"]))
 
     # building ...................................................................................
 
-    @staticmethod
-    def build_command(name: str) -> str:
-        return f"uv run python -m convfinqa.artifacts build {name}"
-
     def ensure(self, name: str, *, allow_heavy: bool, force: bool = False) -> Handle:
         """Make `name` fresh (building it and its stale dependencies) and return its handle."""
         spec, params = self.resolve(name)
-        for dep in self.dep_names(spec, params):
+        for dep in spec.dep_names(params):
             self.ensure(dep, allow_heavy=allow_heavy)
         st = self.status(name)
         if st.fresh and not force:
@@ -487,7 +356,7 @@ class Registry:
     @staticmethod
     def _stale_message(name: str, st: Status) -> str:
         detail = "is missing" if st.kind == "missing" else f"is stale ({st.reason})"
-        msg = (f"Heavy artifact {name!r} {detail}. Build it with:\n    {Registry.build_command(name)}\n"
+        msg = (f"Heavy artifact {name!r} {detail}. Build it with:\n    uv run python -m convfinqa.artifacts build {name}\n"
                "(or run ./build.sh, or render with RUN_HEAVY=1).")
         if st.kind == "stale":
             msg += " ALLOW_STALE=1 would load the old result with a warning."
@@ -495,26 +364,14 @@ class Registry:
 
     def _spawn(self, name: str, *, force: bool) -> None:
         spec, params = self.resolve(name)
-        cmd = [sys.executable, "-m", "convfinqa.artifacts", "--artifacts-dir", str(self.dir), "--root", str(self.root)]
-        cmd += [f"--chapters-dir={self.chapters_dir or ''}"]
-        for m in self.modules:
-            cmd += ["--import", m]
-        cmd += ["_run", name] + (["--force"] if force else [])
-        env = dict(os.environ)
-        env["PYTHONHASHSEED"] = str(self._seed(spec, params))
-        env["CUBLAS_WORKSPACE_CONFIG"] = ":4096:8"
-        if self.extra_paths:
-            env["PYTHONPATH"] = os.pathsep.join(self.extra_paths + [env.get("PYTHONPATH", "")])
-        log = self.dir / f"{name}.tmp" / LOG_NAME
-        print(f"[artifacts] building {name} in a subprocess (log: {log})", file=sys.stderr, flush=True)
-        t0 = time.time()
-        proc = subprocess.run(cmd, env=env, cwd=self.root)
-        if proc.returncode != 0:
-            tail = ""
-            if log.exists():
-                tail = "\n".join(log.read_text(errors="replace").splitlines()[-30:])
-            raise BuildError(f"building {name!r} failed (exit code {proc.returncode}); log: {log}\n{tail}")
-        print(f"[artifacts] built {name} in {time.time() - t0:.0f}s", file=sys.stderr, flush=True)
+        cmd = subprocess_build.child_command(
+            name, artifacts_dir=self.dir, root=self.root, chapters_dir=self.chapters_dir,
+            modules=self.modules, force=force,
+        )
+        env = subprocess_build.child_environment(self._seed(spec, params), self.extra_paths)
+        subprocess_build.run(
+            name, cmd, env, cwd=self.root, log=subprocess_build.log_path(self.dir, name)
+        )
 
     def execute(self, name: str, *, force: bool = False, redirect_output: bool = False) -> None:
         """Run the builder in this process. Takes the lock, then re-checks freshness."""
@@ -526,7 +383,7 @@ class Registry:
             if not force and self.status(name).fresh:
                 return  # another process built it while we waited
             dep_handles = {}
-            for d in self.dep_names(spec, params):
+            for d in spec.dep_names(params):
                 if not self.status(d).fresh:
                     raise BuildError(f"cannot build {name!r}: dependency {d!r} is not fresh")
                 dep_handles[d] = self.handle(d)
@@ -560,7 +417,7 @@ class Registry:
                 "deps": {d: h.hash for d, h in dep_handles.items()},
                 "outputs": outputs,
                 "output_hash": sha256_json(outputs),
-                "code_hash": self._code_hash(spec, dynamic),
+                "code_hash": spec.code_hash(dynamic),
                 "dynamic_modules": dynamic,
                 "git_commit": _git(self.root, "rev-parse", "HEAD"),
                 "git_dirty": _git_dirty(self.root),
@@ -594,57 +451,14 @@ class Registry:
             _show_stale_warning(name, st.reason)
         else:
             raise StaleArtifactError(self._stale_message(name, st))
-        self._record_use(h)
+        self.records.note_use(h)
         return h
 
-    def _record_use(self, h: Handle) -> None:
-        document = os.environ.get("QUARTO_DOCUMENT_FILE")
-        if not document:
-            return
-        self._chapter_seen[h.name] = h.hash
-        if h.stale:
-            self._chapter_stale.add(h.name)
-        path = self.dir / "_chapters" / f"{Path(document).stem}.json"
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"artifacts": self._chapter_seen, "stale": sorted(self._chapter_stale)}, indent=2))
-
-    # CLI actions ................................................................................
-
-    def tree(self, names: list[str]) -> list[str]:
-        lines: list[str] = []
-
-        def show(n: str, depth: int) -> None:
-            st = self.status(n)
-            label = st.kind + (f": {st.reason}" if st.reason else "")
-            lines.append(f"{'  ' * depth}{n}  [{label}]")
-            for note in st.notes:
-                lines.append(f"{'  ' * depth}  note: {note}")
-            spec, params = self.resolve(n)
-            for d in self.dep_names(spec, params):
-                show(d, depth + 1)
-
-        for n in names:
-            show(n, 0)
-        return lines
+    # chapter records ............................................................................
 
     def refresh(self, freeze_dir: Path) -> list[str]:
         """Delete the freeze folder of every chapter that used an artifact that is no longer current."""
-        removed = []
-        for rec in sorted((self.dir / "_chapters").glob("*.json")):
-            data = json.loads(rec.read_text())
-            outdated = bool(data.get("stale"))
-            for name, h in data["artifacts"].items():
-                try:
-                    st = self.status(name)
-                except ArtifactError:
-                    outdated = True
-                    continue
-                outdated |= not st.fresh or st.output_hash != h
-            if outdated:
-                shutil.rmtree(freeze_dir / rec.stem, ignore_errors=True)
-                rec.unlink()  # the chapter re-records its usage when it re-executes
-                removed.append(rec.stem)
-        return removed
+        return self.records.refresh(freeze_dir, self.status)
 
 
 def _git(root: Path, *args: str) -> str | None:
