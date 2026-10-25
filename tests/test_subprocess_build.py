@@ -45,10 +45,6 @@ def test_the_environment_leaves_pythonpath_alone_without_extra_paths(monkeypatch
     assert sb.child_environment(0)["PYTHONPATH"] == "/existing"
 
 
-def test_the_log_lives_in_the_builds_temporary_directory():
-    assert sb.log_path(Path("/a"), "x") == Path("/a/x.tmp/build.log")
-
-
 def test_a_failed_build_reports_the_exit_code_and_the_end_of_the_log(tmp_path):
     log = tmp_path / "build.log"
     log.write_text("\n".join(f"line {i}" for i in range(100)))

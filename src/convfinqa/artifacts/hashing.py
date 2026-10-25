@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import importlib.metadata
 import importlib.util
 import json
 import os
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-TRACKED_LIBRARIES = ("torch", "transformers", "peft", "trl")
 """Tracked libraries for hashing purposes.
 
 If any of these libraries are updated, artifacts depending on them are declared stale.
@@ -222,14 +220,3 @@ def inline_code_hash(source: str, extra_modules: set[str] | list[str] = ()) -> s
     """
     modules = closure_of_modules(local_imports(source)) | set(extra_modules)
     return sha256_json({"source": normalized_source(source), "modules": code_hash(modules)})
-
-
-def library_versions() -> dict[str, str | None]:
-    """Retrieve the versions of tracked libraries, if installed."""
-    out = {}
-    for lib in TRACKED_LIBRARIES:
-        try:
-            out[lib] = importlib.metadata.version(lib)
-        except importlib.metadata.PackageNotFoundError:
-            out[lib] = None
-    return out

@@ -77,3 +77,21 @@ def test_every_field_type_has_a_sample_value_that_its_pattern_accepts():
     assert set(SAMPLE) == set(FIELD_TYPES) == set(spec_module._FIELD_REGEX)
     for t, value in SAMPLE.items():
         assert __import__("re").fullmatch(spec_module._FIELD_REGEX[t], value)
+
+
+def test_build_seed_is_the_name_field_or_the_declared_default():
+    spec = spec_for("m_{variant}_{n}")
+    spec.seed = 5
+    assert spec.build_seed({"variant": "dsl", "n": 3}) == 5
+    assert spec.build_seed({"variant": "dsl", "n": 3, "seed": 9}) == 9
+
+
+def test_config_holds_the_fields_the_seed_and_the_input_file_hashes(tmp_path):
+    spec = spec_for("m_{variant}_{n}")
+    spec.files = ["cfg.json", "missing.json"]
+    (tmp_path / "cfg.json").write_text("{}")
+    config = spec.config({"variant": "dsl", "n": 3}, tmp_path)
+    assert config["params"] == {"variant": "dsl", "n": 3} and config["seed"] == 0
+    assert len(config["files"]["cfg.json"]) == 64 and config["files"]["missing.json"] is None
+    (tmp_path / "cfg.json").write_text('{"changed": true}')
+    assert spec.config({"variant": "dsl", "n": 3}, tmp_path) != config

@@ -20,7 +20,7 @@ def status_tree(reg: Registry, names: list[str]) -> list[str]:
         lines.append(f"{'  ' * depth}{name}  [{label}]")
         for note in st.notes:
             lines.append(f"{'  ' * depth}  note: {note}")
-        for dep in reg.dependencies(name):
+        for dep in reg.catalog.dependencies(name):
             show(dep, depth + 1)
 
     for name in names:
@@ -107,17 +107,17 @@ def main(argv: list[str] | None = None) -> int:
         if args.cmd == "_run":
             reg.execute(args.name, force=args.force, redirect_output=True)
         elif args.cmd == "build":
-            names = reg.targets() if args.all else args.names
+            names = reg.catalog.targets() if args.all else args.names
             if not names and not args.all:
                 p.error("give artifact names or --all")
-            reg.validate(names)
+            reg.catalog.validate(names)
             for n in names:
                 reg.ensure(n, allow_heavy=True, force=args.force)
             print(f"[artifacts] {len(names)} target(s) fresh")
         elif args.cmd == "status":
-            print("\n".join(status_tree(reg, args.names or reg.targets())) or "(no targets)")
+            print("\n".join(status_tree(reg, args.names or reg.catalog.targets())) or "(no targets)")
         elif args.cmd == "refresh":
-            removed = reg.refresh(args.root / "docs" / "_freeze")
+            removed = reg.records.refresh(args.root / "docs" / "_freeze", reg.status)
             if removed:
                 print(f"[artifacts] chapters marked for re-execution: {', '.join(removed)}")
     except ArtifactError as e:

@@ -8,7 +8,7 @@ import pytest
 
 from convfinqa import artifacts as A
 from convfinqa.artifacts import chapters
-from convfinqa.artifacts.registry import LoadState
+from convfinqa.artifacts.catalog import LoadState
 
 FENCE = "```"
 
@@ -51,7 +51,9 @@ def book(tmp_path, monkeypatch):
             return path
 
         def registry(self):
-            return A.Registry(tmp_path / "artifacts", root=tmp_path, chapters_dir=docs).load()
+            reg = A.Registry(tmp_path / "artifacts", root=tmp_path, chapters_dir=docs)
+            reg.catalog.load()
+            return reg
 
     return Book()
 
@@ -145,7 +147,7 @@ def test_builder_may_use_builtins_and_its_own_imports(book):
 def test_light_chapter_builder_runs_in_process(book):
     book.write("301_a", SETUP, SQUARE)
     reg = book.registry()
-    assert reg.targets() == ["sq_4"]
+    assert reg.catalog.targets() == ["sq_4"]
     assert reg.get("sq_4").file("v.txt").read_text() == "16"
     assert reg.get("sq_5").file("v.txt").read_text() == "25"  # any name matching the template works
 
@@ -177,7 +179,7 @@ def test_chapter_builder_depends_on_another_chapters_artifact(book):
         p = get("plus_3")
     """)
     reg = book.registry()
-    assert reg.targets() == ["plus_3", "sq_4"]
+    assert reg.catalog.targets() == ["plus_3", "sq_4"]
     assert reg.get("plus_3").file("v.txt").read_text() == "10"
     assert reg.status("sq_3").fresh  # built as a dependency
 
@@ -198,13 +200,13 @@ def test_tracebacks_point_into_the_qmd_file(book):
 def test_decorator_in_the_running_chapter_is_a_no_op_after_the_scan(book):
     book.write("301_a", SETUP, SQUARE)
     reg = book.registry()
-    scanned = reg.specs["sq_{n}"].fn
+    scanned = reg.catalog.specs["sq_{n}"].fn
 
     def kernel_version(out, deps, *, n):  # what executing the cell would define
         raise AssertionError("the scanned definition is the registered one")
 
-    assert reg.artifact("sq_{n}")(kernel_version) is kernel_version
-    assert reg.specs["sq_{n}"].fn is scanned
+    assert reg.catalog.artifact("sq_{n}")(kernel_version) is kernel_version
+    assert reg.catalog.specs["sq_{n}"].fn is scanned
 
 
 def test_the_same_template_in_two_chapters_is_an_error(book):
@@ -257,13 +259,13 @@ def test_a_long_lived_registry_notices_edited_chapters(book):
     path = book.write("301_a", SETUP, TWO)
     reg = book.registry()  # stays alive, like a Jupyter kernel that Quarto keeps between renders
     reg.get("one"), reg.get("two")
-    assert reg.status("two").fresh and reg.targets() == []
+    assert reg.status("two").fresh and reg.catalog.targets() == []
 
     path.write_text(path.read_text().replace('write_text("2")', 'write_text("22")') + qmd(
         'x = get("two")'
     ))
     assert reg.status("two").kind == "stale"  # the edit was picked up without a new registry
-    assert reg.targets() == ["two"]
+    assert reg.catalog.targets() == ["two"]
 
     path.write_text(qmd(SETUP))  # both builders deleted
     with pytest.raises(A.ArtifactError, match="no artifact is registered"):
@@ -279,7 +281,7 @@ def test_unknown_target_error_names_the_chapter_line(book):
     """)
     reg = book.registry()
     with pytest.raises(A.ArtifactError, match=rf"301_a\.qmd:{line_of(path, 'get(\"nope\")')}: .*nope"):
-        reg.validate(reg.targets())
+        reg.catalog.validate(reg.catalog.targets())
 
 
 # --- name rules -------------------------------------------------------------------------------------
@@ -293,14 +295,14 @@ def test_bad_name_templates_are_rejected(template):
         pass
 
     with pytest.raises(A.ArtifactError, match="bad name template"):
-        reg.artifact(template)(f)
+        reg.catalog.artifact(template)(f)
 
 
 @pytest.mark.parametrize("name", ["../x", "sq-4", "sq_04", "sq_x", "sq_", "sq_4_5", "sq 4", ""])
 def test_names_that_do_not_fit_are_rejected(book, name):
     book.write("301_a", SETUP, SQUARE)
     with pytest.raises(A.ArtifactError):
-        book.registry().resolve(name)
+        book.registry().catalog.resolve(name)
 
 
 def test_string_fields_cannot_contain_the_separator(book):
@@ -313,7 +315,7 @@ def test_string_fields_cannot_contain_the_separator(book):
     assert reg.get("m_dsl_3").file("v.txt").read_text() == "dsl/3"
     for name in ("m_dsl_v2_3", "m_dsl-v2_3"):
         with pytest.raises(A.ArtifactError):
-            reg.resolve(name)
+            reg.catalog.resolve(name)
 
 
 def test_float_fields_are_not_allowed():
@@ -323,7 +325,7 @@ def test_float_fields_are_not_allowed():
         pass
 
     with pytest.raises(A.ArtifactError, match="str or int"):
-        reg.artifact("a_{x}")(f)
+        reg.catalog.artifact("a_{x}")(f)
 
 
 # --- load state -------------------------------------------------------------------------------------
@@ -344,14 +346,14 @@ def unloaded_registry(book):
 def test_a_failed_first_load_can_be_retried(book):
     path = book.write("301_a", SETUP, IMPURE)
     reg = unloaded_registry(book)
-    assert reg.load_state is LoadState.UNLOADED
+    assert reg.catalog.load_state is LoadState.UNLOADED
     for _ in range(2):  # the same error each time, until the chapter is fixed
         with pytest.raises(A.ArtifactError, match="LIMIT"):
             reg.status("sq_3")
-        assert reg.load_state is LoadState.UNLOADED
+        assert reg.catalog.load_state is LoadState.UNLOADED
     path.write_text(qmd(SETUP, SQUARE))
     assert reg.status("sq_3").kind == "missing"
-    assert reg.load_state is LoadState.LOADED
+    assert reg.catalog.load_state is LoadState.LOADED
 
 
 def test_a_failed_rescan_leaves_the_registry_loaded_and_is_retried(book):
@@ -361,7 +363,7 @@ def test_a_failed_rescan_leaves_the_registry_loaded_and_is_retried(book):
     path.write_text(qmd(SETUP, IMPURE))  # an edit that breaks the chapter
     with pytest.raises(A.ArtifactError, match="LIMIT"):
         reg.status("sq_3")
-    assert reg.load_state is LoadState.LOADED
+    assert reg.catalog.load_state is LoadState.LOADED
     with pytest.raises(A.ArtifactError, match="LIMIT"):  # still broken, so still reported
         reg.status("sq_3")
     path.write_text(qmd(SETUP, SQUARE))
@@ -377,20 +379,20 @@ def test_an_invalid_graph_keeps_being_reported(book):
     reg = unloaded_registry(book)
     for _ in range(2):
         with pytest.raises(A.ArtifactError, match="does not resolve"):
-            reg.resolve("needs_1")
-        assert reg.load_state is LoadState.UNLOADED
+            reg.catalog.resolve("needs_1")
+        assert reg.catalog.load_state is LoadState.UNLOADED
 
 
 def test_the_state_is_loading_while_builders_register(book):
     book.write("301_a", SETUP, SQUARE)
     reg = unloaded_registry(book)
     seen = []
-    original = reg._register
+    original = reg.catalog._register
 
     def spy(*args, **kwargs):
-        seen.append(reg.load_state)
+        seen.append(reg.catalog.load_state)
         return original(*args, **kwargs)
 
-    reg._register = spy
-    reg.load()
-    assert seen == [LoadState.LOADING] and reg.load_state is LoadState.LOADED
+    reg.catalog._register = spy
+    reg.catalog.load()
+    assert seen == [LoadState.LOADING] and reg.catalog.load_state is LoadState.LOADED

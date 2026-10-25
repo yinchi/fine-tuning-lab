@@ -36,3 +36,33 @@ def test_layers_import_only_downward():
 def test_pure_layers_do_not_import_torch():
     code = "import sys, convfinqa.dsl.executor, convfinqa.dsl.steps, convfinqa.data; assert 'torch' not in sys.modules"
     subprocess.run([sys.executable, "-c", code], check=True)
+
+
+# --- the artifact package: modules import only the modules they are allowed to ---------------------
+
+# module -> the other `artifacts` modules it may import. `registry`, `cli`, `__init__` and `__main__`
+# are the coordinators and may import any of them.
+ARTIFACT_IMPORTS = {
+    "errors": set(),
+    "handles": set(),
+    "hashing": set(),
+    "seeding": set(),
+    "provenance": set(),
+    "chapters": {"errors"},
+    "spec": {"chapters", "errors", "hashing"},
+    "catalog": {"chapters", "errors", "handles", "spec"},  # what exists: no disk, no building
+    "store": {"errors", "handles", "hashing"},  # the disk layout: no catalog, no building
+    "records": {"errors", "handles"},
+    "policy": {"handles"},
+    "subprocess_build": {"errors"},
+}
+
+
+def test_artifact_modules_import_only_what_they_may():
+    import convfinqa.artifacts as package
+
+    directory = Path(package.__file__).parent
+    for module, allowed in ARTIFACT_IMPORTS.items():
+        imported = hashing.local_imports((directory / f"{module}.py").read_text(), "convfinqa.artifacts")
+        used = {name.split(".")[2] for name in imported if name.startswith("convfinqa.artifacts.")}
+        assert used <= allowed, f"{module} imports {sorted(used - allowed)}"

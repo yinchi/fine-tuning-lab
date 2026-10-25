@@ -114,7 +114,7 @@ def toy(tmp_path, monkeypatch):
 
         def registry(self):
             reg = A.Registry(tmp_path / "artifacts", root=tmp_path, modules=[name], extra_paths=[tmp_path])
-            reg.load()
+            reg.catalog.load()
             self.reg = reg
             return reg
 
@@ -153,7 +153,7 @@ def test_dependencies_are_built_first(toy):
     reg = toy.registry()
     reg.get("leaf")
     assert toy.calls == ["base_2", "mid", "leaf"]
-    assert reg.handle("leaf").file("z.txt").read_text() == "2!?"
+    assert reg.store.handle("leaf").file("z.txt").read_text() == "2!?"
 
 
 def test_missing_dependency_makes_dependent_stale(toy):
@@ -184,7 +184,7 @@ def test_stale_middle_node_makes_fresh_looking_leaf_stale(toy):
     st = reg.status("useuse")  # the leaf's own node.json still looks consistent
     assert st.kind == "stale" and "usecfg" in st.reason
     reg.get("useuse")
-    assert '"lr": 2' in reg.handle("useuse").file("uu.txt").read_text()
+    assert '"lr": 2' in reg.store.handle("useuse").file("uu.txt").read_text()
 
 
 def test_early_cutoff_when_rebuild_is_identical(toy):
@@ -204,14 +204,14 @@ def test_input_file_change_makes_artifact_stale(toy):
     (toy.root / "cfg.json").write_text('{"lr": 2}')
     assert reg.status("cfg").kind == "stale"
     reg.get("cfg")
-    assert json.loads(reg.handle("cfg").file("v.json").read_text()) == {"lr": 2}
+    assert json.loads(reg.store.handle("cfg").file("v.json").read_text()) == {"lr": 2}
 
 
 def test_version_bump_makes_artifact_stale(toy):
     reg = toy.registry()
     reg.get("base_1")
     toy.edit('@artifact("base_{n}")', '@artifact("base_{n}", version=2)')
-    reg.load()
+    reg.catalog.load()
     st = reg.status("base_1")
     assert st.kind == "stale" and "version" in st.reason
 
@@ -243,7 +243,7 @@ def test_allow_stale_loads_old_result_but_still_raises_on_missing(toy, monkeypat
     reg.get("heavy_5")
     monkeypatch.delenv("RUN_HEAVY")
     toy.edit('str(n))\n\n@artifact("crash', 'str(n + 1))\n\n@artifact("crash')
-    reg.load()
+    reg.catalog.load()
     with pytest.raises(A.StaleArtifactError, match="ALLOW_STALE"):
         reg.get("heavy_5")
     monkeypatch.setenv("ALLOW_STALE", "1")
@@ -287,7 +287,7 @@ def test_old_result_survives_a_failed_rebuild(toy):
     reg.get("base_1")
     toy.edit("K = 1", "K = 1\nraise_now = True")
     toy.edit('CALLS.append(f"base_{n}")', 'CALLS.append(f"base_{n}"); assert not raise_now')
-    reg.load()
+    reg.catalog.load()
     with pytest.raises(AssertionError):
         reg.ensure("base_1", allow_heavy=False)
     assert (reg.dir / "base_1" / "node.json").exists()
@@ -318,41 +318,41 @@ def test_lock_serialises_concurrent_builders(toy):
 
 def test_dependencies_and_dep_names(toy):
     reg = toy.registry()
-    assert reg.dependencies("leaf") == ["mid"]
-    assert reg.dependencies("base_3") == []
-    spec, params = reg.resolve("usecfg")
-    assert spec.dep_names(params) == ["cfg"] == reg.dependencies("usecfg")
+    assert reg.catalog.dependencies("leaf") == ["mid"]
+    assert reg.catalog.dependencies("base_3") == []
+    spec, params = reg.catalog.resolve("usecfg")
+    assert spec.dep_names(params) == ["cfg"] == reg.catalog.dependencies("usecfg")
 
 
 def test_default_registry_graph_is_valid():
-    A.DEFAULT.load()
-    A.DEFAULT.validate(A.DEFAULT.targets())
+    A.DEFAULT.catalog.load()
+    A.DEFAULT.catalog.validate(A.DEFAULT.catalog.targets())
 
 
 def test_missing_dependency_template_is_rejected():
     reg = A.Registry(modules=[])
 
-    @reg.artifact("a", deps=["nope"])
+    @reg.catalog.artifact("a", deps=["nope"])
     def a(out: Path, deps: A.Deps):
         pass
 
     with pytest.raises(A.ArtifactError, match="does not resolve"):
-        reg.validate()
+        reg.catalog.validate()
 
 
 def test_cycle_is_rejected():
     reg = A.Registry(modules=[])
 
-    @reg.artifact("a", deps=["b"])
+    @reg.catalog.artifact("a", deps=["b"])
     def a(out: Path, deps: A.Deps):
         pass
 
-    @reg.artifact("b", deps=["a"])
+    @reg.catalog.artifact("b", deps=["a"])
     def b(out: Path, deps: A.Deps):
         pass
 
     with pytest.raises(A.ArtifactError, match="cycle"):
-        reg.validate()
+        reg.catalog.validate()
 
 
 @pytest.mark.parametrize("source", [
@@ -366,13 +366,13 @@ def test_builder_signature_is_enforced(source):
     ns = {"Path": Path, "A": A}
     exec(source, ns)
     with pytest.raises(A.ArtifactError, match="signature"):
-        reg.artifact("a")(ns["f"])
+        reg.catalog.artifact("a")(ns["f"])
 
 
 def test_name_fields_need_a_simple_annotation():
     reg = A.Registry(modules=[])
     with pytest.raises(A.ArtifactError, match="annotation"):
-        @reg.artifact("a_{x}")
+        @reg.catalog.artifact("a_{x}")
         def f(out: Path, deps: A.Deps, *, x): pass
 
 
@@ -392,9 +392,9 @@ def test_handles_and_deps_are_strict(toy):
 def test_ambiguous_and_unknown_names(toy):
     reg = toy.registry()
     with pytest.raises(A.ArtifactError, match="no artifact"):
-        reg.resolve("nothing")
+        reg.catalog.resolve("nothing")
     with pytest.raises(A.ArtifactError):
-        reg.resolve("base_notanint")
+        reg.catalog.resolve("base_notanint")
 
 
 # --- seeding -------------------------------------------------------------------------------------
@@ -411,9 +411,9 @@ def test_builder_draws_do_not_depend_on_prior_random_state(toy):
     for _ in range(5):
         random.random(); np.random.rand(); torch.rand(3)  # perturb the global state
     reg.ensure("draws_7", allow_heavy=False, force=True)
-    assert reg.handle("draws_7").file("d.json").read_text() == a
+    assert reg.store.handle("draws_7").file("d.json").read_text() == a
     reg.ensure("draws_8", allow_heavy=False)
-    assert reg.handle("draws_8").file("d.json").read_text() != a  # the seed matters
+    assert reg.store.handle("draws_8").file("d.json").read_text() != a  # the seed matters
 
 
 def test_in_kernel_build_restores_global_rng_state(toy):
@@ -491,10 +491,10 @@ def test_chapter_records_and_refresh(toy, monkeypatch):
     reg2.get("leaf")  # uses a different chain
     monkeypatch.delenv("QUARTO_DOCUMENT_FILE")
 
-    assert reg.refresh(freeze) == []  # everything fresh: nothing removed
+    assert reg.records.refresh(freeze, reg.status) == []  # everything fresh: nothing removed
     toy.edit("K = 1", "K = 3")
-    reg.load()
-    removed = reg.refresh(freeze)
+    reg.catalog.load()
+    removed = reg.records.refresh(freeze, reg.status)
     # base_1 and (through base_2) leaf are both stale now
     assert removed == ["201_a", "202_b"]
     assert not (freeze / "201_a").exists() and not (freeze / "202_b").exists()
@@ -508,7 +508,7 @@ def test_stale_use_is_recorded_and_always_refreshed(toy, monkeypatch):
     reg.get("heavy_1")
     monkeypatch.delenv("RUN_HEAVY")
     toy.edit('str(n))\n\n@artifact("crash', 'str(n + 1))\n\n@artifact("crash')
-    reg.load()
+    reg.catalog.load()
     monkeypatch.setenv("ALLOW_STALE", "1")
     monkeypatch.setenv("QUARTO_DOCUMENT_FILE", "204_d.qmd")
     reg.get("heavy_1")
@@ -516,7 +516,7 @@ def test_stale_use_is_recorded_and_always_refreshed(toy, monkeypatch):
     assert record["stale"] == ["heavy_1"]
     freeze = toy.root / "docs" / "_freeze"
     (freeze / "204_d").mkdir(parents=True)
-    assert reg.refresh(freeze) == ["204_d"]
+    assert reg.records.refresh(freeze, reg.status) == ["204_d"]
 
 
 def test_status_tree_lists_dependencies(toy):
@@ -536,13 +536,13 @@ def test_seed_field_must_be_an_int():
         pass
 
     with pytest.raises(A.ArtifactError, match="seed.*must be an int"):
-        reg.artifact("m_{seed}")(as_text)
-    reg.artifact("m_{seed}")(as_number)  # fine
-    assert reg.resolve("m_7")[1] == {"seed": 7}
+        reg.catalog.artifact("m_{seed}")(as_text)
+    reg.catalog.artifact("m_{seed}")(as_number)  # fine
+    assert reg.catalog.resolve("m_7")[1] == {"seed": 7}
 
 
 def test_git_provenance_is_unknown_outside_a_repository_not_clean(tmp_path):
-    from convfinqa.artifacts.registry import _git, _git_dirty
+    from convfinqa.artifacts.provenance import git as _git, git_dirty as _git_dirty
 
     assert _git(tmp_path, "rev-parse", "HEAD") is None
     assert _git_dirty(tmp_path) is None  # not False: "clean" would claim something we do not know
@@ -553,3 +553,13 @@ def test_git_provenance_is_unknown_outside_a_repository_not_clean(tmp_path):
     assert _git_dirty(tmp_path) is False
     (tmp_path / "new.txt").write_text("x")
     assert _git_dirty(tmp_path) is True
+
+
+def test_an_explicit_policy_overrides_the_environment(toy, monkeypatch):
+    from convfinqa.artifacts.policy import Policy
+
+    monkeypatch.setenv("RUN_HEAVY", "1")
+    reg = toy.registry()
+    with pytest.raises(A.StaleArtifactError):
+        reg.get("heavy_9", policy=Policy())  # the environment would build it; the policy says not to
+    assert not (reg.dir / "heavy_9").exists()

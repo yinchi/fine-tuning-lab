@@ -155,16 +155,23 @@ fine-tuning-lab/
     stats.py                # (planned) bootstrap CIs, paired cluster bootstrap over conversations, cross-seed agreement
     runs.py                 # (planned) run ids, config/env capture (git commit, library versions)
     artifacts/              # the artifact system; `python -m convfinqa.artifacts build|status|refresh`
+      # what exists (no disk access)
       spec.py               #   Spec and the declaration rules: name templates, builder signature, field types (make_spec)
-      registry.py           #   @artifact, Registry (freshness, builds, subprocesses, get), DEFAULT
-      records.py            #   ChapterRecords: which artifacts each chapter used; refresh clears outdated freeze folders
-      subprocess_build.py   #   child_command, child_environment, run: one heavy build in a child process
-      handles.py            #   Handle, InputFile, Deps, Files, Status;  errors.py: the exceptions
       chapters.py           #   scan .qmd files for @artifact cells and get() calls; purity check; compile with qmd line numbers
-      hashing.py            #   file/output hashes, normalized source, module closure, code hash, framework exclusion
+      catalog.py            #   Catalog: load builders (modules, chapters), resolve names, validate the graph; LoadState
+      # what is on disk and what ran
+      store.py              #   Store: directory layout, node.json, atomic commit, lock
+      records.py            #   ChapterRecord(s): which artifacts each chapter used; refresh clears outdated freeze folders
+      provenance.py         #   git commit/dirty, library and Python versions; drift_notes
       seeding.py            #   seed_everything, RNG-state and cwd context managers
+      subprocess_build.py   #   child_command, child_environment, run: one heavy build in a child process
+      # rules and types
+      policy.py             #   Policy (RUN_HEAVY, ALLOW_STALE read from the environment), Action, messages
+      handles.py            #   Handle, InputFile, Deps, Files, Status;  errors.py: the exceptions
+      hashing.py            #   file/output hashes, normalized source, module closure, code hash, framework exclusion
+      # coordination
+      registry.py           #   Registry: composes catalog + store + records; status, ensure, execute, get; DEFAULT
       cli.py, __main__.py   #   command line
-    builders.py             # builders shared by several chapters (most live in the chapter that uses them)
     book/                   # presentation helpers for the chapters
       viz.py                #   token displays and next-token plots
       diagrams/             #   SVG generators: `python -m convfinqa.book.diagrams`
@@ -500,6 +507,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-23: `artifacts.py` split into the package `artifacts/` (registry, handles, errors, hashing, seeding, cli), done before any artifact existed, so no `node.json` was invalidated. The `__main__` delegation workaround is gone: `python -m convfinqa.artifacts` runs `artifacts/__main__.py` inside the imported package, so builders and the CLI share one registry. The code-hash exclusion is now a prefix check, `hashing.is_framework` (`convfinqa.artifacts` and `convfinqa.artifacts.*`, plus `convfinqa.targets`). Internals the tests use live in the submodules (`hashing`, `cli`); the package exports only the public API.
 - 2026-10-23: Builders are declared in the chapter code cell that uses them, and found by scanning the `.qmd` files with `ast` rather than by importing modules. This keeps "load this artifact or run this code to create it" in one cell while `./build.sh` can still build the whole DAG before rendering. Consequences: builders defined in a chapter must be self-contained (checked at scan time); targets are derived from `get("literal")` calls, so `targets.py` is gone; the code hash of a chapter builder covers its own function plus the `convfinqa` modules it imports; `builders.py` remains for shared builders. Names are letters, digits and underscores only, with `str` (letters and digits) and `int` (canonical) fields, so name matching is unambiguous and cannot escape the artifacts directory; this supersedes the dashed example names in earlier entries (`sft-dsl-0` is now `sft_dsl_0`).
 - 2026-10-23: Quarto keeps each chapter's Jupyter kernel alive for 5 minutes after a successful render and reuses it (found in a scratch chapter: `ALLOW_STALE` was `None` in the reused kernel, and the registry still held the old builder source). `execute: daemon: false` in `_quarto.yml` has no effect in Quarto 1.10.19 (a kernel stayed alive); the CLI flag `--no-execute-daemon` works for both `render` and `preview`, so `build.sh` and the documented commands pass it. As a second defence the registry compares the `.qmd` files' (name, mtime, size) on every lookup and re-scans when they change, so a long-lived kernel never serves a stale builder; environment variables cannot be fixed that way, hence the flag. Also verified end to end through real Quarto with a scratch chapter (since removed): a missing heavy artifact fails the render with the build command; `build --all` builds it in a subprocess; the render then succeeds and records its use; after a builder edit the artifact is stale, a plain render fails, `ALLOW_STALE=1` renders with a red warning box and records the stale use, and `refresh` marks the chapter for re-execution.
+- 2026-10-23: `Registry` now composes parts, as `records` already did: `Catalog` (what exists: builders, loading, name resolution, graph validation; no disk access), `Store` (directory layout, `node.json`, atomic commit, lock), `Policy` (`RUN_HEAVY` and `ALLOW_STALE`, read from the environment when a `Policy` is made; `get` takes an optional policy, so tests need no `setenv`), and the `provenance` functions (git commit and dirty flag, library and Python versions, drift notes). `Spec` gained `build_seed` and `config`. The modules stay flat in `artifacts/`, not subpackages; `tests/test_layers.py` enforces which module may import which. A top-level `convfinqa.registry` package was rejected: after the split the catalog is the registry in the usual sense, and `artifacts` is the public name.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.

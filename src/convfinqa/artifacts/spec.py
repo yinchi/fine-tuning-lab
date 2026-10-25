@@ -12,10 +12,11 @@ import string
 import typing
 from collections.abc import Callable
 from dataclasses import dataclass
+from pathlib import Path
 
 from .chapters import ANNOTATION_NAMES
 from .errors import ArtifactError
-from .hashing import code_hash, inline_code_hash, module_closure, module_path
+from .hashing import code_hash, inline_code_hash, module_closure, module_path, sha256_file
 
 @dataclass
 class Spec:
@@ -85,6 +86,19 @@ class Spec:
         if self.source is not None:
             return inline_code_hash(self.source, dynamic)
         return code_hash(module_closure(self.module) | set(dynamic))
+
+    def build_seed(self, params: dict) -> int:
+        """The seed for a build: the name's `seed` field if it has one, else the declared default."""
+        return int(params.get("seed", self.seed))
+
+    def config(self, params: dict, root: Path) -> dict:
+        """What a build is configured with: the name's fields, the seed, and the content hash of each
+        declared input file (`None` for a file that does not exist). Recorded in `node.json`; freshness
+        compares it with the current one."""
+        input_hashes = {
+            rel: sha256_file(path) if (path := root / rel).is_file() else None for rel in self.files
+        }
+        return {"params": params, "seed": self.build_seed(params), "files": input_hashes}
 
     def dep_names(self, params: dict) -> list[str]:
         """The concrete names of the dependencies, from this artifact's name fields."""

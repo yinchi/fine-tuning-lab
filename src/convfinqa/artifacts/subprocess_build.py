@@ -15,7 +15,6 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from .errors import BuildError
-from .hashing import LOG_NAME
 
 LOG_TAIL_LINES = 30
 """How many lines of a failed build's log are included in the error message."""
@@ -64,8 +63,3 @@ def run(name: str, cmd: list[str], env: dict[str, str], *, cwd: Path, log: Path)
             tail = "\n".join(log.read_text(errors="replace").splitlines()[-LOG_TAIL_LINES:])
         raise BuildError(f"building {name!r} failed (exit code {proc.returncode}); log: {log}\n{tail}")
     print(f"[artifacts] built {name} in {time.time() - started:.0f}s", file=sys.stderr, flush=True)
-
-
-def log_path(artifacts_dir: Path, name: str) -> Path:
-    """Where a build in progress (or a failed one) keeps its log."""
-    return artifacts_dir / f"{name}.tmp" / LOG_NAME
