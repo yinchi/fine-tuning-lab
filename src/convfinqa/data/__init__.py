@@ -5,9 +5,10 @@ Imports `dsl` at most; never torch.
 """
 
 from .raw import RAW_DIR, ROOT, Turn, conversation_type, download_data, load_split, turns
+from .splits import make_val_split, page_group
 from .render import context_text, format_conversation, table_to_markdown
 
 __all__ = [
     "RAW_DIR", "ROOT", "Turn", "conversation_type", "download_data", "load_split", "turns",
-    "context_text", "format_conversation", "table_to_markdown",
+    "context_text", "format_conversation", "table_to_markdown", "make_val_split", "page_group",
 ]

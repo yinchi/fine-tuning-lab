@@ -8,3 +8,18 @@ hash cover just the function and the `convfinqa` modules it imports, so editing 
 this file never makes an artifact stale. It also keeps heavy imports (torch, transformers) out of
 module import time, which `status` and `refresh` pay for.
 """
+
+
+from convfinqa.artifacts import artifact
+
+
+@artifact("train_val_split", seed=0)
+def build_train_val_split(out, deps):
+    """`train.json` split into `train_fit.jsonl` and `val.jsonl`, grouped by report page."""
+    import json
+
+    from convfinqa import data
+
+    fit, val = data.make_val_split(data.load_split("train"), fraction=0.1, seed=0)
+    for name, convs in (("train_fit", fit), ("val", val)):
+        (out / f"{name}.jsonl").write_text("".join(json.dumps(c) + "\n" for c in convs))

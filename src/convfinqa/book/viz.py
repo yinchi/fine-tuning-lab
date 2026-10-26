@@ -120,3 +120,28 @@ def plot_next_token(tok, logits, temperatures=(0.3, 1.0, 2.0), k: int = 10):
     axes[0].set_ylabel("probability")
     fig.tight_layout()
     return fig
+
+
+def surprisal_html(pieces: list[str], logprobs: list[float], full: float = 4.0) -> str:
+    """Render tokens shaded by how surprising they were to the model.
+
+    White is a token the model expected; the strongest red is a surprisal of `full` nats or more
+    (probability below `exp(-full)`, about 2%). The probability is the hover text.
+
+    Args:
+        pieces: The token strings.
+        logprobs: Natural-log probability the model gave each token.
+        full: Surprisal in nats that gets the full colour.
+    """
+    spans = []
+    for piece, lp in zip(pieces, logprobs):
+        shade = min(-lp / full, 1.0)
+        shown = escape(piece).replace("\n", "↵\n")
+        spans.append(
+            f'<span style="background:hsla(0, 85%, 50%, {0.55 * shade:.2f})" '
+            f'title="p = {2.718281828 ** lp:.3f}">{shown}</span>'
+        )
+    return (
+        '<div style="font-family:monospace; white-space:pre-wrap; line-height:1.9; margin:0.4em 0">'
+        + "".join(spans) + "</div>"
+    )

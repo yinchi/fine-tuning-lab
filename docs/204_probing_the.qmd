@@ -1,0 +1,298 @@
+---
+title: "Probing the untuned model on ConvFinQA"
+---
+
+**You will learn:**
+
+- how the untuned model fails when asked for a DSL program, with and without examples in the prompt;
+- how to read a model's surprise at each token of the gold answer, and what that has to do with the loss;
+- the number fine-tuning starts from: the model's mean loss on the gold programs of the validation split.
+
+The earlier chapters used one conversation. Here we look at a sample of them. The model is
+`Qwen3-4B-Instruct-2507`, untuned, and every example comes from the **validation split**, never from dev.
+
+## The validation split
+
+`train.json` has 3,037 conversations. We hold out a tenth of them for tuning decisions (which prompt, which
+checkpoint) and train on the rest. The split is made **by report page**: several conversations are written
+from the same page, and if one were in training and its sibling in validation, the model could be graded on
+a page it had been trained on. Dev stays untouched, for the final numbers.
+
+```{python}
+import pandas as pd
+
+from convfinqa import data
+from convfinqa.artifacts import get, artifact
+
+split = get("train_val_split")
+fit = list(split.jsonl("train_fit.jsonl"))
+val = list(split.jsonl("val.jsonl"))
+
+pages = lambda convs: {data.page_group(c["id"]) for c in convs}
+n_turns = lambda convs: sum(len(c["annotation"]["dialogue_break"]) for c in convs)
+print(
+    f"train-fit: {len(fit):,} conversations, {n_turns(fit):,} turns, "
+    f"{len(pages(fit)):,} pages"
+)
+print(
+    f"val:       {len(val):,} conversations, {n_turns(val):,} turns, "
+    f"{len(pages(val)):,} pages"
+)
+assert not pages(fit) & pages(val)
+```
+
+The split is deterministic (pages are drawn with seed 0), and it is saved as the artifact
+`train_val_split`, so later chapters read exactly these files.
+
+## Asking the untuned model
+
+We take 20 validation conversations at random and ask the model for every turn. Each turn is a separate
+request with the **gold history** (the earlier answers are the dataset's programs), so the requests are
+independent and each one measures a single turn. Decoding is greedy and the answer is judged exactly as
+generated: no cleaning, and an answer the executor rejects is wrong. That is the rule the headline
+evaluation will use.
+
+We try two prompts. **Zero-shot** is the system prompt `Answer with a program in the ConvFinQA DSL.`,
+the page and the question, and nothing else. **Few-shot** puts two complete conversations, with their
+gold programs, in front of the same request, drawn from train-fit.
+
+These runs take a few minutes (they load the 4B model and generate 68 answers twice), so they are an
+artifact: built once in a subprocess, and loaded here. The same artifact holds the gold programs'
+token probabilities that we read in the next section.
+
+```{python}
+#HEAVY
+@artifact("probe_val_sample", deps=["train_val_split"], heavy=True)
+def build_probe_val_sample(out, deps):
+    import json
+    import random
+
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    from convfinqa.probing import probe_sample
+
+    name = "Qwen/Qwen3-4B-Instruct-2507"
+    tok = AutoTokenizer.from_pretrained(name)
+    model = AutoModelForCausalLM.from_pretrained(
+        name, dtype=torch.bfloat16, device_map="cuda"
+    ).eval()
+    fit = list(deps["train_val_split"].jsonl("train_fit.jsonl"))
+    val = list(deps["train_val_split"].jsonl("val.jsonl"))
+    rng = random.Random(0)
+    sample = rng.sample(val, 20)
+    shots = rng.sample(fit, 2)
+    result = probe_sample(model, tok, sample, shots)
+    for key, rows in result.items():
+        (out / f"{key}.jsonl").write_text(
+            "".join(json.dumps(r) + "\n" for r in rows)
+        )
+
+probe = get("probe_val_sample")
+results = pd.DataFrame(probe.jsonl("answers.jsonl"))
+surprisal = list(probe.jsonl("surprisal.jsonl"))
+outputs = results.setting.unique()
+by_id = {c["id"]: c for c in val}
+sample = [by_id[s["id"]] for s in surprisal]
+print(f"{len(results) // len(outputs)} turns from {len(sample)} conversations")
+results.groupby("setting").kind.value_counts().unstack(0)\
+    .fillna(0).astype(int).sort_values("few-shot", ascending=False)
+```
+
+With twenty conversations these counts are rough: a few turns move a row by several points. The
+real measurement is the baseline chapter's, on many more. What we want here is to **read the failures**.
+
+```{python}
+accuracy = results.assign(ok=results.kind == "correct")\
+    .groupby("setting").ok.mean()
+print(accuracy.map("{:.0%}".format).to_string())
+```
+
+### What the failures look like
+
+Each kind of failure, with one real output per setting. The gold program is on the right.
+
+```{python}
+#| output: asis
+def show(setting, kind):
+    r = results[(results.setting == setting) & (results.kind == kind)]
+    if r.empty:
+        return
+    r = r.iloc[0]
+    print(f"- **{setting}, `{kind}`**, turn {r.turn + 1} of `{r.id}`\n")
+    print(
+        f"  ````\n  "
+        + r.output.strip().replace("\n", "\n  ")[:400]
+        + "\n  ````\n"
+    )
+    print(f"  gold: `{r.gold}`\n")
+
+for kind in results.kind.unique():
+    if kind != "correct":
+        for setting in outputs:
+            show(setting, kind)
+```
+
+The kinds, as `probing.classify_output` defines them:
+
+- `code_fence`: the answer is wrapped in a markdown fence, usually with invented syntax inside.
+- `syntax`, `bad_number`, `unknown_operator`: the executor could not read it. These are **format failures**:
+  the model answered in some language, but not the DSL.
+- `wrong_operations`, `wrong_numbers`, `wrong_answer`: a valid program with the wrong answer. These are
+  **reasoning or reading failures**: a different list of operations, different numbers picked from the
+  page, or the right shape with the wrong value.
+
+Examples shift the balance from the first group to the second: the model learns the format from two
+conversations, but picking the right cells and the right operation is a different skill.
+Fine-tuning has to teach both, and the invalid rate it removes is the easy part.
+
+## How surprised is the model by the gold program?
+
+Generation shows what the model does. We can also ask how likely it finds **the gold answer**. One forward
+pass over the whole conversation gives, for every token, the probability the model assigned to it given
+everything before it. The negative log of that probability is the token's **surprisal**, in nats (natural log). It is
+the surprisal of the **gold** token given the **gold** tokens before it (teacher forcing), with no
+comparison to what the model would have chosen. The cross-entropy loss fine-tuning minimizes is the mean
+surprisal over the answer tokens.
+
+```{python}
+from IPython.display import HTML
+
+from convfinqa.book.viz import surprisal_html
+
+row = next(
+    r for r in surprisal
+    if len(by_id[r["id"]]["annotation"]["dialogue_break"]) >= 4
+)
+conv = by_id[row["id"]]
+pieces, logp = row["tokens"], row["logprobs"]
+
+for k, t in enumerate(data.turns(conv)):
+    print(f"turn {k + 1}: {t.question}")
+HTML(surprisal_html(pieces, logp))
+```
+
+Hover over a token for its probability. The answers are printed one after the other, each ending with
+`<|im_end|>`, the token that closes the turn. Red marks a token the model gave less than about 2%.
+
+Hover over a token for its probability. The answers are printed one after the other, each ending with
+`<|im_end|>`, the token that closes the turn. Red marks a token the model gave less than about 2%.
+
+The red is not where we might expect. The numbers, which the model has to find on the page, are mostly
+pale, because it copies them well. The surprise is in the **DSL's own words**: the operator that opens a
+program, the `),` between two steps, the `(#` of a reference to an earlier step. We can measure it across
+the sample, by kind of token:
+
+```{python}
+def token_class(piece):
+    text = piece.strip()
+    if piece == "<|im_end|>":
+        return "end of turn"
+    if "#" in text:
+        return "#k reference"
+    if text.startswith(")") and "," in text:
+        return "step separator"
+    if text.replace("_", "").isalpha():
+        return "operator / constant name"
+    if text and all(ch.isdigit() or ch in ".%,-" for ch in text):
+        return "number"
+    return "bracket / other"
+
+records = []
+for row in surprisal:
+    turn = 0
+    for piece, lp in zip(row["tokens"], row["logprobs"]):
+        records.append({
+            "class": token_class(piece),
+            "turn": min(turn, 4) + 1,
+            "surprisal": -lp
+        })
+        turn += piece == "<|im_end|>"
+tokens = pd.DataFrame(records)
+by_class = tokens.groupby("class").surprisal.agg(["count", "mean", "sum"])
+by_class["share of total"] = by_class["sum"] / by_class["sum"].sum()
+by_class.drop(columns="sum").sort_values("share of total", ascending=False)\
+    .round(3)
+```
+
+```{python}
+tokens.groupby("turn").surprisal.agg(["count", "mean"])\
+    .rename_axis("turn (5 = 5 or later)").round(2)
+```
+
+Most of the loss comes from a few token kinds that a trained model would predict with near certainty:
+which operator comes first, whether the program goes on (`),`) or stops (`<|im_end|>`), and whether the
+next argument is a reference (`(#`). The mean surprisal also falls from turn to turn as earlier answers
+in the chat show the format, but only a little at first: the model does not pick the format up from one
+or two answers. Numbers cost little, and what is left for fine-tuning is the **reasoning** that decides
+the operator and the arguments.
+
+## The number fine-tuning starts from
+
+For the whole validation split we compute the mean surprisal of the gold tokens: one forward pass per
+conversation, token-weighted. This is a model run over 306 conversations, so it is built once as an
+artifact, in a subprocess.
+
+```{python}
+#HEAVY
+@artifact("val_gold_nll", deps=["train_val_split"], heavy=True)
+def build_val_gold_nll(out, deps):
+    import json
+
+    import torch
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+
+    from convfinqa.formatting import conversation_messages
+    from convfinqa.probing import mean_gold_nll
+
+    name = "Qwen/Qwen3-4B-Instruct-2507"
+    tok = AutoTokenizer.from_pretrained(name)
+    model = AutoModelForCausalLM.from_pretrained(
+        name, dtype=torch.bfloat16, device_map="cuda"
+    ).eval()
+    chats = [
+        conversation_messages(c)
+        for c in deps["train_val_split"].jsonl("val.jsonl")
+    ]
+    (out / "nll.json").write_text(json.dumps(mean_gold_nll(model, tok, chats)))
+
+val_nll = get("val_gold_nll").json("nll.json")
+print(
+    f"val: {val_nll['conversations']} conversations, "
+    f"{val_nll['tokens']:,} answer tokens"
+)
+print(
+    f"mean gold-program negative log-likelihood: "
+    f"{val_nll['nll']:.4f} nats per token"
+)
+
+from math import exp
+print(f"perplexity: {exp(val_nll['nll']):.3f}")
+```
+
+The **perplexity** is the exponential of this mean: the model is as uncertain, on average, as if it
+were choosing uniformly among that many tokens at each gold position. A perplexity of 1 would mean every
+gold token had probability 1. It is an average of a lopsided distribution (the earlier table shows a few
+very costly tokens among many nearly free ones), it is per token, so it depends on the tokenizer, and it
+covers the answer tokens only. It carries the same information as the loss; we report both because the
+training logs show the loss and the perplexity is easier to picture.
+
+The mean negative log-likelihood is the loss of the untuned model on the validation split, with the data
+in exactly the format the training will use. Chapter 3.3 trains on the same format, so its **step-0
+validation loss** should agree with it within a few percent: if it doesn't, the formatting or the label mask differs between
+the two, and we look there first. After training we expect the loss to fall, and the same
+heatmap to be much paler.
+
+::: {.callout-note title="Under the hood"}
+The loss is a mean over tokens, not over conversations or turns, so long conversations weigh more.
+`probing.gold_logprobs` scores token `t` with the logits at position `t - 1`, which is how the model's own
+`labels=` loss is defined; the next chapter shows the two agree.
+Attention maps from a copied number back to table cells are a natural next probe, but they are only
+suggestive: a head that attends to a cell is not thereby the reason for the answer
+[@vaswani2017attention]. We leave them out.
+:::
+
+::: {.callout-tip title="Further reading"}
+- The ConvFinQA paper measured GPT-3 with the same DSL and found the unfamiliar syntax hurt it
+  [@chen2022convfinqa].
+:::

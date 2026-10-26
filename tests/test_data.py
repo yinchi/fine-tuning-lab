@@ -67,3 +67,17 @@ def test_gold_constants_are_in_the_official_list(train):
 
     used = {c for conv in train for p in conv["annotation"]["turn_program"] for c in re.findall(r"const_\w+", p)}
     assert used <= set(steps.CONSTANTS)
+
+
+def test_page_group():
+    assert data.page_group("Single_JKHY/2009/page_28.pdf-3") == "JKHY/2009/page_28.pdf"
+    assert data.page_group("Double_JKHY/2009/page_28.pdf-1") == "JKHY/2009/page_28.pdf"
+
+
+def test_val_split_keeps_pages_apart(train):
+    fit, val = data.make_val_split(train)
+    assert len(fit) + len(val) == len(train)
+    assert {data.page_group(c["id"]) for c in fit}.isdisjoint(data.page_group(c["id"]) for c in val)
+    assert 0.07 < len(val) / len(train) < 0.13
+    assert data.make_val_split(train) == (fit, val)
+    assert data.make_val_split(train, seed=1)[1] != val

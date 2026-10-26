@@ -18,6 +18,7 @@ book:
         - 201_from_text.qmd
         - 202_anatomy_of.qmd
         - 203_from_base.qmd
+        - 204_probing_the.qmd
   appendices:
     - 902_references.qmd
 
