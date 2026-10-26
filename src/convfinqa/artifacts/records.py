@@ -17,6 +17,7 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -71,16 +72,24 @@ class ChapterRecord:
     def note_use(self, handle: Handle) -> None:
         """Add an artifact the chapter loaded, and write the record.
 
-        The file is replaced atomically (written beside it, then renamed), so a reader never sees a
-        half-written record.
+        The file is replaced atomically (written beside it under a name of its own, then renamed), so a
+        reader never sees a half-written record and concurrent writers never touch each other's file.
         """
         self.artifacts[handle.name] = handle.hash
         if handle.stale:
             self.stale.add(handle.name)
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        part = self.path.with_name(self.path.name + ".part")
-        part.write_text(json.dumps({"artifacts": self.artifacts, "stale": sorted(self.stale)}, indent=2))
-        os.replace(part, self.path)
+        # A name of its own for each write: two renders of one chapter can run at once (a preview that
+        # re-renders on save, and a render from the command line), and a shared name made one of them
+        # rename the other's file away.
+        fd, name = tempfile.mkstemp(dir=self.path.parent, prefix=self.path.name + ".", suffix=".part")
+        try:
+            with os.fdopen(fd, "w") as part:
+                part.write(json.dumps({"artifacts": self.artifacts, "stale": sorted(self.stale)}, indent=2))
+            os.replace(name, self.path)
+        except BaseException:
+            Path(name).unlink(missing_ok=True)
+            raise
 
     def is_outdated(self, status: Callable[[str], Status]) -> bool:
         """Whether the chapter must be re-executed.

@@ -161,3 +161,26 @@ def test_the_record_file_has_the_documented_shape(records):
     records.note_use(handle("sft_dsl_0", "ec8a", stale=True), document="c.qmd")
     data = json.loads((records.directory / "c.json").read_text())
     assert data == {"artifacts": {"split_v1": "89ab", "sft_dsl_0": "ec8a"}, "stale": ["sft_dsl_0"]}
+
+
+def test_concurrent_writers_do_not_break_each_other(tmp_path):
+    """Two renders of one chapter at once (a preview and a command-line render) both write its record."""
+    import threading
+
+    path = tmp_path / "_chapters" / "201_x.json"
+    errors = []
+
+    def writer(tag):
+        record = ChapterRecord(path)
+        try:
+            for i in range(200):
+                record.note_use(handle(f"{tag}{i % 5}", hash_=f"h{i}"))
+        except Exception as e:  # noqa: BLE001 - any failure is the bug
+            errors.append(e)
+
+    threads = [threading.Thread(target=writer, args=(tag,)) for tag in "abcd"]
+    [t.start() for t in threads]
+    [t.join() for t in threads]
+    assert not errors
+    assert "artifacts" in json.loads(path.read_text())
+    assert [p.name for p in path.parent.iterdir()] == ["201_x.json"]  # no leftover temp files
