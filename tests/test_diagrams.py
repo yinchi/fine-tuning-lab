@@ -4,7 +4,7 @@ import xml.dom.minidom
 
 import pytest
 
-from convfinqa.book.diagrams import attention, decoder, feedforward, pipeline, posttraining
+from convfinqa.book.diagrams import attention, decoder, feedforward, label_shift, pipeline, posttraining, training_step
 from convfinqa.book.diagrams.svg import Box, Svg, arrowhead, rounded_path, waypoints
 
 
@@ -94,3 +94,19 @@ def test_posttraining_diagram_shows_both_routes():
     for word in ["Base models", "Long-CoT cold start", "Reasoning RL", "Thinking mode fusion", "General RL",
                  "Strong-to-weak distillation", "Flagship models", "Lightweight models", "teachers"]:
         assert word in out
+
+
+def test_training_step_diagram_shows_the_loop_and_its_state():
+    out = training_step.build()
+    xml.dom.minidom.parseString(out)
+    for word in ["Batch", "Forward pass", "Loss", "Backward pass", "Optimizer step", "Weights", "Gradients",
+                 "Optimizer state", "repeat with the next batch"]:
+        assert word in out
+
+
+def test_label_shift_diagram_marks_the_answer_tokens():
+    out = label_shift.build()
+    xml.dom.minidom.parseString(out)
+    for word in ["input_ids", "assistant", "&lt;|im_end|&gt;", "(nothing)", "yes", "no"]:
+        assert word in out
+    assert out.count(">yes<") == 4 and out.count(">no<") == 4

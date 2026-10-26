@@ -1,0 +1,15 @@
+{
+  "model": "Qwen/Qwen2.5-0.5B-Instruct",
+  "train_conversations": 320,
+  "eval_conversations": 40,
+  "epochs": 2,
+  "micro_batch": 4,
+  "accumulation": 4,
+  "lr": 2e-5,
+  "warmup_steps": 0.03,
+  "max_length": 3584,
+  "eval_every": 10,
+  "prompt_turns": 24,
+  "seed": 0,
+  "memory_cap_gb": 80
+}

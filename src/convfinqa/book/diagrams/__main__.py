@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from . import attention, decoder, feedforward, pipeline, posttraining
+from . import attention, decoder, feedforward, label_shift, pipeline, posttraining, training_step
 
 # Directory to output generated SVG figures
 FIGURES = Path(__file__).resolve().parents[4] / "docs" / "figures"
@@ -20,7 +20,9 @@ DIAGRAMS = {
     "attention": attention.build,
     "feedforward": feedforward.build,
     "pipeline": pipeline.build,
-    "posttraining": posttraining.build
+    "posttraining": posttraining.build,
+    "training_step": training_step.build,
+    "label_shift": label_shift.build,
 }
 
 

@@ -165,3 +165,64 @@ def probe_sample(model, tok, sample: list[dict], shots: list[dict]) -> dict:
         ids, logp = gold_logprobs(model, tok, conversation_messages(c))
         surprisal.append({"id": c["id"], "tokens": [tok.decode([i]) for i in ids], "logprobs": logp})
     return {"answers": answers, "surprisal": surprisal}
+
+
+def loss_terms(model, input_ids, labels) -> dict:
+    """The training loss computed by hand, next to the library's, and the loss without the mask.
+
+    All of them use the same logits, in float32:
+
+    - `by_hand`: shift by one (position `t` is scored on token `t + 1`), keep the positions whose
+      label is not `-100`, and average `-log p` over them.
+    - `library`: `model(input_ids, labels=labels).loss`.
+    - `no_mask`: the same, but averaged over every position, the prompt included. It is lower,
+      because the prompt is easy to predict, and it is not the loss we train on.
+
+    Args:
+        model: A causal language model.
+        input_ids: A `(1, T)` tensor of token ids.
+        labels: A `(1, T)` tensor: the token id where it counts, `-100` elsewhere.
+
+    Returns:
+        The three losses, and `surprisals`: `-log p` for each counted token, in order.
+    """
+    import torch
+
+    with torch.no_grad():
+        logits = model(input_ids=input_ids).logits[0].float()
+        library = model(input_ids=input_ids, labels=labels).loss.item()
+    logp = torch.log_softmax(logits, dim=-1)
+    x, y = input_ids[0], labels[0]
+
+    shifted = logp[:-1].gather(1, x[1:, None])[:, 0]  # log p of the next token, at every position
+    counted = y[1:] != -100
+    surprisals = -shifted[counted]
+    return {
+        "by_hand": surprisals.mean().item(),
+        "library": library,
+        "no_mask": -shifted.mean().item(),
+        "surprisals": surprisals.tolist(),
+    }
+
+
+def loss_check(model, tok, messages: list[dict]) -> dict:
+    """`loss_terms` for one chat, with the trained tokens named.
+
+    Args:
+        model: A causal language model.
+        tok: Its tokenizer.
+        messages: A full chat with gold assistant messages.
+
+    Returns:
+        What `loss_terms` returns, plus `tokens` (the counted tokens' text), `n_tokens` (the whole
+        sequence) and `n_counted`.
+    """
+    import torch
+
+    ids, labels = tokenize_conversation(tok, messages)
+    device = model.device
+    out = loss_terms(model, torch.tensor([ids], device=device), torch.tensor([labels], device=device))
+    out["tokens"] = [tok.decode([i]) for i, l in zip(ids, labels) if l != -100]
+    out["n_tokens"] = len(ids)
+    out["n_counted"] = len(out["tokens"])
+    return out

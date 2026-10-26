@@ -47,3 +47,31 @@ def test_labels_are_exactly_the_assistant_programs(tok):
     trained = [i for i, l in zip(ids, labels) if l != -100]
     assert all(l in (-100, i) for i, l in zip(ids, labels))
     assert tok.decode(trained) == "5<|im_end|>add(5, 1)<|im_end|>"
+
+
+def test_collate_pads_to_the_longest_and_masks_padding(tok):
+    pytest.importorskip("torch")
+    from convfinqa.step_cost import collate
+
+    short = CONV
+    long = {**CONV, "annotation": {**CONV["annotation"], "dialogue_break": ["q1", "q2", "q3"],
+            "turn_program": ["5", "add(5, 1)", "add(5, 2)"], "exe_ans_list": [5, 6, 7], "qa_split": [0, 0, 0]}}
+    b = collate(tok, [short, long], max_length=4096)
+    assert b["input_ids"].shape == b["labels"].shape == b["attention_mask"].shape
+    n_short = int(b["attention_mask"][0].sum())
+    assert n_short < b["input_ids"].shape[1]
+    assert (b["labels"][0, n_short:] == -100).all()
+    assert (b["labels"][0] != -100).sum() == (b["labels"][0, :n_short] != -100).sum() > 0
+    assert collate(tok, [long], max_length=10)["input_ids"].shape[1] == 10
+
+
+def test_estimate_hours():
+    from convfinqa.step_cost import estimate_hours
+
+    assert estimate_hours(36.0, 2731, 2, 16) == 36.0 * 342 / 3600
+
+
+def test_worst_case_batch_uses_real_lengths(tok):
+    """`apply_chat_template(tokenize=True)` returns a mapping whose len() is 2: lengths must come from the ids."""
+    ids = tok(tok.apply_chat_template(conversation_messages(CONV), tokenize=False), add_special_tokens=False)["input_ids"]
+    assert len(ids) > 2
