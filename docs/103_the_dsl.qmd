@@ -1,6 +1,4 @@
----
-title: "The DSL and its executor"
----
+# The DSL and its executor {#sec-dsl}
 
 **You will learn:**
 
@@ -24,7 +22,7 @@ argument  = number | percent | "#" index | constant
 number    = digits, optionally with commas and a decimal point, e.g. 206588 or 1,234.5
 percent   = number "%"            # evaluated as number / 100
 index     = digit { digit }       # the result of an earlier step
-constant  = "const_" ( digits | "m1" )   # a fixed list of 18, see the previous chapter
+constant  = "const_" ( digits | "m1" )   # a fixed list of 18, see the chapter on what ConvFinQA looks like
 ```
 
 A program with no parentheses is a **number-selection** turn: its value is just that number. Every other

@@ -1,6 +1,4 @@
----
-title: "Anatomy of Qwen3-4B"
----
+# Anatomy of Qwen3-4B {#sec-anatomy}
 
 **You will learn:**
 
@@ -8,7 +6,7 @@ title: "Anatomy of Qwen3-4B"
 - what one layer of Qwen3-4B contains, and how big each part is;
 - which of its linear layers LoRA will adapt in a later chapter.
 
-The previous chapter treated the 36 transformer layers as a black box. This chapter opens it. We start
+@sec-tokens treated the 36 transformer layers as a black box. This chapter opens it. We start
 with where the design comes from, because it explains what is, and is not, in the box.
 
 ## Where this architecture comes from
@@ -24,7 +22,7 @@ The transformer was introduced for machine translation [@vaswani2017attention] a
 
 Qwen3-4B, like most current chat and code models, is **decoder-only**: one stack with causal
 self-attention, and no encoder and no cross-attention. The prompt and the answer form a single sequence,
-and the model's one job is to predict the next token, as in the trace of the previous chapter.
+and the model's one job is to predict the next token, as in the trace of @sec-tokens.
 
 The ConvFinQA paper's own model has the traditional shape: a RoBERTa encoder reads the question and the
 context, and a small recurrent decoder writes the program [@chen2022convfinqa].
@@ -85,12 +83,12 @@ checks each row against the real model.
 ## Setting up
 
 ::: {.callout-note title="Requirements"}
-This chapter runs the 4B model on a GPU and reads `artifacts/processed/lengths.json`, which the data
-chapter writes. The book is built once by its author, and the executed results are stored in
+This chapter runs the 4B model on a GPU and reads `artifacts/processed/lengths.json`, which @sec-convfinqa
+writes. The book is built once by its author, and the executed results are stored in
 `docs/_freeze/`, so a reader of the rendered book needs neither.
 :::
 
-We load the model and the example from the previous chapter: the first turn of the AAPL conversation, as
+We load the model and the example from @sec-tokens: the first turn of the AAPL conversation, as
 a prompt of 1,125 tokens.
 
 ```{python}

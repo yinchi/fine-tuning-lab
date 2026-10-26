@@ -1,4 +1,4 @@
-# Environment setup
+# Environment setup {#sec-environment}
 
 ## Python environment and Quarto
 

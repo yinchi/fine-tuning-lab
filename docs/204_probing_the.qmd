@@ -1,6 +1,4 @@
----
-title: "Probing the untuned model on ConvFinQA"
----
+# Probing the untuned model on ConvFinQA {#sec-probing}
 
 **You will learn:**
 
@@ -278,7 +276,7 @@ covers the answer tokens only. It carries the same information as the loss; we r
 training logs show the loss and the perplexity is easier to picture.
 
 The mean negative log-likelihood is the loss of the untuned model on the validation split, with the data
-in exactly the format the training will use. Chapter 3.3 trains on the same format, so its **step-0
+in exactly the format the training will use. The training chapter uses the same format, so its **step-0
 validation loss** should agree with it within a few percent: if it doesn't, the formatting or the label mask differs between
 the two, and we look there first. After training we expect the loss to fall, and the same
 heatmap to be much paler.
@@ -286,7 +284,7 @@ heatmap to be much paler.
 ::: {.callout-note title="Under the hood"}
 The loss is a mean over tokens, not over conversations or turns, so long conversations weigh more.
 `probing.gold_logprobs` scores token `t` with the logits at position `t - 1`, which is how the model's own
-`labels=` loss is defined; the next chapter shows the two agree.
+`labels=` loss is defined; @sec-fine-tuning shows the two agree.
 Attention maps from a copied number back to table cells are a natural next probe, but they are only
 suggestive: a head that attends to a cell is not thereby the reason for the answer
 [@vaswani2017attention]. We leave them out.

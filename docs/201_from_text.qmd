@@ -1,6 +1,4 @@
----
-title: "From text to tokens to next-token probabilities"
----
+# From text to tokens to next-token probabilities {#sec-tokens}
 
 **You will learn:**
 
@@ -67,7 +65,7 @@ display(show_tokens(
 
 The model never sees `181001` as one unit, only the digit sequence `1 8 1 0 0 1`. This follows from
 the tokenizer's design (see below), and it is one reason why we do not ask the model to do arithmetic
-itself. It writes a program, and the executor from the previous chapter computes the number.
+itself. It writes a program, and the executor from @sec-dsl computes the number.
 
 ### A gold program
 
@@ -252,7 +250,7 @@ print(f"the gold first token {tok.decode([gold_id])!r}: probability {probs[gold_
 
 The untuned model does not know our DSL. It starts a Markdown code block and gives the correct first
 digit a few percent. Nothing in the pipeline was wrong; the model simply has not seen this task. Teaching
-it is what fine-tuning does, and we will measure this exact quantity on whole conversations in the chapter that probes the untuned model.
+it is what fine-tuning does, and we will measure this exact quantity on whole conversations in @sec-probing.
 
 ### The whole path
 

@@ -1,6 +1,4 @@
----
-title: "From base model to instruct model"
----
+# From base model to instruct model {#sec-base-instruct}
 
 **You will learn:**
 
@@ -10,7 +8,7 @@ title: "From base model to instruct model"
 
 Qwen publishes most of its models twice: a **base** model and an **instruct** model. We fine-tune the
 instruct one. This chapter explains the difference, shows it on the real models, and prepares the way
-for the formatting chapter that follows.
+for the chapters on formatting conversations and training, later in the book.
 
 ## What "base" and "instruct" mean
 
@@ -107,8 +105,8 @@ print("end-of-sequence token: ", {kind: t.eos_token for kind, t in toks.items()}
 ```
 
 We use four prompts. Three have nothing to do with finance: a direct question, the start of a sentence,
-and a question-and-answer pattern. The fourth is the first turn of the ConvFinQA conversation from the
-previous chapters. Each prompt is given to each model in two forms: as **plain text**, and wrapped in the
+and a question-and-answer pattern. The fourth is the first turn of the ConvFinQA conversation from @sec-tokens
+and @sec-anatomy. Each prompt is given to each model in two forms: as **plain text**, and wrapped in the
 model's **chat template**, which we look at in the next section. Decoding is greedy, and at most 60 new
 tokens are generated.
 
