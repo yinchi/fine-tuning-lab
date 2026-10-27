@@ -411,6 +411,8 @@ This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters
 - **Grammar levels:**
   1. **none**;
   2. **syntax:** a static EBNF grammar for each format.
+     - xgrammar was checked on the GB10 (2026-10-26; `constrained.DSL_GRAMMAR`, tests in `tests/test_constrained.py`): the DSL grammar accepts all 8,981 gold programs of train and dev, and Qwen3-4B constrained answers always followed it. In a 16-turn check, zero-shot went from 5 to 6 correct and from 7 to 16 syntactically valid answers; two-shot answers were identical with and without the grammar (15 of 16 correct); compiling takes 0.4 s and generation time was unchanged.
+     - A grammar guarantees syntax, not termination: with an unbounded number rule an untuned zero-shot model ran on in digits (`2.7000...0`) up to the token limit. Gold numbers have at most 10 integer and 4 decimal digits and programs at most 120 characters, so a **bounded** variant (digit-count limits) is an option for this level; choose between the two on val.
 - A grounded variant, which restricts numbers to those in the context, is deferred to §4.2.
 - **Runs:** {DSL, Python} × {none, syntax} × {untuned few-shot, fine-tuned}, for 8 evaluations.
 - **Report:**
@@ -588,6 +590,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-26: Chapter titles became `# Title {#sec-name}` headings (labels: `sec-environment`, `sec-convfinqa`, `sec-dsl`, `sec-tokens`, `sec-anatomy`, `sec-base-instruct`, `sec-probing`, `sec-fine-tuning`), and the prose of chapters 2.4 and 2.5 and the relative references of the earlier chapters ("the previous chapter") now use `@sec-` references, because the book's rendered chapter numbers (204 is Chapter 7) differ from the plan's. Also fixed: the 2.3 chapter said the formatting chapter follows it (the probing chapter does), and 2.5 mentioned a hand-written loop that was dropped. Changing every title re-executes every chapter once (freeze watches the `.qmd` source).
 - 2026-10-26: Chapter 2.6 explains LoRA conceptually, with no hand-built LoRA layer (the plan's "single `nn.Linear` wrapped by hand, then by PEFT" item is dropped). Same reasoning as for the hand-written training loop in 2.5: re-implementing the formula teaches tensor shapes more than concepts. It keeps the idea (a diagram and prose), a computed parameter count that must match PEFT's 33,030,144, the rank-ceiling and break-even table, and two checks on the real model through PEFT: step-0 logits equal the base model's, and a merged adapter equals the unmerged one.
 - 2026-10-26: Open-domain, multi-document financial QA (retrieval over a large corpus, then reasoning) is out of scope for the current chapters. A literature survey (LOFin, FinanceBench, SEC-QA, corpus-level aggregation benchmarks, results and approaches) is saved in "Open topic: beyond the single page" for a later discussion; nothing in the chapters or the progress tracker changes.
+- 2026-10-26: xgrammar verified on the GB10 (Python 3.14, aarch64, CUDA 13.2) with the DSL grammar and the HF logits processor (`constrained.compile_grammar`, `grammar_accepts`, `generate_constrained`). The grammar accepts every gold program; constrained Qwen3-4B answers always follow it; no measurable generation-time overhead at this scale; two-shot answers are unchanged by the constraint, zero-shot ones become valid programs. The token vocabulary size passed to xgrammar must be the model's output size (151,936), not the tokenizer's (151,669), and the stop token is `<|im_end|>`. Whether to bound number lengths in the grammar is left to §3.6, decided on val.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.
@@ -595,7 +598,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
   - The Python translation round trip: every gold `turn_program` in train and dev, once translated and run by the safe evaluator, equals the DSL executor's result.
   - The safe evaluator rejects `__import__('os')`, attribute access, calls, and loops.
   - Grammars: every gold train and dev program, in both formats, is accepted by its syntax grammar.
-  - A short constrained generation through xgrammar's HF logits processor works on GB10.
+  - A short constrained generation through xgrammar's HF logits processor works on GB10 (done, 2026-10-26: `tests/test_constrained.py`, plus a 16-turn check on Qwen3-4B).
   - `stats.py` checks:
     - identical systems give a difference CI centered on 0;
     - a planted +5-point difference on synthetic data is detected;
