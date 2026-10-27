@@ -10,7 +10,7 @@
 Fine-tuning has no special machinery. It is the training that produced the model, run again on a small
 amount of new data: the same loss, the same optimizer, the same steps. What changes is the data (a few
 thousand ConvFinQA conversations) and, with LoRA, which weights are allowed to move. This chapter looks
-at one step, and the LoRA chapter at the shortcut LoRA takes.
+at one step, and @sec-lora at the shortcut LoRA takes.
 
 ## One training step
 
@@ -45,7 +45,7 @@ Only weights that are **trainable** get a gradient and an optimizer state. In fu
 all four billion of them, so gradients and optimizer state need far more memory than the model itself.
 LoRA freezes the original weights and trains a small set of added ones, so the gradients and the
 optimizer state shrink to that small set. The memory budget later in this chapter puts numbers on this,
-and the LoRA chapter shows how it does it.
+and @sec-lora shows how it does it.
 :::
 
 ## Which tokens count
@@ -416,7 +416,9 @@ ratios = []
 for _ in range(5000):
     step = rng.sample(counts, 16)
     micro = [sum(step[i : i + 4]) for i in range(0, 16, 4)]
-    ratios += [sum(micro) / 4 / m for m in micro]   # weight of a token on the left / on the right
+
+    # weight of a token on the left / on the right
+    ratios += [sum(micro) / 4 / m for m in micro]
 
 pd.Series(ratios, name="weight ratio").describe(
     percentiles=[0.05, 0.25, 0.5, 0.75, 0.95]
@@ -460,7 +462,7 @@ worst-case micro-batch, the four longest conversations of train-fit. These are n
 only measure.
 
 Two models are measured. The **0.5B** model with all weights trained shows the effect cheaply. The
-**4B** model with LoRA (rank 16, see the LoRA chapter) is the configuration of the main run in the training chapter, and the
+**4B** model with LoRA (rank 16, see @sec-lora) is the configuration of the main run in the training chapter, and the
 one whose answer we need.
 
 ```{python}
@@ -588,7 +590,10 @@ GB = 1024**3
 small = costs[("0.5B, full fine-tuning", "on")]
 lora = costs[("4B, LoRA r=16", "on")]
 base = lora["total_params"] - lora["trainable_params"]
-assert base == 4_022_468_096          # the parameter count found in the anatomy chapter
+
+# the parameter count found in the anatomy chapter
+assert base == 4_022_468_096
+
 trainable = lora["trainable_params"]
 
 def static(weights, grads, state):
@@ -667,8 +672,16 @@ in bf16 and twice that again once cast to float32 for the loss, before their gra
 #| fig-cap: "Peak memory of the longest batch, by part. The first two bars are measured; the last two are estimates that add the larger of the two measured activation-and-logit costs (hatched is the estimate). The dashed lines are the 80 GB cap we measure under and the whole 122 GB of the machine, which the desktop shares."
 #| fig-alt: "Horizontal stacked bar chart of memory in gigabytes for four settings: 0.5B full fine-tuning in bf16, 4B with LoRA, 4B full fine-tuning in bf16, and 4B full fine-tuning with fp32 weights. Each bar is split into weights, gradients, optimizer state, and activations plus logits. The first two bars, measured, end near 27 and 34 gigabytes. The estimated third bar ends near 56 gigabytes, and the fourth near 86, past a dashed line at 80 gigabytes. A second dashed line marks the machine's total of 122 gigabytes."
 parts = ["weights", "gradients", "optimizer state"]
-colours = {"weights": "#6c8ebf", "gradients": "#b85450", "optimizer state": "#82b366", "activations + logits": "#d6b656"}
-worst = {n: m["worst_peak_gb"] - sum(p.values()) for n, (p, m) in scenarios.items() if m}
+colours = {
+    "weights": "#6c8ebf",
+    "gradients": "#b85450",
+    "optimizer state": "#82b366",
+    "activations + logits": "#d6b656"
+}
+worst = {
+    n: m["worst_peak_gb"] - sum(p.values())
+    for n, (p, m) in scenarios.items() if m
+}
 acts = max(worst.values())
 
 fig, ax = plt.subplots(figsize=(8, 3.4))
@@ -793,7 +806,8 @@ Each box of @fig-training-step has a setting:
 
 ### Four checks
 
-**1. The number of steps.** 320 conversations at 16 per step is 20 steps per epoch.
+**1. The number of steps.** 320 conversations at 16 per step is 20 steps per epoch, or 40 across
+the two epochs.
 
 ```{python}
 log = demo["log_history"]
@@ -854,7 +868,7 @@ normalization is wrong somewhere.
 ```{python}
 #| label: fig-demo-loss
 #| fig-cap: "Loss over the 40 steps of the demo run. Each dot is the training loss of one optimizer step; the squares are the loss on 40 held-out validation conversations, at step 0 and every 10 steps."
-#| fig-alt: "Line chart of loss against optimizer step from 0 to 40. The training loss, plotted as dots, starts near 1.5, falls below 0.2 by step 10 and keeps slowly falling to about 0.05. Four squares mark the validation loss: 1.46 at step 0, 0.19 at step 10, 0.12 at steps 20 and 30, and 0.12 at step 40."
+#| fig-alt: "Line chart of loss against optimizer step from 0 to 40, on a logarithmic scale. The training loss, plotted as dots, starts near 1.5, falls steeply over the first ten steps and then slowly to about 0.05. Four squares mark the validation loss: about 1.5 at step 0, about 0.2 at step 10, and levelling off near 0.12 for the rest of the run."
 train_loss = [(e["step"], e["loss"]) for e in log if "loss" in e]
 eval_loss = [(e["step"], e["eval_loss"]) for e in log if "eval_loss" in e]
 fig, ax = plt.subplots(figsize=(7, 3.2))
@@ -871,8 +885,9 @@ fig.tight_layout()
 plt.show()
 ```
 
-The loss at step 0, 1.46, is the model's surprise at the DSL answers, and it falls by a factor of ten in 10
-steps. The training loss keeps falling to about 0.05, while the validation loss levels off near 0.12, so by the end
+The loss at step 0, `{python} f"{eval_loss[0][1]:.2f}"`, is the model's surprise at the DSL answers, and it falls about
+`{python} f"{eval_loss[0][1] / eval_loss[1][1]:.0f}"`-fold in 10 steps. The training loss keeps falling to about
+`{python} f"{train_loss[-1][1]:.2f}"`, while the validation loss levels off near `{python} f"{eval_loss[-1][1]:.2f}"`, so by the end
 the model is fitting the 320 conversations a little better than it does held-out ones.
 
 The change shows in what the model writes. We asked it the first 24 turns of the validation conversations, as
@@ -884,15 +899,31 @@ kinds = pd.DataFrame({
     "after": pd.Series([r["kind"] for r in demo["after"]]).value_counts(),
 }).fillna(0).astype(int)
 print(kinds.to_string())
+
+# outcomes of an answer that runs
+runs = ["correct", "wrong_operations", "wrong_numbers", "wrong_answer"]
+
+count = lambda when, names: int(
+    sum(kinds.loc[k, when] for k in names if k in kinds.index)
+)
+n_turns = len(demo["before"])
+before_right = count("before", ["correct"])
+after_right = count("after", ["correct"])
+before_broken = n_turns - count("before", runs)
+after_broken = n_turns - count("after", runs)
+
+ # the claim made below: after training every answer is a program that runs
+assert after_broken == 0
+
 for before, after in list(zip(demo["before"], demo["after"]))[:4]:
     print(f"\nturn {before['turn'] + 1}   gold: {before['gold']}")
     print(f"  before: {before['output'][:90]!r}")
     print(f"  after:  {after['output'][:90]!r}")
 ```
 
-Before training, 3 of the 24 answers are right and 20 do not run at all (prose, or arithmetic in other
-notations). After 40 steps, 20 are correct, and **none fails to run**: the four that are wrong are valid
-programs with a wrong operation or answer. The model has learned the syntax within these 40 steps. What is
+Before training, `{python} before_right` of the `{python} n_turns` answers are right and `{python} before_broken` do not run at
+all (prose, or arithmetic in other notations). After 40 steps, `{python} after_right` are correct, and **none fails to
+run**: the `{python} n_turns - after_right` that are wrong are valid programs with a wrong operation or answer. The model has learned the syntax within these 40 steps. What is
 left is choosing the right operation and numbers, the part of the task that needs reasoning about the page.
 That is consistent with the shape of the loss curve: a steep fall while the format is learned, then a
 plateau of the validation loss (the training loss keeps falling, as the model begins to fit these 320
