@@ -1,0 +1,255 @@
+# LoRA in detail {#sec-lora}
+
+**You will learn:**
+
+- what a LoRA adapter is, and why a *low-rank* update is a reasonable thing to try;
+- which layers of Qwen3-4B get adapters, and what they cost in parameters;
+- how to check, on the real model, that an adapter starts as the identity, and what happens when it is merged into the weights.
+
+@sec-fine-tuning showed that fine-tuning every weight is expensive: the weights, their gradients and the
+optimizer state all have to fit in memory, and a narrow task may not need all of that freedom.
+**LoRA** (low-rank adaptation) [@hu2022lora] freezes the model and learns a small correction to each of its
+big matrices instead. Writing a large matrix as the product of two thin ones is an old trick: recommender
+systems, for example, factor the matrix of user ratings into a user part and an item part
+[@koren2009matrix]. LoRA uses the same trick on a different object. What is factored is not the data but the
+*update* to a frozen weight.
+
+## The idea
+
+A linear layer in the model multiplies its input by a weight matrix $W$. LoRA leaves $W$ alone and adds
+a correction that is the product of two thin matrices:
+
+$$
+W' = W + \frac{\alpha}{r}\, B\,A, \qquad B \in \mathbb{R}^{d_\text{out} \times r}, \quad A \in \mathbb{R}^{r \times d_\text{in}} .
+$$
+
+The number $r$, the **rank**, is chosen small (we start with 16) compared with $d_\text{in}$ and $d_\text{out}$,
+which are in the thousands. A product of an $r$-column and an $r$-row matrix can only change the layer's
+output within an $r$-dimensional space, so the update is **low-rank** however large the layer is.
+@fig-lora-matrix shows one matrix of Qwen3-4B in two equivalent views.
+
+![One weight matrix with a LoRA adapter (Qwen3-4B's `gate_proj`, rank 16). Left: the adapted weight is the frozen W plus the product of two thin matrices scaled by α/r, which is what merging produces. Right: what training runs. The input goes through W and, separately, through A then B, and the outputs are added, so the full 9,728 × 2,560 product is never built in memory. Only r = 16 numbers pass between A and B, and the trained matrices hold 196,608 weights, against 24.9 million in W. The thin matrices are drawn wider than their true proportion.](figures/lora_matrix.svg){#fig-lora-matrix fig-alt="Two panels. Left: W-prime equals frozen W plus a thin tall B times a thin flat A, scaled by alpha over r. Right: the input splits into a path through frozen W and a path through A then B; the two outputs are summed. A dashed box around A and B notes that their product is never built."}
+
+Three details are worth knowing.
+
+- **Why it is cheap.** During training the input is multiplied by $A$ first and then by $B$, so only a vector of
+  $r$ numbers sits between them. The big update matrix $BA$ is never formed. Only $A$ and $B$ have gradients and
+  optimizer state, which is why LoRA's memory cost in @sec-fine-tuning was small.
+- **Why it starts as the identity.** $B$ is initialized to zero and $A$ to small random values (PEFT's default is
+  the same initialization as an ordinary linear layer: uniform in $\pm 1/\sqrt{d_\text{in}}$, about $\pm 0.02$ for our
+  matrices; other schemes exist, some of which start from the weights' singular components). At step 0 the
+  correction $BA$ is exactly zero, so the model begins as the base model. $A$ must not be zero too: with $B = 0$
+  the gradient of $B$ depends on $A$'s output, so a zero $A$ would give no gradient to start from.
+- **What $\alpha/r$ does.** It scales the correction. We set $\alpha = 2r$, so the scale is 2 at every rank we
+  try; changing $\alpha$ is, to a first approximation, like changing the learning rate of the adapter.
+
+The bet LoRA makes is that the change a task needs, $W' - W$, is of low rank. It is a bet, not a fact: the training
+chapter tests it by looking at the singular values of the update the
+training produces.
+
+## Where the adapters go
+
+We put an adapter on every linear layer of the transformer blocks, which PEFT calls `target_modules="all-linear"`.
+@fig-lora-layer marks them on one decoder layer: four in attention and three in the feed-forward block.
+
+![One decoder layer of Qwen3-4B, repeated 36 times. The seven linear layers LoRA adapts are green: q, k, v and o in attention, and gate, up and down in the feed-forward block. The embeddings, the norms, the output head and the parts with no weights have no adapter.](figures/lora_layer.svg){#fig-lora-layer fig-alt="A decoder layer inside a dashed box labelled 36 times. Seven boxes are highlighted: q, k, v and o projections in the attention part, and gate, up and down projections in the feed-forward part. The embeddings, the two RMSNorms and the output head are grey."}
+
+That is $36 \times 7 = 252$ adapters, the number of modules @sec-anatomy counted. The embeddings, the
+normalization scales and the output head are not adapted, and stay as they were.
+
+## What it costs
+
+A matrix with $d_\text{in}$ inputs and $d_\text{out}$ outputs has $d_\text{in}\, d_\text{out}$ weights; its adapter has
+$r\,(d_\text{in} + d_\text{out})$. We can compute the cost for Qwen3-4B from the model's configuration, and check the
+total against what PEFT reports once it has wrapped the real model.
+
+```{python}
+#HEAVY
+import math
+
+import pandas as pd
+from transformers import AutoConfig
+
+from convfinqa.artifacts import artifact, get
+
+
+@artifact(
+  "lora_checks",
+  deps=["train_val_split"],
+  files=["configs/lora_checks.json"],
+  heavy=True
+)
+def build_lora_checks(out, deps, files):
+    import json
+
+    from convfinqa.formatting import prompt_messages
+    from convfinqa.adapters import lora_checks
+
+    cfg = files["configs/lora_checks.json"].json()
+    conv = next(iter(deps["train_val_split"].jsonl("val.jsonl")))
+    result = lora_checks(
+        cfg["model"], prompt_messages(conv, 0),
+        r=cfg["r"],
+        alpha=cfg["alpha"],
+        b_std=cfg["b_std"],
+        seed=cfg["seed"],
+        memory_cap_gb=cfg["memory_cap_gb"],
+    )
+    (out / "checks.json").write_text(json.dumps(result))
+
+checks = get("lora_checks").json("checks.json")
+
+config = AutoConfig.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+
+hidden = config.hidden_size
+ff = config.intermediate_size
+layers = config.num_hidden_layers
+q_out = config.num_attention_heads * config.head_dim
+kv_out = config.num_key_value_heads * config.head_dim
+
+projections = {  # name: (inputs, outputs)
+    "q_proj": (hidden, q_out),
+    "k_proj": (hidden, kv_out),
+    "v_proj": (hidden, kv_out),
+    "o_proj": (q_out, hidden),
+    "gate_proj": (hidden, ff),
+    "up_proj": (hidden, ff),
+    "down_proj": (ff, hidden),
+}
+
+r = 16
+rows = {
+    name: {
+        "shape (in → out)": f"{i:,} → {o:,}",
+        "full weights": f"{i * o:,}",
+        f"adapter weights, r={r}": f"{r * (i + o):,}",
+        "adapter / full": f"{r * (i + o) / (i * o):.1%}",
+        "largest useful rank": f"{min(i, o):,}",
+        "break-even rank": f"{round(i * o / (i + o)):,}",
+    }
+    for name, (i, o) in projections.items()
+}
+pd.DataFrame(rows).T
+```
+
+```{python}
+per_layer = sum(r * (i + o) for i, o in projections.values())
+total = per_layer * layers
+print(
+    f"adapter weights per layer: {per_layer:,};  × {layers} layers = {total:,}"
+)
+peft = checks["bf16"]
+print(f"PEFT's count of trainable parameters:   {peft['trainable_params']:,}")
+print(
+    f"adapted modules: {peft['adapted_modules']}   "
+    f"share of the model: {total / checks['base_params']:.2%}"
+)
+assert total == peft["trainable_params"]\
+    and peft["adapted_modules"] == layers * len(projections)
+print(f"saved as fp32, the adapter is about {total * 4 / 1e6:.0f} MB")
+```
+
+At rank 16 the adapters hold `{python} f"{total / 1e6:.1f}"` million weights, `{python} f"{total / checks['base_params']:.2%}"`
+of the model, and the count equals PEFT's. Two columns of the table matter for choosing a rank.
+
+- **Largest useful rank.** The product $BA$ can never have a rank above $\min(d_\text{in}, d_\text{out})$. At
+  that rank the update can be any matrix of the layer's shape: 2,560 for most matrices and 1,024 for $k$ and $v$.
+  A rank beyond it adds weights and no new updates.
+- **Break-even rank.** Where $r\,(d_\text{in}+d_\text{out}) = d_\text{in}\, d_\text{out}$, the adapter has as many weights as
+  the matrix it adapts: between 731 and 2,027 here. Above that LoRA is not smaller than full fine-tuning, so
+  useful ranks sit far below it. Our $r = 16$ is 0.6% of the largest useful rank for most matrices, and 1.6% for $k$ and $v$.
+
+Even at the largest rank, LoRA would not be the same as full fine-tuning: the embeddings and norms stay frozen,
+and the update is learned through the two factors, which behaves differently from training $W$ directly.
+
+## Two checks on the real model
+
+The claims above are about the model we use, so we test them on it. The artifact above loaded Qwen3-4B twice, in bf16 and in fp32,
+wrapped it with PEFT at rank 16 and $\alpha = 32$, and ran one prompt, the first turn of a validation
+conversation (`{python} checks["n_positions"]` tokens), through the original model, the wrapped one and the merged one.
+
+**It starts as the base model.** With $B = 0$ the logits of the wrapped model and of the original must be the same:
+
+```{python}
+for precision in ("bf16", "fp32"):
+    print(
+        f"{precision}: largest difference between the wrapped and the "
+        f"original model's logits: {checks[precision]['step0_max_abs_diff']}"
+    )
+assert all(checks[p]["step0_max_abs_diff"] == 0.0 for p in ("bf16", "fp32"))
+```
+
+The logits are identical, not merely close: adding a correction of exactly zero changes nothing, in any precision.
+
+**Merging, in fp32 and in bf16.** After training, the correction can be folded into the weights,
+$W \leftarrow W + \tfrac{\alpha}{r} BA$, so the model runs with no extra layers and no extra cost. To test that on a
+model whose adapter actually does something, we give $B$ random values (small ones, with a standard deviation
+of 0.01), which moves the logits, and compare the output with the adapter kept separate against the output
+after merging it. We do it twice, with the model in fp32 and in bf16:
+
+```{python}
+merge_table = pd.DataFrame({
+    precision: {
+        "largest logit change caused by the adapter":
+            checks[precision]["adapter_effect_max_abs"],
+        "largest difference, merged vs separate":
+            checks[precision]["merge_max_abs_diff"],
+        "same top token, merged vs separate":
+            f"{checks[precision]['merge_top1_agreement']:.1%}",
+        "same top token, adapter vs base model":
+            f"{checks[precision]['adapter_top1_agreement']:.1%}",
+    }
+    for precision in ("fp32", "bf16")
+})
+print(
+    f"{checks['n_positions']} positions; the logits of the original model "
+    f"go up to about {checks['bf16']['logit_scale']:.0f}"
+)
+merge_table
+```
+
+```{python}
+fp32, bf16 = checks["fp32"], checks["bf16"]
+assert fp32["merge_max_abs_diff"] < 0.01 * fp32["adapter_effect_max_abs"]\
+    and fp32["merge_top1_agreement"] == 1.0
+```
+
+**In fp32, merging is the same function.** The largest difference between the merged and the separate adapter is
+`{python} f"{fp32['merge_max_abs_diff']:.3f}"` in the logits, against `{python} f"{fp32['adapter_effect_max_abs']:.1f}"` for the effect of the adapter
+itself, and the top token is the same at every position: the difference is float rounding.
+
+**In bf16, it is not.** The largest difference is `{python} f"{bf16['merge_max_abs_diff']:.1f}"`, as large as the adapter's own
+effect, and the merged model picks a different top token at `{python} f"{1 - bf16['merge_top1_agreement']:.0%}"` of the positions.
+One likely reason: the merged weights $W + \tfrac{\alpha}{r}BA$ are rounded to bf16 when they are stored, which
+discards the low bits of a small correction, and the separate adapter keeps them. Another is probably that a random
+$B$ is a large, arbitrary perturbation of the model, which makes its output sensitive to every small rounding, so a
+trained adapter, smaller and with structure, may merge better. We have not measured that.
+
+What does keep the adapter's exact effect is not to merge it into bf16 weights: either leave it separate, a bf16
+base model with an fp32 adapter, which is how we train it and PEFT's default, or merge and keep the whole model in
+fp32 (twice the memory). Merging and then casting to bf16 stores rounded weights, which is the case we measured, so a
+merged bf16 model has to be evaluated before it is relied on. The evaluation chapter does that on the trained adapter.
+
+## Rank, alpha and what we leave out
+
+- **Rank** is capacity: a rank-$r$ update can change each layer's output in only $r$ directions. Too small
+  and the model cannot fit the task; beyond what the task needs, more rank only adds weights. How much the task needs
+  is an empirical question, and we answer it with a rank sweep, below and above 16, planned at the end of the book.
+- **Alpha** sets the size of the correction. Keeping $\alpha = 2r$ keeps the scale fixed at 2 whatever the rank, so
+  rank is the only thing the sweep changes.
+- **QLoRA** [@dettmers2023qlora] stores the frozen base weights in 4 bits, to save memory, and trains the adapters in
+  higher precision on top. We do not need it: the 4B model's bf16 weights take 8 GB of the machine's 122 GB.
+
+::: {.callout-note title="Under the hood"}
+The two views of @fig-lora-matrix compute the same function in exact arithmetic, but they are not interchangeable in practice.
+Training runs the right-hand view, because it never builds the big matrix. Merging builds $W + \tfrac{\alpha}{r}BA$
+once, which is what makes inference free of extra cost. A merge cannot be undone exactly: once the correction
+is added to bf16 weights the original $W$ cannot be recovered, so we keep the adapter file and not only the
+merged model. In fp32 the adapter of the main run is about 130 MB, against 8 GB for the model.
+:::
+
+::: {.callout-tip title="Further reading"}
+- The LoRA paper [@hu2022lora] introduces the method and the low-rank hypothesis it rests on.
+- QLoRA [@dettmers2023qlora] combines it with a 4-bit base model.
+- Low-rank factorization for recommendation [@koren2009matrix] is the older use of the same product-of-thin-matrices idea.
+:::

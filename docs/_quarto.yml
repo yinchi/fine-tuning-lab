@@ -20,6 +20,7 @@ book:
         - 203_from_base.qmd
         - 204_probing_the.qmd
         - 205_how_fine_tuning.qmd
+        - 206_lora_in.qmd
   appendices:
     - 902_references.qmd
 

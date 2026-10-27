@@ -849,7 +849,7 @@ calculation and comes in the chapter on how fine-tuning works.
 
 ## Which layers LoRA adapts
 
-LoRA, introduced properly in a later chapter, leaves the model's weights frozen and learns a small
+LoRA, introduced properly in @sec-lora, leaves the model's weights frozen and learns a small
 update for selected **linear layers**. In this model the linear layers are the seven projections in
 every decoder layer (listed below for layer 0), plus the output head:
 

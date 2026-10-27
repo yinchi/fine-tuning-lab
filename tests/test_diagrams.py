@@ -4,7 +4,9 @@ import xml.dom.minidom
 
 import pytest
 
-from convfinqa.book.diagrams import attention, decoder, feedforward, label_shift, pipeline, posttraining, training_step
+from convfinqa.book.diagrams import (
+    attention, decoder, feedforward, label_shift, lora_layer, lora_matrix, pipeline, posttraining, training_step,
+)
 from convfinqa.book.diagrams.svg import Box, Svg, arrowhead, rounded_path, waypoints
 
 
@@ -110,3 +112,21 @@ def test_label_shift_diagram_marks_the_answer_tokens():
     for word in ["input_ids", "assistant", "&lt;|im_end|&gt;", "(nothing)", "yes", "no"]:
         assert word in out
     assert out.count(">yes<") == 4 and out.count(">no<") == 4
+
+
+def test_lora_matrix_diagram_shows_both_views():
+    out = lora_matrix.build()
+    xml.dom.minidom.parseString(out)
+    for word in ["As matrices", "As computation", "W′", "frozen", "(α/r)", "9,728 × 2,560", "196,608",
+                 "is never built while training", "r = 16 numbers"]:
+        assert word in out
+
+
+def test_lora_layer_diagram_marks_the_seven_adapted_layers():
+    out = lora_layer.build()
+    xml.dom.minidom.parseString(out)
+    for name in ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]:
+        assert out.count(f">{name}<") == 1
+    for word in ["36 ×", "Embeddings", "Output head", "RMSNorm", "252", "residual"]:
+        assert word in out
+    assert out.count("#d5e8d4") == 8  # seven adapted boxes and the legend swatch
