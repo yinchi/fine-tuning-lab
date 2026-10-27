@@ -1,0 +1,279 @@
+# Formatting conversations for training {#sec-formatting}
+
+**You will learn:**
+
+- how a ConvFinQA conversation becomes one training sequence, and exactly which tokens the loss counts;
+- why one sequence per conversation is as good as one per turn;
+- how training, validation and dev data are kept apart, and how the prompt for each turn is built when we evaluate.
+
+@sec-base-instruct explained chat templates and teacher forcing in general. This chapter fixes the format
+we use for ConvFinQA, shows it on a real conversation, and checks the properties the later chapters rely on.
+Nothing here trains a model: it prepares the data that the training and evaluation chapters read.
+
+## The messages
+
+A conversation becomes one chat. A fixed system message comes first. The first user message holds the page,
+that is the text before the table, the table as markdown and the text after it, followed by the first question.
+The assistant's reply is the gold program for that turn. Each later turn adds a user message with the question
+alone, and the assistant's reply with its gold program. `formatting.conversation_messages` does this. Here it is
+on a validation conversation with three turns:
+
+```{python}
+from IPython.display import HTML, display
+
+from convfinqa import data
+from convfinqa.artifacts import get
+from convfinqa.formatting import conversation_messages
+
+val = list(get("train_val_split").jsonl("val.jsonl"))
+three = [c for c in val if len(c["annotation"]["turn_program"]) == 3]
+conv = min(
+    three,
+    key=lambda c: sum(len(p) for p in c["annotation"]["turn_program"])
+)
+messages = conversation_messages(conv)
+
+def short(text, head=110, tail=60):
+    text = text.replace("\n", " ⏎ ")
+    return (
+        text if len(text) <= head + tail + 5
+        else text[:head] + " … " + text[-tail:]
+    )
+
+print(conv["id"], f"(Type {data.conversation_type(conv)})\n")
+for m in messages:
+    print(f"{m['role']:>9}: {short(m['content'])}")
+```
+
+The page appears once, in the first user message, because it does not change. The later questions refer to it
+and to the earlier answers, as a real conversation would.
+
+## What the loss counts
+
+The messages are turned into token ids by the model's chat template, and a second list, the `labels`, says which
+of those tokens the model is trained to produce. A label is the token id where the token counts and `-100`
+where it does not (@sec-fine-tuning showed why the value is `-100`). The rule is simple: **only the assistant's
+answers count**, together with the `<|im_end|>` token that ends each one. @fig-sequence-layout shows the layout.
+
+![Two ways to lay out the training data for a conversation of three turns (not to scale: the page is the long part). One sequence per conversation reads the page once and trains all three answers. One sequence per turn trains the same three answers, but reads the page and the earlier answers again for every turn.](figures/sequence_layout.svg){#fig-sequence-layout fig-alt="Two groups of bars. The first group has one bar: a system box, a long page-and-first-question box, then answer 1, question 2, answer 2, question 3 and answer 3, with the three answers in green. The second group has three bars, for turns 1, 2 and 3. Each starts with the same system and page boxes and ends with its own answer in green, and the earlier answers and questions are grey, so the page is repeated three times."}
+
+On our conversation, with the first part of the sequence cut off, the tokens look like this. Green tokens are
+trained, grey ones are only read:
+
+```{python}
+from transformers import AutoTokenizer
+
+from convfinqa.book.viz import trained_html
+from convfinqa.formatting import tokenize_conversation
+
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+ids, labels = tokenize_conversation(tok, messages)
+first = next(i for i, label in enumerate(labels) if label != -100)
+start = first - 40  # the end of the first user message, and everything after it
+pieces = [tok.decode([i]) for i in ids[start:]]
+display(HTML(
+    '<div style="opacity:0.7">… (the first ' + f"{start:,}"
+    + " tokens: the system message and the page)</div>"
+    + trained_html(pieces, [label != -100 for label in labels[start:]])
+))
+print(
+    f"{len(ids):,} tokens in all, "
+    f"{sum(label != -100 for label in labels)} of them trained"
+)
+```
+
+How much of a sequence is trained? We can count over the whole validation split, and check that the count is the
+one the untuned model's loss was measured on in @sec-probing:
+
+```{python}
+print(
+    "the template has generation markers:",
+    "{% generation %}" in tok.chat_template
+)
+
+total = trained = 0
+for c in val:
+    ids_c, labels_c = tokenize_conversation(tok, conversation_messages(c))
+    total += len(ids_c)
+    trained += sum(label != -100 for label in labels_c)
+share = trained / total
+print(f"validation split: {total:,} tokens, {trained:,} trained ({share:.1%})")
+
+# the count the untuned loss was measured on
+assert trained == get("val_gold_nll").json("nll.json")["tokens"]
+```
+
+Three details of the layout:
+
+- **The answers are green, the markers around them are not.** The model is *given* `<|im_start|>assistant` and
+  the newline that follows it, so these are grey: they are the generation prompt of the next section. It is
+  asked to produce the answer and the `<|im_end|>` after it, which is how it learns to stop. The newline that the
+  template writes after `<|im_end|>` is grey too.
+- **Most of the sequence is not trained.** The page and the questions are many tokens, and the answers few.
+  Over the whole validation split the answers are `{python} f"{share:.1%}"` of the tokens.
+- **The labels are ours.** The chat template of this model has no `{% generation %}` markers, which is what
+  TRL's `assistant_only_loss` option needs. We do not need them: `tokenize_conversation` renders the chat up to
+  each assistant message and finds the answer's tokens itself, and the Trainer uses a `labels` column as it is.
+
+## One sequence per conversation
+
+Why is it allowed to train on all the answers of a conversation in one pass? Because the model is **causal**:
+the output at a position depends only on the tokens before it. The loss on the answer of turn $k$ therefore
+depends only on the tokens up to that answer, exactly as if the sequence had ended there. The summed loss of the
+whole conversation is the sum of the losses of the truncated sequences, and so is its gradient.
+`tests/test_causal_prefix.py` checks both on a small Qwen3, and also checks the limit of the claim: only the *end* of
+a conversation can be cut, because removing early tokens changes every later loss.
+Two training runs, one in each layout, are therefore equivalent up to batching (a step of 16 conversations holds far
+more answer tokens than a step of 16 turns) and rounding (different padding and batching change bf16 results), but
+not step for step.
+
+The saving is the one counted in @sec-base-instruct: the per-turn layout of @fig-sequence-layout reads about
+3.5 times as many tokens for the same answers. The price is the one named there too, **exposure bias**: during
+training every earlier answer in the context is the gold one. Nothing is cut by `max_length`: the longest full
+conversation of the data is 3,460 tokens (@sec-convfinqa) and `max_length` is 3,584.
+
+## Train, validation and dev
+
+`train.json` has 3,037 conversations. We hold out a tenth of them as **validation** data, for the choices that
+the project makes (the prompt, the checkpoint, the grammar) and train on the rest. Several conversations are
+written from the same report page, so the split is made **by page**: the group key is the conversation id
+without its `Single_` or `Double_` prefix and its `-N` suffix. A page then lies entirely on one side, and the model
+is never scored on a page it trained on.
+
+```{python}
+import pandas as pd
+
+fit = list(get("train_val_split").jsonl("train_fit.jsonl"))
+dev = data.load_split("dev")
+print(conv["id"], "->", data.page_group(conv["id"]))
+
+pages = lambda convs: {data.page_group(c["id"]) for c in convs}
+n_turns = lambda convs: sum(len(c["annotation"]["dialogue_break"]) for c in convs)
+sizes = pd.DataFrame({
+    "conversations": {
+        "train-fit": len(fit),
+        "val": len(val),
+        "dev": len(dev)
+    },
+    "turns": {
+        "train-fit": n_turns(fit),
+        "val": n_turns(val),
+        "dev": n_turns(dev)
+    },
+    "pages": {
+        "train-fit": len(pages(fit)),
+        "val": len(pages(val)),
+        "dev": len(pages(dev))
+    },
+})
+display(sizes)
+assert not pages(fit) & pages(val)
+print(
+    f"dev pages that also occur in train: "
+    f"{len(pages(dev) & (pages(fit) | pages(val)))} of {len(pages(dev))}"
+)
+```
+
+The split is made once, with a fixed seed, and saved as the artifact `train_val_split`. **Dev is never used to
+make a choice.** The one use that the plan allows before the final evaluations is the one above: the page
+identifiers of dev are compared with train's, and no dev page is in train. That makes the validation data, which
+is disjoint from the training data by page, a fair stand-in for dev. The official test split has no labels and is
+not used.
+
+## Prompts for evaluation
+
+At evaluation time the model sees the conversation up to the question of turn $k$, and writes the answer. The
+prompt is the training sequence cut right before that answer, with the generation prompt at the end.
+`formatting.prompt_messages` builds the chat. Earlier answers are the gold programs by default (the *gold history*
+of the evaluation chapters). The model's own earlier answers can be passed instead (the *predicted history*),
+and complete example conversations can be put in front (few-shot):
+
+```{python}
+from convfinqa.formatting import prompt_messages
+
+def outline(chat):
+    return " | ".join(f"{m['role']}: {m['content'][:24]}…" for m in chat)
+
+print("gold history, turn 3:\n ", outline(prompt_messages(conv, 2)), "\n")
+print(
+    "predicted history, turn 3:\n ",
+    outline(prompt_messages(
+        conv, 2, history=["(the model's answer 1)", "(the model's answer 2)"]
+    )),
+    "\n"
+)
+print(
+    "one example first, turn 3 (s = system, u = user, a = assistant):\n ",
+    " ".join(m["role"][0] for m in prompt_messages(conv, 2, examples=[fit[0]]))
+)
+```
+
+What the model reads in training and in evaluation must be the same, token for token, or the evaluation measures a
+different task from the one trained. We can check it on every turn of the validation split: the tokens of the prompt
+for turn $k$ must be the training sequence up to where the answer of turn $k$ begins.
+
+```{python}
+def answer_starts(labels):
+    return [
+        i for i, label in enumerate(labels)
+        if label != -100
+        and (i == 0 or labels[i - 1] == -100)
+    ]
+
+checked = 0
+for c in val:
+    ids_c, labels_c = tokenize_conversation(tok, conversation_messages(c))
+    starts = answer_starts(labels_c)
+    assert len(starts) == len(data.turns(c))
+    for k, s in enumerate(starts):
+        prompt = tok.apply_chat_template(
+            prompt_messages(c, k), tokenize=False, add_generation_prompt=True
+        )
+        assert tok(prompt, add_special_tokens=False)["input_ids"] == ids_c[:s]
+        checked += 1
+print(
+    f"{checked:,} prompts checked: each is the training sequence up to the "
+    "start of its answer"
+)
+```
+
+## The turns as tables
+
+For scoring, the evaluation chapters need the gold answer of every turn, and breakdowns by turn index and by
+conversation type. The artifact `eval_turns` holds them as one row per turn, for validation and for dev:
+
+```{python}
+tables = get("eval_turns")
+val_turns = pd.DataFrame(tables.jsonl("val_turns.jsonl"))
+dev_turns = pd.DataFrame(tables.jsonl("dev_turns.jsonl"))
+assert len(val_turns) == n_turns(val) and len(dev_turns) == n_turns(dev) == 1490
+val_turns.head(4)
+```
+
+```{python}
+longest = int(max(t["turn"].max() for t in (val_turns, dev_turns))) + 1
+breakdown = {
+    name: pd.crosstab(t["turn"] + 1, t["type"]).rename_axis("turn")\
+        .reindex(range(1, longest + 1), fill_value=0)
+    for name, t in (("val", val_turns), ("dev", dev_turns))
+}
+display(pd.concat(breakdown, axis=1))
+print(
+    "share of number-selection turns:",
+    {
+        name: f"{t.number_turn.mean():.0%}"
+        for name, t in (("val", val_turns), ("dev", dev_turns))
+    }
+)
+```
+
+Later turns are rarer, so a figure for turn 5 rests on far fewer turns than one for turn 1. The evaluation chapters
+report accuracy by turn index and by conversation type, and these counts say how many turns each figure rests on.
+
+The program is written in the DSL throughout this chapter. Writing it as Python code instead, a later experiment
+of the book, changes the assistant's messages and nothing else here.
+
+::: {.callout-tip title="Further reading"}
+- ConvFinQA's own files [@chen2022convfinqa] come in the same two shapes: whole conversations, and one row per turn,
+  which is the per-turn layout of @fig-sequence-layout.
+:::

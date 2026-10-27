@@ -81,3 +81,13 @@ def test_val_split_keeps_pages_apart(train):
     assert 0.07 < len(val) / len(train) < 0.13
     assert data.make_val_split(train) == (fit, val)
     assert data.make_val_split(train, seed=1)[1] != val
+
+
+def test_turn_rows_match_the_official_turn_files(train):
+    from convfinqa.data.tables import turn_rows
+
+    rows = turn_rows(data.load_split("dev"))
+    assert len(rows) == len(data.load_split("dev_turn")) == 1490
+    assert {r["type"] for r in rows} == {"I", "II"}
+    assert all(r["number_turn"] == ("(" not in r["program"]) for r in rows)
+    assert max(r["turn"] for r in rows) + 1 == max(r["n_turns"] for r in rows)

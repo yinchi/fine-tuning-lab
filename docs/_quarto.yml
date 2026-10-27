@@ -21,6 +21,9 @@ book:
         - 204_probing_the.qmd
         - 205_how_fine_tuning.qmd
         - 206_lora_in.qmd
+    - part: "Experiments"
+      chapters:
+        - 301_formatting_conversations.qmd
   appendices:
     - 902_references.qmd
 

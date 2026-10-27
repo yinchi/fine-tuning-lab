@@ -42,3 +42,11 @@ def test_next_token_stats_and_plot():
     assert cold["top1"] > 0.99 and hot["top1"] < 0.3
     assert cold["entropy"] < hot["entropy"] < torch.log(torch.tensor(6.0)).item()
     assert len(plot_next_token(Tok(), logits, (0.5, 1.0), k=3).axes) == 2
+
+
+def test_trained_html_marks_the_kept_tokens():
+    from convfinqa.book.viz import trained_html
+
+    out = trained_html(["a", "<b>", "c"], [False, True, True])
+    assert out.count("<span") == 3 and "&lt;b&gt;" in out
+    assert out.count("hsla(130") == 2 and out.count("hsla(0, 0%") == 1

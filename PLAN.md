@@ -298,26 +298,14 @@ Concepts first, little maths: the only formulas are `W' = W + (α/r)·B·A` and 
 ### Part 3 — Experiments
 
 **3.1 Formatting conversations for training** (`301_formatting_conversations.qmd`)
-This chapter uses standard multi-turn SFT: one training sequence per **conversation**, with teacher forcing. Background is in 2.3.
-- **Messages:**
-  - System: "Answer with a program in the ConvFinQA DSL."
-  - User turn 1: the context (`pre_text`, the markdown table, `post_text`) followed by question 1.
-  - Assistant turn 1: gold `turn_program[0]`.
-  - Then user turn k: question k, and assistant turn k: gold `turn_program[k]`, for the rest of the conversation.
-- **Loss** is computed on **assistant tokens only**, all turns at once. With causal attention this equals the sum of the losses on each truncated prefix, and so do the gradients; `tests/test_causal_prefix.py` checks both on a tiny Qwen3. Only the end of a conversation can be cut; dropping early tokens changes every later loss. The page is encoded once per conversation, not once per turn, which uses about 3.5× fewer tokens than a per-turn layout (measured on the training split in 2.3: 3,525,034 against 12,333,479).
-- **Masking:**
-  - Check whether the Qwen3 chat template has `{% generation %}` tags, which TRL's `assistant_only_loss=True` needs.
-  - If it doesn't, have `formatting.py` tokenize message by message and build `labels`, with -100 on system and user tokens. Write these as pre-tokenized `input_ids` and `labels`.
-  - Either way, the chapter renders one conversation with the trained tokens highlighted.
-- **Validation split** (`data.make_val_split`):
-  - Group key: the `id` with the `Single_`/`Double_` prefix and the `-N` suffix removed, e.g. `JKHY/2009/page_28.pdf`.
-  - Hold out 10% of groups, using a fixed seed.
-  - Report how many pages are shared between train and dev, for reference only.
-- `output_format: "dsl" | "python"` is a parameter (§3.5).
-- **Outputs:**
-  - `artifacts/processed/train_fit.jsonl`: about 2,730 conversations.
-  - `artifacts/processed/val.jsonl`: about 300 conversations.
-  - `dev` files in two shapes: per-conversation (421) and per-turn (1,490).
+This chapter uses standard multi-turn SFT: one training sequence per **conversation**, with teacher forcing. Background is in 2.3 and 2.5. Most of the code already exists (built in 2.4 and 2.5); the chapter presents it and checks the properties the later chapters rely on.
+- **Messages** (`formatting.conversation_messages`): a fixed system message ("Answer with a program in the ConvFinQA DSL."); user turn 1 = the context (`pre_text`, the markdown table, `post_text`) followed by question 1; then, for every turn, the assistant's gold `turn_program[k]` and the next user question.
+- **What the loss counts:** the assistant's answers and their `<|im_end|>`, nothing else (`formatting.tokenize_conversation`: `labels` are the token ids there and `-100` elsewhere). The chapter shows one real conversation with the trained tokens highlighted, and the share of trained tokens over val (4.7%, equal to the token count of the 2.4 loss). The Qwen3 template has no `{% generation %}` markers, and none are needed: TRL uses a `labels` column as it is.
+- **One sequence per conversation:** with causal attention, the loss on all answers at once equals the sum over truncated prefixes, and so do the gradients (`tests/test_causal_prefix.py`, on a tiny Qwen3); only the end of a conversation can be cut. The per-turn layout reads about 3.5× more tokens (2.3). No conversation is cut by `max_length` = 3,584.
+- **Validation split** (`data.make_val_split`, artifact `train_val_split`): group key = the `id` without the `Single_`/`Double_` prefix and the `-N` suffix; 10% of pages held out, seed 0 (2,731 train-fit and 306 val conversations). Dev has 218 pages and none is in train (reported in the chapter).
+- **Evaluation prompts** (`formatting.prompt_messages`): gold or predicted history, optional few-shot examples. Checked on all 1,125 val turns: the prompt for turn k equals the training sequence up to the start of answer k, token for token.
+- **Outputs:** the artifacts `train_val_split` (`train_fit.jsonl`, `val.jsonl`) and `eval_turns` (`val_turns.jsonl`, `dev_turns.jsonl` as one row per turn, and `dev.jsonl`, dev's 421 conversations).
+- The `output_format: "dsl" | "python"` parameter is added with the Python experiment (§3.5), not before.
 
 **3.2 The untuned baseline** (`302_the_untuned.qmd`, HEAVY)
 - Runs `Qwen/Qwen3-4B-Instruct-2507` untuned, with 2–3 in-context examples, on dev.
@@ -549,7 +537,7 @@ Mark each item `[x]` when it's done and verified. Add a short note (run id, head
 - [x] 2.4 Probing the untuned model. 20 val conversations (68 turns, gold history, greedy): zero-shot 24% exec. acc. (44 of 52 errors are format failures), 2-shot 68% (7 format, 15 valid-but-wrong); 13 of 51 invalid outputs contain the gold answer under a lenient reading (ad hoc scan, not in the chapter). Most surprisal is in DSL tokens (opening operator, `),`, `(#`, end of turn), not copied numbers. **Val gold-program NLL = 2.2062 nats/token** (306 convs, 16,417 tokens; artifact `val_gold_nll`), the predicted step-0 loss for §3.3. Attention-map probe skipped (optional).
 - [x] 2.5 How fine-tuning works. By-hand loss on a 4B val conversation = `model(labels=...).loss` (1.889931 both) and = 2.4's `gold_logprobs`; AdamW and cosine-with-warmup written out (schedule checked against the library at every step); accumulation normalization quantified; memory budget (computed weights match measured); `step_cost_*` measurements (4B LoRA r=16 needs gradient checkpointing: 21 GB typical / 34 GB longest batch, ~41 s/step, ~4 h for 342 steps); `sft_demo` (0.5B full fine-tuning via `SFTTrainer`, 40 steps): Trainer's step-0 loss = hand-computed (1.4589), labels = ours, logged lr = our schedule, 3 -> 19 of 24 turns correct (20 in the first run; GPU training is not bit-reproducible, so the chapter computes its numbers from the artifact). No hand-written loop (see decision log).
 - [x] 2.6 LoRA in detail. Parameter count at r=16 computed from the config = PEFT's (33,030,144; 252 modules; 0.82% of the model; about 132 MB in fp32); step-0 logits identical to the base model's (max difference 0.0, bf16 and fp32); merging a random adapter is exact in fp32 (0.002 on an effect of 14.7) but not in bf16 (15.3, with 4% of top tokens changed), so a merged bf16 model is checked before use (§3.4).
-- [ ] 3.1 Formatting + splits; label-mask test passes
+- [x] 3.1 Formatting + splits. Trained tokens are 4.7% of the val tokens (16,417 of 347,006, equal to the 2.4 loss count); template has no generation markers (not needed); all 1,125 val prompts equal the training sequence cut at the answer; dev pages 0 of 218 in train; artifacts `eval_turns` (val 1,125 / dev 1,490 turns) and `train_val_split`.
 - [ ] 3.2 Untuned baseline, 3 example sets (DSL)
 - [ ] 3.3 Smoke run (0.5B)
 - [ ] 3.3 Main LoRA run (Qwen3-4B, DSL); adapter analysis
@@ -608,6 +596,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-26: xgrammar verified on the GB10 (Python 3.14, aarch64, CUDA 13.2) with the DSL grammar and the HF logits processor (`constrained.compile_grammar`, `grammar_accepts`, `generate_constrained`). The grammar accepts every gold program; constrained Qwen3-4B answers always follow it; no measurable generation-time overhead at this scale; two-shot answers are unchanged by the constraint, zero-shot ones become valid programs. The token vocabulary size passed to xgrammar must be the model's output size (151,936), not the tokenizer's (151,669), and the stop token is `<|im_end|>`. Whether to bound number lengths in the grammar is left to §3.6, decided on val.
 - 2026-10-26: Metric roles for the evaluation chapters. Execution accuracy is the headline (task goal, comparable to the reference table, and the only metric that works across DSL and Python output). Program accuracy, with the official string rule for arguments, is reported next to it, except in §3.5. A literal check (numeric literals as text and as values, against the gold program and against the page) is a diagnostic in §3.4 and also runs on Python code in §3.5, so formatting and trailing zeros are checked in both formats. Official behaviour confirmed from `code/utils/general_utils.py`: intermediate results are never rounded, only the final value, to 5 decimals; the comparison with the gold answer is exact equality of rounded floats.
 - 2026-10-26: Data protocol written down (section "Data protocol"): dev is page-disjoint from train (0 of 218 pages shared); no retraining on train-fit plus val; a freeze entry before the first dev evaluation; after it, code changes only for genuine bugs, and a disappointing result is reported, not fixed; everything that does not need dev (all code, training, val evaluations) is done first, across all chapters. Checked: the DSL grammar's argument shapes and the digit bounds (10 integer digits, 4 decimals, 120 characters) come from train alone; dev contains no new shape, and the grammar accepts all of dev as a held-out confirmation.
+- 2026-10-26: Chapter 3.1 presents the formatting built in 2.4 and 2.5 and adds the `eval_turns` artifact (the turns of val and dev as tables). The `{% generation %}` check and the `output_format` parameter of the earlier 3.1 plan are dropped from it (TRL uses our labels as they are; the parameter arrives with the Python experiment). A lesson about artifact freshness: adding a function to a module that heavy builders import (here `data/raw.py`) staled every heavy artifact at once, because the code hash covers the module closure; new data helpers therefore go in new modules (`data/tables.py`, imported only where used), which keeps the closure unchanged. The light `train_val_split` rebuilt with identical output, so by early cutoff nothing heavy had to be rebuilt.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.

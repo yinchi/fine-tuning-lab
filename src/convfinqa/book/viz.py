@@ -145,3 +145,21 @@ def surprisal_html(pieces: list[str], logprobs: list[float], full: float = 4.0) 
         '<div style="font-family:monospace; white-space:pre-wrap; line-height:1.9; margin:0.4em 0">'
         + "".join(spans) + "</div>"
     )
+
+
+def trained_html(pieces: list[str], trained: list[bool]) -> str:
+    """Render tokens with the ones the loss counts in green and the rest in grey.
+
+    Args:
+        pieces: The token strings.
+        trained: For each token, whether its label is kept (not `-100`).
+    """
+    spans = []
+    for piece, kept in zip(pieces, trained):
+        shown = escape(piece).replace("\n", "↵\n")
+        colour = "hsla(130, 55%, 45%, 0.45)" if kept else "hsla(0, 0%, 55%, 0.18)"
+        spans.append(f'<span style="background:{colour}">{shown}</span>')
+    return (
+        '<div style="font-family:monospace; white-space:pre-wrap; line-height:1.9; margin:0.4em 0">'
+        + "".join(spans) + "</div>"
+    )

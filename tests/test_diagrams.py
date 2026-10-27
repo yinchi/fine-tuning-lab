@@ -5,7 +5,7 @@ import xml.dom.minidom
 import pytest
 
 from convfinqa.book.diagrams import (
-    attention, decoder, feedforward, label_shift, lora_layer, lora_matrix, pipeline, posttraining, training_step,
+    attention, decoder, feedforward, label_shift, lora_layer, lora_matrix, pipeline, posttraining, sequence_layout, training_step,
 )
 from convfinqa.book.diagrams.svg import Box, Svg, arrowhead, rounded_path, waypoints
 
@@ -130,3 +130,11 @@ def test_lora_layer_diagram_marks_the_seven_adapted_layers():
     for word in ["36 ×", "Embeddings", "Output head", "RMSNorm", "252", "residual"]:
         assert word in out
     assert out.count("#d5e8d4") == 8  # seven adapted boxes and the legend swatch
+
+
+def test_sequence_layout_diagram_shows_both_layouts():
+    out = sequence_layout.build()
+    xml.dom.minidom.parseString(out)
+    for word in ["one sequence", "turn 1", "turn 2", "turn 3", "page + Q1", "system", "3 sequences"]:
+        assert word in out
+    assert out.count("#d5e8d4") >= 7  # trained answers, and the legend swatch
