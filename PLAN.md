@@ -63,6 +63,18 @@ Hardware: DGX Spark (NVIDIA GB10, ~121 GB unified memory, aarch64, CUDA 13.2).
    - The `P.C` codes (written §2.3 in this plan) are therefore **plan and filename identifiers only**. They don't match the rendered chapter numbers. Cross-references in the book use `@sec-` labels.
    - A YAML `title:` cannot carry a label (tested: the reference stays unresolved and the title shows the literal `{#sec-...}`), so a chapter's title is its first heading, `# Title {#sec-name}`. Prose refers to written chapters with `@sec-name` (rendered as "Chapter 7") and to chapters not yet written in words ("the LoRA chapter"), converted to `@sec-` when the chapter exists. `tests/test_book_refs.py` enforces labelled titles, resolvable references, unique labels and no `chapter 2.4` / `§3.3` in the prose.
 
+## Data protocol (train, val, dev)
+- **Splits:** train-fit 2,731 conversations (9,979 turns), val 306 (1,125 turns), dev 421 (1,490 turns). Val is 10% of `train.json`, page-grouped; dev has 218 pages and none of them is in train, so val (disjoint from train-fit by page) mirrors dev. The official test split has no labels and is unused.
+- **Systems evaluated on dev, once each, in both history modes** (the retry and self-consistency variants only for the fine-tuned models): the untuned 4B, DSL, few-shot, 3 example sets (§3.2); the LoRA fine-tuned 4B, DSL, seed 0, plus seeds 1 and 2 only if a CI straddles 0 (§3.3/§3.4); untuned and fine-tuned Python (§3.5); the syntax-constrained versions of those four (§3.6). The "no grammar" rows of §3.6 reuse the earlier evaluations (greedy, fixed batch size, so the outputs are the same). The 0.5B smoke run is never evaluated on dev, and the rank sweep (§4.2) is scored on val.
+- **Chosen on val:** the baseline prompt and few-shot sets (examples from train-fit, never from val), the checkpoint (best val loss), the grammar variant (bounded or unbounded numbers) and how Python writes a percent, and the rank sweep. There is no hyperparameter search: the §3.3 configuration is fixed in advance. Val accuracy has a standard error of about 2 points (an estimate), so choices on val use the paired bootstrap and only large differences count.
+- **Rules.**
+  1. No choice is made from dev results: not prompts, hyperparameters, checkpoints, grammars or translator conventions.
+  2. **Freeze:** before the first dev evaluation, a decision-log entry lists every choice made on val, with the git commit. After it, nothing changes because of dev numbers.
+  3. After the freeze, code changes only for **genuine bugs** (an evaluation that crashes or scores wrongly, found for example by a test). A disappointing result is reported, not fixed. A bug fix that changes a number is re-run, and the chapter says so.
+  4. No retraining on train-fit plus val: the models trained on train-fit are the final models.
+  5. Allowed uses of dev before the freeze: its page ids (the overlap report) and its gold programs and answers, to test code that has no model in it (the executor, the translator round trip, grammar acceptance). Never model outputs scored on dev.
+- **Order of work.** Everything that does not need dev first: §3.1 data and formatting; the evaluation machinery (`evaluate.py`, `stats.py`) and its tests; §3.2 prompt choice on val; §3.3 training and val checks; §3.4 evaluation code run on val; §3.5 translator, safe evaluator, training and val evaluation; §3.6 grammars and val evaluation; §4.1. Then the freeze entry, then all the dev evaluations, then the dev tables of the chapters and §4.2. Chapters are written with their val results first, and their dev sections are added after the freeze.
+
 ## What ConvFinQA looks like (content of §1.2)
 Source: github.com/czyssrs/ConvFinQA (`data.zip`), from Chen et al., EMNLP 2022. Conversations are built from FinQA: earnings-report pages, each with a table and the text around it.
 
@@ -349,7 +361,9 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - This matches the official FinQA/ConvFinQA `evaluate.py` (`invalid_flag` → counted wrong, denominator is all examples, results rounded to 5 decimal places) and PoT greedy decoding, so it's comparable with the reference table.
   - In predicted-history mode, an invalid output stays in the history exactly as generated.
   - Report the invalid rate by cause: parse error, unknown operator, bad `#k`, division by zero, rejected by the safe evaluator, empty output.
-- **Program accuracy:** computed with sympy symbolic equivalence, as the official script does (`equal_program`), not by string match.
+- **Metrics.** Execution accuracy is the headline: it is the task's goal, it is what the reference table reports, and it is the only metric that is comparable across output formats (§3.5). Program accuracy is reported next to it in every table, from the same predictions, with the same bootstrap.
+  - Program accuracy follows the official `equal_program`: the structure of the program is compared symbolically with sympy (so `add(a, b)` equals `add(b, a)`), but each argument is compared as exact text, so `2.70` against `2.7`, or `0.17` against `17%`, counts as different.
+  - **Literal check** (a diagnostic, not a metric): the numeric literals of a program, taken as text, against the gold program's (exact text) and as values (so `2.70` equals `2.7`), and against the numbers that appear on the page. The gap between the first two measures formatting and trailing zeros; the third measures whether numbers are copied from the page. It works in any output format, so §3.5 uses it too.
 - **Extra-compute comparison** on the fine-tuned model, reported in separately labeled rows and never mixed into the headline:
   - **retry with feedback:** on an invalid output, append the error message and regenerate, up to 2 extra attempts;
   - **self-consistency:** sample N=5 at temperature 0.5, drop invalid programs, majority-vote on executed answers (PoT used n=30, T=0.5); all invalid → wrong.
@@ -385,6 +399,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - Operator mapping: `add/subtract/multiply/divide/exp/greater` → `+ - * / ** >`. `#k` → `vk`, and `const_N` → the number N (`const_m1` → `-1`).
   - The last line is `ans = v<last>`, and a bare-number turn becomes `ans = 206588`.
   - Any `table_*` ops are mapped or flagged.
+  - Open: how to write a percent such as `17%`. Evaluating it as `0.17` puts a number in the code that is not on the page; `17 / 100` keeps the page's text. Decide with the literal check, on val.
 - **Execution:** a safe evaluator parses with `ast` and allows only `Assign`, `BinOp`, `UnaryOp`, `Compare`, `Name`, and numeric `Constant`. It never calls `exec`. The chapter explains why.
 - **History:** turns stay self-contained, as in ConvFinQA, where programs restate their numbers. The model copies numbers from the chat history, so no new mechanism is needed.
 - **Runs:**
@@ -395,7 +410,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - accuracy by turn index;
   - the retry and self-consistency variants from §3.4.
   - Prediction: if Python mainly cuts invalid outputs, retries will help the DSL more than Python, and the two formats will end up close.
-  - Program accuracy is left out because it can't be compared across syntaxes.
+  - Program accuracy is left out because it can't be compared across syntaxes. The literal check of §3.4 is reported for both formats: it compares the numeric literals of the generated program (DSL arguments, or the constants of the Python code) with the gold literals, as text and as values, and with the page, so formatting and trailing zeros are still checked.
 - **Possible follow-up (§4.2):** a REPL-style variant where variables persist across turns.
 
 **3.6 Constrained decoding** (`306_constrained_decoding.qmd`, HEAVY)
@@ -591,6 +606,8 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-26: Chapter 2.6 explains LoRA conceptually, with no hand-built LoRA layer (the plan's "single `nn.Linear` wrapped by hand, then by PEFT" item is dropped). Same reasoning as for the hand-written training loop in 2.5: re-implementing the formula teaches tensor shapes more than concepts. It keeps the idea (a diagram and prose), a computed parameter count that must match PEFT's 33,030,144, the rank-ceiling and break-even table, and two checks on the real model through PEFT: step-0 logits equal the base model's, and a merged adapter equals the unmerged one.
 - 2026-10-26: Open-domain, multi-document financial QA (retrieval over a large corpus, then reasoning) is out of scope for the current chapters. A literature survey (LOFin, FinanceBench, SEC-QA, corpus-level aggregation benchmarks, results and approaches) is saved in "Open topic: beyond the single page" for a later discussion; nothing in the chapters or the progress tracker changes.
 - 2026-10-26: xgrammar verified on the GB10 (Python 3.14, aarch64, CUDA 13.2) with the DSL grammar and the HF logits processor (`constrained.compile_grammar`, `grammar_accepts`, `generate_constrained`). The grammar accepts every gold program; constrained Qwen3-4B answers always follow it; no measurable generation-time overhead at this scale; two-shot answers are unchanged by the constraint, zero-shot ones become valid programs. The token vocabulary size passed to xgrammar must be the model's output size (151,936), not the tokenizer's (151,669), and the stop token is `<|im_end|>`. Whether to bound number lengths in the grammar is left to §3.6, decided on val.
+- 2026-10-26: Metric roles for the evaluation chapters. Execution accuracy is the headline (task goal, comparable to the reference table, and the only metric that works across DSL and Python output). Program accuracy, with the official string rule for arguments, is reported next to it, except in §3.5. A literal check (numeric literals as text and as values, against the gold program and against the page) is a diagnostic in §3.4 and also runs on Python code in §3.5, so formatting and trailing zeros are checked in both formats. Official behaviour confirmed from `code/utils/general_utils.py`: intermediate results are never rounded, only the final value, to 5 decimals; the comparison with the gold answer is exact equality of rounded floats.
+- 2026-10-26: Data protocol written down (section "Data protocol"): dev is page-disjoint from train (0 of 218 pages shared); no retraining on train-fit plus val; a freeze entry before the first dev evaluation; after it, code changes only for genuine bugs, and a disappointing result is reported, not fixed; everything that does not need dev (all code, training, val evaluations) is done first, across all chapters. Checked: the DSL grammar's argument shapes and the digit bounds (10 integer digits, 4 decimals, 120 characters) come from train alone; dev contains no new shape, and the grammar accepts all of dev as a held-out confirmation.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.
