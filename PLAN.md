@@ -457,6 +457,66 @@ This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters
 - **A.1 Glossary** (`901_glossary.qmd`): every term the chapters link to, e.g. logits, teacher forcing, exposure bias, LoRA rank, effective batch, execution accuracy, paired bootstrap.
 - **A.2 References** (`902_references.qmd`): the bibliography rendered from `references.bib`.
 
+## Open topic: beyond the single page (literature notes, for later discussion)
+Not in scope for the current chapters; saved from a 2026-10-26 discussion so it can be picked up later (a possible §4.x, or a "Further reading" callout). **Verification status:** items marked (search) come from web-search summaries and, for LOFin, a read of the paper's HTML (arXiv 2505.20368v3, the last ~13k characters unread); items marked (memory) are recalled, not checked. Check every title, year and number before it goes into `references.bib`.
+
+**The problem.** ConvFinQA hands the model the one right page (text plus table). The harder, realistic task: the question names no document and the system must find the evidence in a large corpus, then reason over it. Three settings, in growing difficulty:
+1. *Open-domain, few documents needed:* a corpus of hundreds to thousands of filings; each question needs one to a few of them; the model is not told which.
+2. *Few-document multi-doc:* the documents are given or pre-selected (SEC-QA, MultiHiertt, TAT-DQA); not the target.
+3. *Corpus-level aggregation:* the answer needs records from hundreds or thousands of documents, so top-k retrieval cannot work.
+
+**Our interest:** setting 1, in particular telling apart many similar-looking tables across many filings. Setting 3 is noted for completeness.
+
+**Benchmarks**
+- *Open-domain, setting 1.*
+  - **LOFin** (arXiv 2505.20368; search + paper): 145,897 reports from 516 companies; LOFin-1.4k / 1.6k test questions built from FinanceBench, FinQA and SEC-QA templates. Gold evidence is page-level (`GIS_2020_10K (p.51)`).
+  - **FinanceBench** (Islam et al. 2023; search): ~150 open-book questions over ~360 filings, with a "shared vector store" setting (all filings in one index). GPT-4-Turbo: 50% correct with a per-document store, 19% shared (68% refused). A later pipeline (arXiv 2411.07142) got 47% shared with query rewriting, filename prefixes and GPT-4o, and 55% with finance-adapted (BAM) embeddings; the two pipelines differ, so the numbers are not comparable. One secondary source says 10,231 triplets, which conflicts with the original scale; check the release.
+  - Seen in search results but not read: FinRCA-Bench (arXiv 2608.18534), LEDGER (arXiv 2606.13100), Fin-RATE (arXiv 2602.07294), FinSAgent (arXiv 2607.18102).
+- *Few-document multi-doc, setting 2:* SEC-QA (Lai et al. 2024, arXiv 2406.14394; a question-generation framework over SEC filings, no fixed size), MultiHiertt, TAT-DQA, DocFinQA (long-context, full filing; memory).
+- *Corpus-level aggregation, setting 3 (search):* MuDABench (arXiv 2604.22239; >80k pages, 332 questions, ~15 documents per question), CorpusQA (arXiv 2601.14952; hundreds to thousands of documents), AGGBench (arXiv 2602.01355; entity-level aggregation, an agentic disambiguate/filter/aggregate baseline), Structured RAG, S-RAG (arXiv 2511.08505; build a schema and a record per document at ingestion, then query the records). Text-to-SQL-over-documents systems (Evaporate, DocETL, Aryn) were not found by the search; unchecked.
+- *Document-image retrieval (memory):* ColPali/ViDoRe, M3DocRAG, VisRAG, MP-DocVQA, DUDE, MMLongBench-Doc.
+- *Open-domain table QA (memory):* OTT-QA, dense table retrieval (DTR).
+- *Fine-tuning for retrieval-augmented reading (memory):* RAFT (train with the gold document plus distractors).
+
+**LOFin results** (paper's Table 2, LOFin-1.4k; page recall / answer accuracy, %; ◊ = GPT-4o generator)
+
+| Method | Avg recall | Avg acc. | Numeric-from-table acc. |
+|---|---|---|---|
+| GPT-4o zero-shot (no retrieval) | – | 13.9 | 3.8 |
+| Perplexity | – | 10.6 | 2.5 |
+| Self-RAG | 19.0 | 7.6 | 1.9 |
+| RQ-RAG | 18.5 | 8.3 | 2.0 |
+| IRCoT ◊ | 25.2 | 22.3 | 19.1 |
+| HybridSearch ◊ | 24.4 | 25.6 | 19.1 |
+| HHR ◊ | 33.3 | 28.7 | 26.5 |
+| Dense ◊ | 34.8 | 29.2 | 23.7 |
+| HiREC ◊ (paper's method) | 45.4 | 42.4 | 37.2 |
+| Gold evidence ◊ | 100 | 65.9 | 65.0 |
+
+- Generator size (HiREC retrieval): Qwen-2.5-7B 32.3, DeepSeek-14B 38.8, GPT-4o 42.4. Retrieval matters more than the generator (Dense + GPT-4o: 29.2).
+- By source (accuracy, HiREC / Dense): FinanceBench 50.0 / 33.3, FinQA 41.6 / 27.6, SEC-QA (multi-document) 14.2 / 9.5. Every method is lowest on SEC-QA.
+- Commercial search (40 questions per category): Perplexity 15.0, SearchGPT 27.5, HiREC 46.7 average; they find documents but often miss the exact numbers.
+- No results for newer frontier models or agentic systems were found; a search for later LOFin papers is open.
+
+**Approaches seen**
+- *HiREC* (LOFin paper): hierarchical retrieval (document, then page), then evidence curation (filter, and generate follow-up queries when evidence is missing); the curation model is a fine-tuned 7B. Ablations (accuracy): full 42.4; without hierarchical retrieval 32.8; without curation 36.7; without fine-tuning 40.1; without the filter 42.1 (best recall, 50.2, but conflicting passages reach the generator).
+- Metadata-aware retrieval (FinanceBench follow-up): query rewriting, filename prefixes, finance-tuned embeddings.
+- Agentic iteration (IRCoT, Self-RAG, RQ-RAG): did worse than plain dense retrieval on LOFin.
+- Corpus-level: extract structured records per document at ingestion, then answer by querying them (S-RAG and similar).
+- RAFT-style training for the reader (memory).
+
+**Why even gold evidence scores only ~66% on LOFin.** The paper has no error analysis of the gold-evidence runs. What it shows: gold evidence is whole pages (~1.3 per question) extracted as text with PyMuPDF (table serialization not described); numeric answers are checked with an unspecified rounding tolerance; textual answers are judged by GPT-4o; FinQA-derived gold pages came from a BM25 + NLI pipeline with manual resolution, and OCR errors merged some pages. Appendix F failures: wrong arithmetic from rounded inputs (General Mills FY2020 free cash flow: 3,239 vs 3,215), and a three-year question where only one filing was retrieved. Our guess, untested: multi-step programs fail on one slip in cell choice, units or sign. ConvFinQA's clean tables plus an executed DSL remove the parsing and arithmetic failures, so accuracy there would not transfer to raw pages without a table-extraction step.
+
+**Ideas for this lab** (suggestions, not decisions)
+- Add a retriever in front of the §3 reader and compare gold-page vs retrieved-page accuracy, which separates reader errors from retrieval errors.
+- Use a pool of ConvFinQA source pages as a controlled corpus: they come from the same companies' reports, so near-duplicate tables are built in.
+- Fine-tune the retrieval-side step with LoRA (the HiREC curation model is a fine-tuned 7B), or use RAFT-style distractor training for the reader.
+
+**Open questions for the discussion**
+- Which of settings 1 and 3 do we want, and is a small controlled corpus enough?
+- How should tables be serialized for the reader on raw pages?
+- Read the missing parts: LOFin Appendix D.4 (generation prompt) and the unread tail of the HTML; FinRCA-Bench and LEDGER setups; later LOFin results with newer models.
+
 ## Progress tracker
 Mark each item `[x]` when it's done and verified. Add a short note (run id, headline number) where useful.
 
@@ -524,6 +584,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-26: Chapter 2.5 shows `SFTTrainer` with four checks (step count, labels, learning-rate schedule, step-0 loss against our own by-hand loss) instead of a hand-written training loop: the pieces are already explained in "From the loss to a weight change", and implementing the loop adds tensor calculus that obscures the concepts. This replaces the "about 30 lines of PyTorch" item of §2.5. The same four checks carry over to §3.3. Findings that carry over too: `SFTTrainer` uses a pre-tokenized `labels` column as it is (so §3.3 can pass `formatting.tokenize_conversation`'s labels and does not need `assistant_only_loss` or template markers); with this transformers version warmup is `warmup_steps=0.03` (a float below 1 is a fraction of all steps, rounded up), and the Trainer logs at step s the rate used for that step's update; with accumulation the Trainer sums the token losses and divides by the whole accumulated batch's token count (`num_items_in_batch`). The demo trains with fp32 weights and bf16 autocast, because pure-bf16 weights can lose updates much smaller than their rounding step at small learning rates.
 - 2026-10-26: Chapter records are written through a temp file of their own (`tempfile.mkstemp`) instead of a fixed `<chapter>.json.part`. A `quarto preview` that re-renders on save and a command-line render of the same chapter ran at once and one renamed the other's `.part` file away (`FileNotFoundError`). A test runs four writer threads on one record.
 - 2026-10-26: Chapter titles became `# Title {#sec-name}` headings (labels: `sec-environment`, `sec-convfinqa`, `sec-dsl`, `sec-tokens`, `sec-anatomy`, `sec-base-instruct`, `sec-probing`, `sec-fine-tuning`), and the prose of chapters 2.4 and 2.5 and the relative references of the earlier chapters ("the previous chapter") now use `@sec-` references, because the book's rendered chapter numbers (204 is Chapter 7) differ from the plan's. Also fixed: the 2.3 chapter said the formatting chapter follows it (the probing chapter does), and 2.5 mentioned a hand-written loop that was dropped. Changing every title re-executes every chapter once (freeze watches the `.qmd` source).
+- 2026-10-26: Open-domain, multi-document financial QA (retrieval over a large corpus, then reasoning) is out of scope for the current chapters. A literature survey (LOFin, FinanceBench, SEC-QA, corpus-level aggregation benchmarks, results and approaches) is saved in "Open topic: beyond the single page" for a later discussion; nothing in the chapters or the progress tracker changes.
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.
