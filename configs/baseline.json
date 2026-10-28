@@ -1,0 +1,19 @@
+{
+  "model": "Qwen/Qwen3-4B-Instruct-2507",
+  "max_new_tokens": 96,
+  "example_seeds": [
+    0,
+    1,
+    2
+  ],
+  "example_types": [
+    "I",
+    "II",
+    "I"
+  ],
+  "system": {
+    "plain": "Answer with a program in the ConvFinQA DSL.",
+    "description": "Answer with a program in the ConvFinQA DSL, and write nothing else: no explanation and no code block.\n\nA program is a single number, or a list of steps separated by \", \":\n    operation(argument, argument)\nThe operations are add, subtract, multiply, divide, exp and greater (greater gives yes or no).\nAn argument is one of:\n    a number copied from the page, without thousands separators (a percentage keeps its % sign);\n    #k, the result of step k, counting steps from 0;\n    a constant: const_1 to const_9, const_10, const_100 and so on up to const_1000000000, or const_m1 for -1."
+  },
+  "memory_cap_gb": 80
+}

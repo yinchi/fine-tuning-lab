@@ -75,10 +75,12 @@ An argument is one of:
 ```
 
 The **examples** are 2 or 3 complete conversations from train-fit, written as earlier turns of the chat, as in
-@sec-formatting. A set of examples is a seeded shuffle of train-fit, of which the first 2 or 3 conversations are used, so
-that the two-example prompt is a prefix of the three-example one. The seeds are 0, 1 and 2, fixed in advance, and
-the three sets share no conversation. The sets are saved, as lists of conversation ids, so that a run can be checked
-against them.
+@sec-formatting. A set of examples is built from a seeded shuffle of
+train-fit, position by position: a Type I conversation, then a Type II one, then another Type I. A set therefore holds
+exactly one Type II conversation, and the two-example prompt (the first two) shows one of each kind; it is a prefix of
+the three-example one. The seeds are 0, 1 and 2, fixed in advance, and no two examples, in a set or between sets, come
+from the same report page (several conversations are written from one page, so two of them would show the same table
+twice). The sets are saved, as lists of conversation ids, so that a run can be checked against them.
 
 ### The variants, and the choice
 
@@ -120,3 +122,147 @@ the measures can change without generating again.
 As defined for the evaluation of the fine-tuned model: execution accuracy (an output that does not run counts as wrong),
 the match of the program with the gold one, the invalid rate by cause, accuracy by turn index and by conversation type,
 and the diagnostics for how numbers are written and for answers that are off by a power of ten.
+
+
+## The code
+
+Three artifacts carry the experiment. `example_sets` is light: it draws the sets from the ids of train-fit, and is
+saved so that nothing depends on how the random draw behaves in a later version of Python. The two others are
+named by the split, the prompt variant, the example-set seed and the history mode. `untuned_{split}_{variant}_{seed}_{mode}`
+loads the model and writes one prediction per turn; its development on dev is refused until a `configs/FROZEN` file
+exists, which is how the freeze of the data protocol is enforced. `scores_untuned_…` is light: it executes and scores
+the predictions.
+
+```{python}
+from convfinqa.artifacts import artifact, get
+
+
+@artifact(
+    "untuned_{split}_{variant}_{seed}_{mode}",
+    deps=["train_val_split", "eval_turns", "example_sets"],
+    files=["configs/baseline.json"],
+    heavy=True,
+)
+def build_untuned(
+    out, deps, files, *, split: str, variant: str, seed: int, mode: str
+):
+    import json
+    import time
+
+    from convfinqa.evaluate import (
+        load_model, make_generator, require_freeze, run_generation
+    )
+    from convfinqa.prompts import parse_variant
+
+    require_freeze(split)
+    cfg = files["configs/baseline.json"].json()
+    n_examples, kind = parse_variant(variant)
+    if n_examples == 0 and seed != 0:
+        raise ValueError(
+            "a variant with no examples has no example set: use seed 0"
+        )
+    if split == "val":
+        convs = list(deps["train_val_split"].jsonl("val.jsonl"))
+    elif split == "dev":
+        convs = list(deps["eval_turns"].jsonl("dev.jsonl"))
+    else:
+        raise ValueError(f"split must be 'val' or 'dev', not {split!r}")
+    examples = []
+    if n_examples:
+        wanted = deps["example_sets"].json("sets.json")\
+            ["sets"][str(seed)][:n_examples]
+        pool = {
+            c["id"]: c
+            for c in deps["train_val_split"].jsonl("train_fit.jsonl")
+        }
+        examples = [pool[i] for i in wanted]
+
+    model, tok = load_model(cfg["model"], cfg["memory_cap_gb"])
+    generate = make_generator(model, tok, cfg["max_new_tokens"])
+    start, done = time.perf_counter(), 0
+    with open(out / "predictions.jsonl", "w") as f:
+        def sink(row):
+            nonlocal done
+            f.write(json.dumps({
+                k: v for k, v in row.items() if k != "seconds"
+            }) + "\n")   # timing is not an output
+            f.flush()
+            done += 1
+            if done % 50 == 0:
+                print(
+                    f"{done} turns, {time.perf_counter() - start:.0f} s",
+                    flush=True
+                )
+
+        run_generation(
+            convs, generate, system=cfg["system"][kind],
+            examples=examples, mode=mode, sink=sink
+        )
+    print(f"done: {done} turns in {time.perf_counter() - start:.0f} s")
+
+
+@artifact(
+    "scores_untuned_{split}_{variant}_{seed}_{mode}",
+    deps=["untuned_{split}_{variant}_{seed}_{mode}", "eval_turns"],
+)
+def build_scores_untuned(
+    out, deps, *, split: str, variant: str, seed: int, mode: str
+):
+    import json
+
+    from convfinqa.evaluate import score_rows, summarize
+
+    rows = list(
+        deps[f"untuned_{split}_{variant}_{seed}_{mode}"]
+        .jsonl("predictions.jsonl")
+    )
+    scores = score_rows(
+        rows, list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    )
+    (out / "scores.jsonl").write_text(
+        "".join(json.dumps(s) + "\n" for s in scores)
+    )
+    (out / "summary.json").write_text(
+        json.dumps(summarize(scores), indent=2)
+    )
+```
+
+The sets drawn from the pool, with the size of the prompt each would make (the example conversations alone, before the
+target conversation is added):
+
+```{python}
+import json
+
+import pandas as pd
+from transformers import AutoTokenizer
+
+from convfinqa import data
+from convfinqa.formatting import conversation_messages
+
+sets = get("example_sets").json("sets.json")["sets"]
+fit = {c["id"]: c for c in get("train_val_split").jsonl("train_fit.jsonl")}
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+assert len({i for ids in sets.values() for i in ids})\
+     == sum(len(ids) for ids in sets.values())   # no shared conversation
+
+def tokens(conv):
+    chat = conversation_messages(conv)[1:]
+    return len(
+        tok(
+            tok.apply_chat_template(chat, tokenize=False),
+            add_special_tokens=False
+        )["input_ids"]
+    )
+
+pd.DataFrame([
+    {
+        "set": seed,
+        "position": n + 1,
+        "conversation": i,
+        "type": data.conversation_type(fit[i]),
+        "turns": len(data.turns(fit[i])),
+        "tokens": tokens(fit[i])
+    }
+    for seed, ids in sets.items() for n, i in enumerate(ids)
+]).set_index(["set", "position"])
+```

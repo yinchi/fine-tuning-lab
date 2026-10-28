@@ -38,3 +38,16 @@ def build_eval_turns(out, deps):
     for name, rows in (("val_turns", turn_rows(val)), ("dev_turns", turn_rows(dev))):
         (out / f"{name}.jsonl").write_text("".join(json.dumps(r) + "\n" for r in rows))
     (out / "dev.jsonl").write_text("".join(json.dumps(c) + "\n" for c in dev))
+
+
+@artifact("example_sets", deps=["train_val_split"], files=["configs/baseline.json"])
+def build_example_sets(out, deps, files):
+    """The few-shot example sets (`sets.json`): conversation ids of train-fit, one set per seed."""
+    import json
+
+    from convfinqa.data.examples import draw_example_sets
+
+    cfg = files["configs/baseline.json"].json()
+    ids = [c["id"] for c in deps["train_val_split"].jsonl("train_fit.jsonl")]
+    sets = draw_example_sets(ids, cfg["example_seeds"], cfg["example_types"])
+    (out / "sets.json").write_text(json.dumps({"pool": "train_fit", "sets": sets}, indent=2))
