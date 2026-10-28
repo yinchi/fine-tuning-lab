@@ -9,7 +9,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from . import attention, decoder, feedforward, label_shift, lora_layer, lora_matrix, pipeline, posttraining, sequence_layout, training_step
+from . import attention, baseline_prompt, decoder, feedforward, history_rounds, label_shift, lora_layer, lora_matrix, pipeline, posttraining, sequence_layout, training_step
 
 # Directory to output generated SVG figures
 FIGURES = Path(__file__).resolve().parents[4] / "docs" / "figures"
@@ -26,6 +26,8 @@ DIAGRAMS = {
     "lora_matrix": lora_matrix.build,
     "lora_layer": lora_layer.build,
     "sequence_layout": sequence_layout.build,
+    "baseline_prompt": baseline_prompt.build,
+    "history_rounds": history_rounds.build,
 }
 
 

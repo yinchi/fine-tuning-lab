@@ -24,6 +24,7 @@ book:
     - part: "Experiments"
       chapters:
         - 301_formatting_conversations.qmd
+        - 302_the_untuned.qmd
   appendices:
     - 902_references.qmd
 

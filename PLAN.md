@@ -65,8 +65,8 @@ Hardware: DGX Spark (NVIDIA GB10, ~121 GB unified memory, aarch64, CUDA 13.2).
 
 ## Data protocol (train, val, dev)
 - **Splits:** train-fit 2,731 conversations (9,979 turns), val 306 (1,125 turns), dev 421 (1,490 turns). Val is 10% of `train.json`, page-grouped; dev has 218 pages and none of them is in train, so val (disjoint from train-fit by page) mirrors dev. The official test split has no labels and is unused.
-- **Systems evaluated on dev, once each, in both history modes** (the retry and self-consistency variants only for the fine-tuned models): the untuned 4B, DSL, few-shot, 3 example sets (§3.2); the LoRA fine-tuned 4B, DSL, seed 0, plus seeds 1 and 2 only if a CI straddles 0 (§3.3/§3.4); untuned and fine-tuned Python (§3.5); the syntax-constrained versions of those four (§3.6). The "no grammar" rows of §3.6 reuse the earlier evaluations (greedy, fixed batch size, so the outputs are the same). The 0.5B smoke run is never evaluated on dev, and the rank sweep (§4.2) is scored on val.
-- **Chosen on val:** the baseline prompt and few-shot sets (examples from train-fit, never from val), the checkpoint (best val loss), the grammar variant (bounded or unbounded numbers) and how Python writes a percent, and the rank sweep. There is no hyperparameter search: the §3.3 configuration is fixed in advance. Val accuracy has a standard error of about 2 points (an estimate), so choices on val use the paired bootstrap and only large differences count.
+- **Systems evaluated on dev, once each, in both history modes** (the retry and self-consistency variants only for the fine-tuned models): the untuned 4B, DSL, in the prompt variant chosen on val (§3.2: 3 example sets if the variant has examples, one run if not); the LoRA fine-tuned 4B, DSL, seed 0, plus seeds 1 and 2 only if a CI straddles 0 (§3.3/§3.4); untuned and fine-tuned Python (§3.5); the syntax-constrained versions of those four (§3.6). The "no grammar" rows of §3.6 reuse the earlier evaluations (greedy, fixed batch size, so the outputs are the same). The 0.5B smoke run is never evaluated on dev, and the rank sweep (§4.2) is scored on val.
+- **Chosen on val:** the baseline prompt variant (number of examples, plain or description system message; the examples come from train-fit, never from val), the checkpoint (best val loss), the grammar variant (bounded or unbounded numbers) and how Python writes a percent, and the rank sweep. There is no hyperparameter search: the §3.3 configuration is fixed in advance. Val accuracy has a standard error of about 2 points (an estimate), so choices on val use the paired bootstrap and only large differences count.
 - **Rules.**
   1. No choice is made from dev results: not prompts, hyperparameters, checkpoints, grammars or translator conventions.
   2. **Freeze:** before the first dev evaluation, a decision-log entry lists every choice made on val, with the git commit. After it, nothing changes because of dev numbers.
@@ -135,7 +135,7 @@ What our setup changes:
   - **Training always uses gold history.**
 
 Our targets:
-- **§3.2, untuned Qwen3-4B-Instruct-2507, few-shot, DSL output:** about **50–65%**. Expect DSL format errors. The paper found GPT-3 was hurt by the unfamiliar DSL syntax. Zero-shot will be lower.
+- **§3.2, untuned Qwen3-4B-Instruct-2507, best prompt variant, DSL output:** about **50–65%**. Expect DSL format errors. The paper found GPT-3 was hurt by the unfamiliar DSL syntax. Zero-shot with only the one-line system message will be lower.
 - **§3.4, after LoRA SFT on about 2,730 train-fit conversations (about 10k turns):** about **70–80%**. Clearing 70 beats FinQANet. Getting to the high 70s matches GPT-4 zero-shot. Going past 80 probably needs reasoning traces, RL, or a bigger model; those are extensions in §4.2.
 - **Breakdowns** (shapes to look for, from paper Tab. 4 and Fig. 5):
   - number-selection turns score much higher than program turns (82.5 vs. 62.1);
@@ -309,11 +309,16 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
 - The `output_format: "dsl" | "python"` parameter is added with the Python experiment (§3.5), not before.
 
 **3.2 The untuned baseline** (`302_the_untuned.qmd`, HEAVY)
-- Runs `Qwen/Qwen3-4B-Instruct-2507` untuned, with 2–3 in-context examples, on dev.
-  - The examples come from **train-fit**: 3 fixed sets, each drawn with its own seed. Report the mean ± std across sets and the per-set results.
-  - Any prompt iteration happens on **val**. Dev is run once, with the final prompt.
-- Uses greedy, batched generation with left padding, with a **fixed batch size and a fixed example order** (sorted by length once), because batch composition changes bf16 logits slightly. Each predicted program is parsed and executed.
-- Reports **execution accuracy** (the headline metric), program accuracy, and the invalid rate. These follow the evaluation rules in §3.4.
+Measures `Qwen/Qwen3-4B-Instruct-2507`, untuned, writing DSL programs. The chapter has an introduction and the exact setup (written); results come after the runs. Everything is scored by the rules of §3.4.
+- **A prompt** (one per **turn**; val: 1,125 turns in 306 conversations, dev: 1,490 in 421): the system message; the **example set** (2 or 3 complete train-fit conversations as earlier chat turns); the target conversation up to question k; the generation prompt. Earlier answers of the target conversation are the gold programs (gold history) or the model's own (predicted history; an invalid answer stays as written).
+- **System messages**, fixed before any run and not tuned: *plain* = the training line "Answer with a program in the ConvFinQA DSL."; *description* = the text in the chapter (the DSL's steps, operations, argument forms and constants, and the rule "write nothing else: no explanation and no code block").
+- **Example sets.** Defined by seed, pool (train-fit) and size only, so the same seed gives the same examples on val and dev. Seeds 0, 1, 2, fixed in advance; each set is a seeded shuffle of train-fit whose first 2 or 3 conversations are used (the 2-example prompt is a prefix of the 3-example one); the three sets share no conversation; saved as the light artifact `example_sets` (conversation ids). Each run uses one set for all its prompts.
+- **Variants, on val** (set 0 where there are examples; predicted history): examples {0, 2, 3} × system message {plain, description} = six variants `e0p e0d e2p e2d e3p e3d`; the no-example ones have no set (one run). Rule, written before any run: take the variant with the highest execution accuracy on val; if the paired-bootstrap interval of its lead over another includes 0, prefer fewer examples, then the plain message. Val accuracy has a standard error of about 2 points, so only large differences count.
+- **Reported, on dev, once, after the freeze:** the chosen variant; with examples, 3 sets × 2 history modes = 6 runs, without, 1 × 2. Both modes are scored on the same prompts, differing only in how earlier answers are filled in. §3.4/§3.5/§3.6 use set 0 of the chosen variant for their untuned rows.
+- **Generation.** Greedy, stop at the end-of-turn token or 96 new tokens (the longest gold program is 58); an output that reaches the limit is scored as written; **batch size 1**, so an output cannot depend on batch composition. Gold history: all turns are independent. Predicted history: one round per turn index over all conversations that reach it.
+- **Cost** (timing run on 48 val turns, 2026-10-28; Qwen3-4B bf16, greedy, 64-token cap): no examples about 1.9 s/turn at batch 1 (answers average 34 tokens, often prose; 1.0 s at batch 16); 2 examples 1.5 s (3,503 prompt tokens; 2.9 s at batch 16); 3 examples 1.8 s (4,752 prompt tokens). Batching does not help with long prompts, because reading them dominates. So the six val variants take about 3 hours, and the dev runs about 0.7 h each (4.5 h for 6 runs; 1.6 h for two zero-shot runs).
+- **Artifacts.** Generation is heavy and scoring is light: `untuned_{split}_{variant}_{seed}_{mode}` writes the predictions (id, turn, output text, tokens, finish reason); `scores_untuned_…` executes and scores them. Both depend on `example_sets`, `eval_turns` and the declared configuration (`configs/baseline.json`: the two system messages, the limits).
+- **Reported:** execution accuracy (headline), program accuracy, the invalid rate by cause, the literal and wrong-scale diagnostics, accuracy by turn index and by Type I/II, the gap between predicted and gold history by turn index, bootstrap CIs per set, and a few failures of each kind. Figures: the prompt and the runs; the two history modes.
 
 **3.3 Training with LoRA** (`303_training_with.qmd`, HEAVY)
 - **Base models:**
@@ -364,11 +369,11 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
   - A comparison whose CI straddles 0 gets 2 extra training seeds for each side. Report mean ± std across seeds, plus **cross-seed agreement**, the share of turns where all seeds give the same answer, and list the turns where they disagree in the error analysis.
   - All of these are **dev** scores.
   - **Untuned models** have no training seed. Their equivalent is the **few-shot example set**.
-    - §3.2 always uses 3 sets, reported as mean ± std, as the ConvFinQA paper did for GPT-3 (Tab. 5).
-    - §3.5 and §3.6 untuned rows use set 1. A comparison that straddles 0 adds sets 2–3, mirroring the training-seed rule.
+    - §3.2 uses 3 sets (seeds 0–2) when the chosen variant has examples, reported as mean ± std, as the ConvFinQA paper did for GPT-3 (Tab. 5).
+    - §3.5 and §3.6 untuned rows use the chosen variant, with set 0 if it has examples. A comparison that straddles 0 adds sets 1–2, mirroring the training-seed rule.
   - **Base vs. fine-tuned:**
     - The paired bootstrap applies as usual. With an expected gap of about 15 points, it should settle the comparison without extra seeds.
-    - The base model is evaluated few-shot and the fine-tuned model zero-shot, each in its best setting. The chapter states this explicitly.
+    - The base model is evaluated in its best prompt variant (§3.2) and the fine-tuned model zero-shot, with the training prompt. The chapter states this explicitly.
   - The chapter explains the procedure with a worked example:
     1. Train A0 and B0 (seed 0) and score both on dev.
     2. Run the paired bootstrap on the difference.
@@ -392,7 +397,7 @@ This chapter uses standard multi-turn SFT: one training sequence per **conversat
 - **Execution:** a safe evaluator parses with `ast` and allows only `Assign`, `BinOp`, `UnaryOp`, `Compare`, `Name`, and numeric `Constant`. It never calls `exec`. The chapter explains why.
 - **History:** turns stay self-contained, as in ConvFinQA, where programs restate their numbers. The model copies numbers from the chat history, so no new mechanism is needed.
 - **Runs:**
-  - The formatting, baseline, training, and evaluation functions take `output_format: "dsl" | "python"`. This chapter calls them with `"python"`, using the same model, hyperparameters, and few-shot examples, and only the output syntax changes.
+  - The formatting, baseline, training, and evaluation functions take `output_format: "dsl" | "python"`. This chapter calls them with `"python"`, using the same model, hyperparameters, prompt variant and examples, and only the output syntax changes.
 - **Results:** a 2×2 table of {DSL, Python} × {untuned, fine-tuned}, showing:
   - execution accuracy, in both history modes;
   - the parse/format failure rate;
@@ -418,7 +423,7 @@ This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters
      - xgrammar was checked on the GB10 (2026-10-26; `constrained.DSL_GRAMMAR`, tests in `tests/test_constrained.py`): the DSL grammar accepts all 8,981 gold programs of train and dev, and Qwen3-4B constrained answers always followed it. In a 16-turn check, zero-shot went from 5 to 6 correct and from 7 to 16 syntactically valid answers; two-shot answers were identical with and without the grammar (15 of 16 correct); compiling takes 0.4 s and generation time was unchanged.
      - A grammar guarantees syntax, not termination: with an unbounded number rule an untuned zero-shot model ran on in digits (`2.7000...0`) up to the token limit. Gold numbers have at most 10 integer and 4 decimal digits and programs at most 120 characters, so a **bounded** variant (digit-count limits) is an option for this level; choose between the two on val.
 - A grounded variant, which restricts numbers to those in the context, is deferred to §4.2.
-- **Runs:** {DSL, Python} × {none, syntax} × {untuned few-shot, fine-tuned}, for 8 evaluations.
+- **Runs:** {DSL, Python} × {none, syntax} × {untuned (best variant), fine-tuned}, for 8 evaluations.
 - **Report:**
   - execution accuracy and invalid rate;
   - accuracy on number-selection vs. program turns;
@@ -539,7 +544,7 @@ Mark each item `[x]` when it's done and verified. Add a short note (run id, head
 - [x] 2.5 How fine-tuning works. By-hand loss on a 4B val conversation = `model(labels=...).loss` (1.889931 both) and = 2.4's `gold_logprobs`; AdamW and cosine-with-warmup written out (schedule checked against the library at every step); accumulation normalization quantified; memory budget (computed weights match measured); `step_cost_*` measurements (4B LoRA r=16 needs gradient checkpointing: 21 GB typical / 34 GB longest batch, ~41 s/step, ~4 h for 342 steps); `sft_demo` (0.5B full fine-tuning via `SFTTrainer`, 40 steps): Trainer's step-0 loss = hand-computed (1.4589), labels = ours, logged lr = our schedule, 3 -> 19 of 24 turns correct (20 in the first run; GPU training is not bit-reproducible, so the chapter computes its numbers from the artifact). No hand-written loop (see decision log).
 - [x] 2.6 LoRA in detail. Parameter count at r=16 computed from the config = PEFT's (33,030,144; 252 modules; 0.82% of the model; about 132 MB in fp32); step-0 logits identical to the base model's (max difference 0.0, bf16 and fp32); merging a random adapter is exact in fp32 (0.002 on an effect of 14.7) but not in bf16 (15.3, with 4% of top tokens changed), so a merged bf16 model is checked before use (§3.4).
 - [x] 3.1 Formatting + splits. Trained tokens are 4.7% of the val tokens (16,417 of 347,006, equal to the 2.4 loss count); template has no generation markers (not needed); all 1,125 val prompts equal the training sequence cut at the answer; dev pages 0 of 218 in train; artifacts `eval_turns` (val 1,125 / dev 1,490 turns) and `train_val_split`.
-- [ ] 3.2 Untuned baseline, 3 example sets (DSL)
+- [ ] 3.2 Untuned baseline: six prompt variants on val; the chosen variant on dev (DSL)
 - [ ] 3.3 Smoke run (0.5B)
 - [ ] 3.3 Main LoRA run (Qwen3-4B, DSL); adapter analysis
 - [ ] 3.4 Evaluation: both history modes, invalid breakdown, retry/self-consistency, bootstrap CIs, error analysis
@@ -600,6 +605,8 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-26: Data protocol written down (section "Data protocol"): dev is page-disjoint from train (0 of 218 pages shared); no retraining on train-fit plus val; a freeze entry before the first dev evaluation; after it, code changes only for genuine bugs, and a disappointing result is reported, not fixed; everything that does not need dev (all code, training, val evaluations) is done first, across all chapters. Checked: the DSL grammar's argument shapes and the digit bounds (10 integer digits, 4 decimals, 120 characters) come from train alone; dev contains no new shape, and the grammar accepts all of dev as a held-out confirmation.
 - 2026-10-26: Chapter 3.1 presents the formatting built in 2.4 and 2.5 and adds the `eval_turns` artifact (the turns of val and dev as tables). The `{% generation %}` check and the `output_format` parameter of the earlier 3.1 plan are dropped from it (TRL uses our labels as they are; the parameter arrives with the Python experiment). A lesson about artifact freshness: adding a function to a module that heavy builders import (here `data/raw.py`) staled every heavy artifact at once, because the code hash covers the module closure; new data helpers therefore go in new modules (`data/tables.py`, imported only where used), which keeps the closure unchanged. The light `train_val_split` rebuilt with identical output, so by early cutoff nothing heavy had to be rebuilt.
 - 2026-10-26: Results are redone once, at the very end: code review and restructure, then a full rebuild from a clean checkout, training included, which becomes the reported run (the earlier run is archived as a pilot). This replaces the idea of re-keying trained artifacts after a refactor. Prose quoting a result must be an inline expression, and claims about results that cannot be generated are checked by hand after the rebuild (convention added to `CLAUDE.md`). Chapters written so far (2.4 to 2.6) still hard-code some numbers from heavy artifacts, to be converted in the final audit.
+- 2026-10-28: Structure of the baseline (§3.2) written down. Few-shot example sets are defined by seed, pool and size only, so the same seed gives the same examples on val and on dev; they are saved as the artifact `example_sets`, drawn as seeded shuffles of train-fit (seeds 0, 1, 2, no shared conversations) so that 2-example prompts are prefixes of 3-example ones; each run uses one set for all its prompts. Prompt development on val is limited to a short list fixed in advance (2 or 3 examples; with or without a compact DSL description in the system message). Generation and scoring are separate artifacts. Correction: the dev baseline is about 8,900 generations (1,490 turns × 3 sets × 2 history modes), not the 27,000 stated earlier.
+- 2026-10-28: §3.2 set-up fixed. Six prompt variants (0/2/3 examples × plain/description system message, the description text fixed in advance), chosen on val by a rule written before the runs; batch size 1 for every baseline run (timing: batching does not help with long prompts, and it removes batch-composition effects); 96 new tokens at most. The zero-example variants have no example set, so a zero-example winner is a single run per history mode. Estimated cost: about 3 hours for the val variants and 1.6 to 4.5 hours for the dev runs (generation time had been unmeasured).
 
 ## Verification
 - `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.

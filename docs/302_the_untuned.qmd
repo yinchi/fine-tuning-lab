@@ -1,0 +1,122 @@
+# The untuned baseline {#sec-baseline}
+
+**You will learn:**
+
+- why we measure the untuned model first, and what a *fair* baseline is;
+- how a prompt is built from example conversations, and why the examples come in fixed *sets*;
+- what is counted when a predicted program is scored.
+
+Fine-tuning will be judged by what it adds to the model we start from, so before training anything we measure
+what `Qwen3-4B-Instruct-2507` already does on ConvFinQA. The comparison is only worth making if the baseline is
+a fair one. A weak prompt would make any later improvement look bigger than it is. So the untuned model gets the
+best help we can give it **without changing its weights**: a description of the DSL, and complete example
+conversations written into the prompt [@brown2020gpt3].
+
+## What we measure
+
+For every turn of a conversation, the model reads a prompt and writes a program. Our executor runs the program, and
+the result is compared with the gold answer: this is **execution accuracy**, and an output that does not run counts as
+wrong. The prompt for turn $k$ ends with question $k$, and what comes before it depends on how the earlier answers
+are supplied (@sec-formatting):
+
+- with the **gold history**, every earlier answer in the prompt is the dataset's own program, so each turn is scored
+  on its own;
+- with the **predicted history**, they are the model's own earlier outputs, mistakes included, and errors compound
+  from turn to turn. This is the setting a real user would meet, and the one we treat as the headline.
+
+@sec-base-instruct explained why the two differ: teacher forcing, and exposure bias.
+
+## What to expect
+
+The ConvFinQA paper found that an unfamiliar program syntax hurt GPT-3 [@chen2022convfinqa], and in @sec-probing the
+untuned model's errors were mostly failures of **format**: prose, or arithmetic in other notations, instead of a
+program. So a good part of what the examples and the description can fix is the format. Choosing the right operation
+and numbers is the other part, and it is the one we expect fine-tuning to have to teach.
+
+## How the experiment is organised
+
+- **Prompts.** A prompt holds the system message, then the **example set** (complete training conversations, written as
+  earlier turns of the chat), then the target conversation up to the current question. The system message is either a
+  single line or the same line plus a compact description of the DSL and the rule that an answer is a program and
+  nothing else.
+- **Example sets.** Which examples are used changes the result, and an untuned model has no training seed to vary, so
+  the examples play that part. A set is fixed by its seed alone, so the same seed gives the same examples whichever
+  data we evaluate on. When the prompt has examples, the baseline is run once for each of three sets, and we report each result and their
+  spread.
+- **Choosing the prompt.** The variants we try (how many examples, with or without the description, and none at all) are
+  listed in advance, and the choice between them is made on the **validation** data. The development data are touched
+  only for the numbers the book reports, once, with the prompt already chosen.
+- **Scoring.** Generation and scoring are separate steps, so the measures can be refined without generating again.
+  Besides execution accuracy we count how the invalid outputs fail, how well the programs match the gold ones, and
+  whether numbers are copied from the page as they are written there.
+
+## The experiment, exactly
+
+### The prompt
+
+@fig-baseline-prompt shows one prompt, and the three runs that the example sets make.
+
+![The baseline's prompt (left) and its runs (right). The system message and the examples are the same in every prompt of a run, and the target conversation changes with every turn. Each run uses one example set; the baseline is one run per set.](figures/baseline_prompt.svg){#fig-baseline-prompt fig-alt="Left: a row of boxes. A grey system message box, two blue example conversation boxes, a yellow box for the target conversation up to question k, and a dashed green box where the model writes answer k. A bracket marks the first three as fixed for the whole run and the yellow box as changing with every turn. Right: three blue boxes for sets 1, 2 and 3, each with an arrow to a box for a pass over every turn of the split, and an arrow to its own accuracy."}
+
+The **system message** has two forms. The plain one is the line the models are trained with, `Answer with a program in the
+ConvFinQA DSL.` The other adds a description of the language and the rule that the answer is the program and nothing
+else. Its text is fixed now, and is not tuned on the validation data:
+
+```text
+Answer with a program in the ConvFinQA DSL, and write nothing else: no explanation and no code block.
+
+A program is a single number, or a list of steps separated by ", ":
+    operation(argument, argument)
+The operations are add, subtract, multiply, divide, exp and greater (greater gives yes or no).
+An argument is one of:
+    a number copied from the page, without thousands separators (a percentage keeps its % sign);
+    #k, the result of step k, counting steps from 0;
+    a constant: const_1 to const_9, const_10, const_100 and so on up to const_1000000000, or const_m1 for -1.
+```
+
+The **examples** are 2 or 3 complete conversations from train-fit, written as earlier turns of the chat, as in
+@sec-formatting. A set of examples is a seeded shuffle of train-fit, of which the first 2 or 3 conversations are used, so
+that the two-example prompt is a prefix of the three-example one. The seeds are 0, 1 and 2, fixed in advance, and
+the three sets share no conversation. The sets are saved, as lists of conversation ids, so that a run can be checked
+against them.
+
+### The variants, and the choice
+
+Six prompts are compared on the validation data, with the first set where there are examples:
+
+| | one-line system message | with the description |
+|---|---|---|
+| no examples | `e0p` | `e0d` |
+| 2 examples | `e2p` | `e2d` |
+| 3 examples | `e3p` | `e3d` |
+
+The prompts with no examples have no set, so they are a single run. The six are scored with the **predicted history**,
+the headline setting, and the choice is made by a rule written down before any of them is run: take the variant with
+the highest execution accuracy on the validation data; if the paired bootstrap interval of its lead over another does not
+exclude zero, prefer the one with fewer examples, then the plain system message. Only large differences count: the
+standard error of an accuracy on this much data is about two points.
+
+### The runs that are reported
+
+The chosen variant is then run on the development data, once, after the decisions of the project are frozen. With
+examples, that is one run per set (three) and per history mode (two); without examples, one run per history mode. Both
+modes are scored on the same predictions of the same prompts, which differ only in how the earlier answers are filled in.
+
+@fig-history-rounds shows the difference between the two modes in how the runs are organised.
+
+![The two history modes on four conversations of one to four turns. With the gold history, every turn is its own prompt, and all ten can be built in advance and run in any order. With the predicted history, a round asks every conversation that has reached turn k, and the model's answers to earlier turns enter the prompts of the next round.](figures/history_rounds.svg){#fig-history-rounds fig-alt="Two grids of turn boxes for four conversations with four, two, three and one turns. Left, gold history: all ten boxes are inside one dashed frame, since every turn is independent. Right, predicted history: boxes are grouped in four dashed frames, rounds 1 to 4, one per turn index; arrows join each box to the next turn of the same conversation."}
+
+### Generation
+
+Decoding is greedy and stops at the end-of-turn token or after 96 new tokens, which is well above the longest gold
+program (58 tokens). Prompts are run **one at a time**: with prompts this long the model spends its time reading, so
+batching gains little, and a prompt's output then cannot depend on which other prompts share its batch (bf16 results
+change slightly with the batch). An output that reaches the limit is scored as written. Every prediction is stored with the
+conversation id, the turn, the text, the number of tokens and why generation stopped, and scoring reads these files, so
+the measures can change without generating again.
+
+### Scoring
+
+As defined for the evaluation of the fine-tuned model: execution accuracy (an output that does not run counts as wrong),
+the match of the program with the gold one, the invalid rate by cause, accuracy by turn index and by conversation type,
+and the diagnostics for how numbers are written and for answers that are off by a power of ten.

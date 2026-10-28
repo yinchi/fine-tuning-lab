@@ -5,7 +5,7 @@ import xml.dom.minidom
 import pytest
 
 from convfinqa.book.diagrams import (
-    attention, decoder, feedforward, label_shift, lora_layer, lora_matrix, pipeline, posttraining, sequence_layout, training_step,
+    attention, baseline_prompt, decoder, feedforward, history_rounds, label_shift, lora_layer, lora_matrix, pipeline, posttraining, sequence_layout, training_step,
 )
 from convfinqa.book.diagrams.svg import Box, Svg, arrowhead, rounded_path, waypoints
 
@@ -138,3 +138,19 @@ def test_sequence_layout_diagram_shows_both_layouts():
     for word in ["one sequence", "turn 1", "turn 2", "turn 3", "page + Q1", "system", "3 sequences"]:
         assert word in out
     assert out.count("#d5e8d4") >= 7  # trained answers, and the legend swatch
+
+
+def test_baseline_prompt_diagram_shows_the_prompt_and_the_runs():
+    out = baseline_prompt.build()
+    xml.dom.minidom.parseString(out)
+    for word in ["system", "example", "conversation A", "conversation B", "target conversation", "writes Ak",
+                 "set 1", "set 2", "set 3", "mean ± spread"]:
+        assert word in out
+
+
+def test_history_rounds_diagram_shows_both_modes():
+    out = history_rounds.build()
+    xml.dom.minidom.parseString(out)
+    for word in ["Gold history", "Predicted history", "round 1", "round 4", "conv 4"]:
+        assert word in out
+    assert out.count(">Q1<") == 8  # four conversations in each of the two grids
