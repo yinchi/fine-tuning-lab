@@ -6,18 +6,18 @@ import re
 
 from .formatting import SYSTEM_PROMPT, prompt_messages
 
-VARIANT = re.compile(r"e([023])([pd])")
-"""A variant name: `e` + the number of examples (0, 2 or 3) + `p` (plain system message) or `d` (description)."""
+VARIANT = re.compile(r"e([023])([pdf])")
+"""A variant name: `e` + the number of examples (0, 2 or 3) + `p` (plain system message), `d` (description) or `f` (description and the flat-steps rule; added after reading the validation errors of the first six)."""
 
-VARIANTS = ("e0p", "e0d", "e2p", "e2d", "e3p", "e3d")
+VARIANTS = ("e0p", "e0d", "e2p", "e2d", "e3p", "e3d", "e3f")
 
 
 def parse_variant(name: str) -> tuple[int, str]:
-    """The number of examples and the kind of system message (`plain` or `description`) of a variant."""
+    """The number of examples and the kind of system message (`plain`, `description` or `flat`) of a variant."""
     m = VARIANT.fullmatch(name)
     if not m:
         raise ValueError(f"unknown prompt variant {name!r}; expected one of {VARIANTS}")
-    return int(m.group(1)), {"p": "plain", "d": "description"}[m.group(2)]
+    return int(m.group(1)), {"p": "plain", "d": "description", "f": "flat"}[m.group(2)]
 
 
 def prompt_chat(

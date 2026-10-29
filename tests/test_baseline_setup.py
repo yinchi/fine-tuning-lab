@@ -63,8 +63,8 @@ def test_the_configured_pattern_has_one_type_ii_in_the_first_two_positions():
 
 def test_variants():
     assert [parse_variant(v) for v in VARIANTS] == [
-        (0, "plain"), (0, "description"), (2, "plain"), (2, "description"), (3, "plain"), (3, "description")]
-    for bad in ("e1p", "e2x", "2p", "e2pp", ""):
+        (0, "plain"), (0, "description"), (2, "plain"), (2, "description"), (3, "plain"), (3, "description"), (3, "flat")]
+    for bad in ("e1p", "e2x", "e1f", "2p", "e2pp", ""):
         with pytest.raises(ValueError):
             parse_variant(bad)
 
@@ -93,3 +93,9 @@ def test_with_no_examples_the_prompt_is_the_conversation_alone():
     chat = prompt_chat(CONV, 1, SYSTEM_PROMPT)
     assert [m["role"] for m in chat] == ["system", "user", "assistant", "user"]
     assert chat[1:] == conversation_messages(CONV)[1:4]
+
+
+def test_the_flat_message_extends_the_description_with_the_no_nesting_rule():
+    flat, description = CONFIG["system"]["flat"], CONFIG["system"]["description"]
+    assert flat.startswith(description) and flat != description
+    assert "never another operation" in flat and "divide(#0, 3)" in flat
