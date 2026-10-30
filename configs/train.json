@@ -1,0 +1,22 @@
+{
+  "common": {
+    "lora": {"r": 16, "alpha": 32, "dropout": 0.05, "target_modules": "all-linear"},
+    "lr": 0.0002,
+    "scheduler": "cosine",
+    "warmup_ratio": 0.03,
+    "weight_decay": 0.0,
+    "max_grad_norm": 1.0,
+    "epochs": 2,
+    "max_steps": null,
+    "micro_batch": 4,
+    "accumulation": 4,
+    "max_length": 3584,
+    "eval_every": 50,
+    "gradient_checkpointing": true,
+    "memory_cap_gb": 80
+  },
+  "runs": {
+    "smoke": {"model": "Qwen/Qwen2.5-0.5B-Instruct", "max_steps": 50, "eval_every": 10},
+    "main": {"model": "Qwen/Qwen3-4B-Instruct-2507"}
+  }
+}

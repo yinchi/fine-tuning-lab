@@ -1,0 +1,188 @@
+# Training with LoRA {#sec-training}
+
+**You will learn:**
+
+- the settings of the training run, and why each one has the value it has;
+- how the work is organised: a short check on a small model, then the main run.
+
+@sec-fine-tuning showed what one training step does, and @sec-lora what a LoRA adapter is. This chapter puts the two
+to work: it trains an adapter for `Qwen3-4B-Instruct-2507` on the training conversations, formatted as in
+@sec-formatting. The machinery has nothing new in it. The work is in choosing the settings, and in checking while the
+run goes that it does what we think it does.
+
+## The data
+
+The run trains on **train-fit**, and the **validation** split is what it is checked against.
+
+```{python}
+#HEAVY
+import math
+
+import pandas as pd
+
+from convfinqa.artifacts import artifact, get
+
+n_fit = sum(1 for _ in get("train_val_split").jsonl("train_fit.jsonl"))
+n_val = sum(1 for _ in get("train_val_split").jsonl("val.jsonl"))
+```
+
+There are `{python} f"{n_fit:,}"` training conversations and `{python} n_val` validation conversations. Every
+conversation is one training example: the system message, then the questions and answers in turn, with the loss counted
+on the answers only (@sec-fine-tuning, "Which tokens count"). The development split is not used here, not even to
+choose a checkpoint. Everything that is decided in this chapter is decided on the validation split.
+
+## The settings
+
+The settings of every run are in one file, `configs/train.json`: the ones all runs share, and a few entries for each
+named run. A light artifact, `train_config_{run}`, merges the two for one run, so a run's settings are a file that can be
+read, and a change to one run's entry does not change what the others were built from.
+
+```{python}
+@artifact("train_config_{run}", files=["configs/train.json"])
+def build_train_config(out, deps, files, *, run: str):
+    import json
+
+    from convfinqa.train_config import run_config
+
+    cfg = run_config(files["configs/train.json"].json(), run)
+    (out / "config.json").write_text(json.dumps(cfg, indent=2))
+```
+
+The two runs of this chapter, with the settings that decide how it behaves:
+
+```{python}
+#HEAVY
+cfg = get("train_config_main").json("config.json")
+smoke = get("train_config_smoke").json("config.json")
+sci = lambda x: f"{x:.0e}".replace("e-0", "e-")
+demo = get("sft_demo").json("result.json")
+full_lr = max(h["learning_rate"] for h in demo["log_history"] if "learning_rate" in h)
+
+steps_per_epoch = math.ceil(n_fit / (cfg["micro_batch"] * cfg["accumulation"]))
+steps = steps_per_epoch * cfg["epochs"]
+warmup = math.ceil(cfg["warmup_ratio"] * steps)
+
+pd.DataFrame([
+    ("model", smoke["model"], cfg["model"]),
+    (
+        "LoRA rank r / alpha / dropout",
+        f"{smoke['lora']['r']} / {smoke['lora']['alpha']} / {smoke['lora']['dropout']}",
+        f"{cfg['lora']['r']} / {cfg['lora']['alpha']} / {cfg['lora']['dropout']}"
+    ),
+    (
+        "adapted layers",
+        smoke["lora"]["target_modules"],
+        cfg["lora"]["target_modules"]
+    ),
+    (
+        "learning rate (peak)",
+        sci(smoke["lr"]),
+        sci(cfg["lr"])
+    ),
+    (
+        "schedule, warmup",
+        f"{smoke['scheduler']},{smoke['warmup_ratio']:.0%}",
+        f"{cfg['scheduler']}, {cfg['warmup_ratio']:.0%}"
+    ),
+    (
+        "weight decay",
+        smoke["weight_decay"],
+        cfg["weight_decay"]
+    ),
+    (
+        "gradient clipping (max norm)",
+        smoke["max_grad_norm"],
+        cfg["max_grad_norm"]
+    ),
+    (
+        "micro-batch × accumulation",
+        f"{smoke['micro_batch']} × {smoke['accumulation']}",
+        f"{cfg['micro_batch']} × {cfg['accumulation']}"
+    ),
+    ("epochs", smoke["epochs"], cfg["epochs"]),
+    (
+        "optimizer steps",
+        smoke["max_steps"],
+        f"{steps} ({steps_per_epoch} per epoch)"
+    ),
+    (
+        "maximum length (tokens)",
+        f"{smoke['max_length']:,}",
+        f"{cfg['max_length']:,}"
+    ),
+    (
+        "evaluation on validation every",
+        f"{smoke['eval_every']} steps",
+        f"{cfg['eval_every']} steps"
+    ),
+    (
+        "gradient checkpointing",
+        "on" if smoke["gradient_checkpointing"] else "off",
+        "on" if cfg["gradient_checkpointing"] else "off"
+    ),
+], columns=["setting", "smoke run", "main run"]).set_index("setting")
+```
+
+Most of these were explained in the chapters before this one. The reasons, in order:
+
+**LoRA.** Rank `{python} cfg["lora"]["r"]`, alpha `{python} cfg["lora"]["alpha"]` (so the update is scaled by
+$\alpha / r =$ `{python} f"{cfg['lora']['alpha'] / cfg['lora']['r']:g}"`), dropout `{python} cfg["lora"]["dropout"]`
+on the adapter's input, and an adapter on every linear layer of the decoder (`{python} cfg["lora"]["target_modules"]`):
+the seven matrices of @sec-lora. The model's own weights stay in bf16 and the adapter, which is what trains, in fp32.
+The rank is a guess at how much freedom the task needs, and the book returns to it at the end.
+
+**The learning rate and its schedule.** A peak of `{python} sci(cfg["lr"])`, reached after a linear warmup of
+`{python} warmup` steps and then falling along half a cosine wave to zero by step `{python} steps`
+(@sec-fine-tuning, "The learning-rate schedule"). The rate is `{python} f"{cfg['lr'] / full_lr:.0f}"` times that of the full
+fine-tuning run of @sec-fine-tuning (`{python} sci(full_lr)`): the adapter starts at zero and has to travel to be
+useful, and it has far fewer weights to move.
+
+**The batch.** Micro-batches of `{python} cfg["micro_batch"]` conversations, with
+`{python} cfg["accumulation"]` of them accumulated into each update, so each update uses
+`{python} cfg["micro_batch"] * cfg["accumulation"]` conversations. With `{python} f"{n_fit:,}"` conversations that makes `{python} steps_per_epoch` steps an epoch, and
+`{python} steps` in the `{python} cfg["epochs"]` epochs. Gradient clipping at a norm of
+`{python} cfg["max_grad_norm"]` guards against one odd batch.
+
+**Weight decay.** It is zero. Weight decay pulls every trainable weight a little towards zero at each step, a brake on
+weights that would otherwise keep growing. It earns its keep when a large network trains for a long time on much data.
+Here the adapter starts at zero, trains for about `{python} steps` steps, and the checkpoint is chosen by its validation
+loss, which already guards against training for too long. Pulling the adapter towards zero would also pull the model
+towards where it started, which the learning rate and the choice of checkpoint control more directly. If the
+validation loss turns up while the training loss still falls, this is the first setting to revisit.
+
+**Length and memory.** Conversations are cut at `{python} f"{cfg['max_length']:,}"` tokens (the longest in the data is
+3,460, @sec-convfinqa, so nothing is cut). Gradient checkpointing is on, as in @sec-fine-tuning, because the
+activations of such long sequences would otherwise take more memory than the weights do. The process is capped at
+`{python} cfg["memory_cap_gb"]` GB of the GPU's memory, which the desktop shares.
+
+## The two runs
+
+```{python}
+#HEAVY
+from convfinqa.step_cost import estimate_hours
+
+step_s = get("step_cost_main_lora_on").json("cost.json")["median_step_s"]
+hours = estimate_hours(
+    step_s,
+    n_fit,
+    cfg["epochs"],
+    cfg["micro_batch"] * cfg["accumulation"]
+)
+
+# the smoke run changes the model and the length of the run,
+# and nothing about how the model learns
+assert {k for k in cfg if cfg[k] != smoke[k]} \
+    == {"model", "max_steps", "eval_every"}
+assert cfg["weight_decay"] == 0
+```
+
+The **smoke run** trains `{python} smoke["model"]` for `{python} smoke["max_steps"]` steps with the same recipe. It
+takes minutes, and is there to check the whole chain (the data, the training, the choice of the best checkpoint, the
+numbers recorded) before the main run spends hours. Nothing is concluded from its accuracy. It changes only the
+model, the number of steps and how often the validation loss is measured. The **main run** trains
+`{python} cfg["model"]` for the full `{python} steps` steps. At the `{python} f"{step_s:.0f}"` seconds a step that
+@sec-fine-tuning measured with this recipe, it takes about `{python} f"{hours:.1f}"` hours.
+
+Both runs measure the loss on the validation conversations before the first step and then every
+`{python} cfg["eval_every"]` steps (every `{python} smoke["eval_every"]` for the smoke run), and at the end. Only the
+checkpoint with the lowest validation loss is kept, as the adapter that the rest of the book uses.

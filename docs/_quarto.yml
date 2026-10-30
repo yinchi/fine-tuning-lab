@@ -25,6 +25,7 @@ book:
       chapters:
         - 301_formatting_conversations.qmd
         - 302_the_untuned.qmd
+        - 303_training_with.qmd
   appendices:
     - 902_references.qmd
 
