@@ -58,3 +58,26 @@ def test_the_final_step_is_evaluated_even_when_it_is_not_a_multiple_of_eval_step
     control = NS(should_evaluate=False)
     callback.on_step_end(args, NS(global_step=50, max_steps=50), control)
     assert control.should_evaluate is False       # a multiple: the Trainer evaluates there itself
+
+
+def test_the_evaluation_loss_averaged_over_conversations_is_the_mean_over_tokens(monkeypatch):
+    import torch
+    from trl import SFTTrainer
+
+    from convfinqa.finetune import _token_weighted_trainer
+
+    cls = _token_weighted_trainer()
+    losses = {"a": 2.0, "b": 1.0}                       # mean loss of each conversation
+    answer_tokens = {"a": 4, "b": 2}                    # and the number of answer tokens it has
+    current = {}
+    monkeypatch.setattr(SFTTrainer, "prediction_step", lambda self, *a, **k: (torch.tensor(losses[current["id"]]), None, None))
+    trainer = object.__new__(cls)
+    trainer.mean_eval_tokens = sum(answer_tokens.values()) / len(answer_tokens)
+    scaled = []
+    for conv, n in answer_tokens.items():
+        current["id"] = conv
+        labels = torch.tensor([[-100, -100] + [7] * n])  # the first position is dropped by the shift: n counted
+        loss, _, _ = trainer.prediction_step(None, {"labels": labels}, False)
+        scaled.append(float(loss))
+    token_weighted = sum(losses[c] * answer_tokens[c] for c in losses) / sum(answer_tokens.values())
+    assert sum(scaled) / len(scaled) == pytest.approx(token_weighted)

@@ -187,6 +187,11 @@ Both runs measure the loss on the validation conversations before the first step
 `{python} cfg["eval_every"]` steps (every `{python} smoke["eval_every"]` for the smoke run), and at the end. Only the
 checkpoint with the lowest validation loss is kept, as the adapter that the rest of the book uses.
 
+The validation loss is the mean over answer tokens, so that every answer token weighs the same, as in the training loss
+and in the loss of the untuned model measured in @sec-probing. (The Trainer's own evaluation averages the mean losses
+of the conversations instead, which gives a short conversation the weight of a long one; the training code corrects
+for that, so that the first validation loss can be compared with the untuned model's.)
+
 ## The code
 
 Two artifacts carry a run. Both are named by the run (`smoke`, `main`) and the seed of the training. `lora_{run}_{seed}`

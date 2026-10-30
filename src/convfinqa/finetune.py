@@ -31,11 +31,34 @@ def _eval_at_end_callback():
     return EvalAtEnd()
 
 
+def _token_weighted_trainer():
+    """`SFTTrainer` whose evaluation loss is the mean over answer tokens, not over conversations.
+
+    With an evaluation batch of one conversation, the Trainer averages the conversations' mean losses, so a short
+    conversation counts as much as a long one. Training weighs every answer token equally (the batch loss is
+    divided by the number of answer tokens in it), and so does `probing.mean_gold_nll`. This trainer scales each
+    conversation's loss by its share of the average number of answer tokens, so that the average over conversations
+    is the average over tokens. `mean_eval_tokens` must be set to that average before evaluating.
+    """
+    from trl import SFTTrainer
+
+    class TokenWeightedSFTTrainer(SFTTrainer):
+        mean_eval_tokens = 1.0
+
+        def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
+            loss, logits, labels = super().prediction_step(model, inputs, prediction_loss_only, ignore_keys)
+            tokens = int((inputs["labels"][..., 1:] != -100).sum())
+            return loss * (tokens / self.mean_eval_tokens), logits, labels
+
+    return TokenWeightedSFTTrainer
+
+
 def train_lora(cfg: dict, train_convs: list[dict], val_convs: list[dict], out: Path, seed: int) -> dict:
     """Fine-tune a model with a LoRA adapter, keep the adapter with the lowest validation loss, and save it.
 
     The base model's weights are bf16 and stay frozen; the adapter, which trains, is fp32 (both are checked).
-    The loss counts the answer tokens of every conversation only (`formatting.tokenize_conversation`). The
+    The loss counts the answer tokens of every conversation only (`formatting.tokenize_conversation`), in training
+    and on the validation conversations alike: every answer token weighs the same (`_token_weighted_trainer`). The
     validation loss is measured before the first step, every `eval_every` steps and after the last one; the
     checkpoint with the lowest is loaded at the end and written to `out / "adapter"`.
 
@@ -54,7 +77,7 @@ def train_lora(cfg: dict, train_convs: list[dict], val_convs: list[dict], out: P
     import torch
     from peft import LoraConfig, get_peft_model
     from transformers import AutoModelForCausalLM, AutoTokenizer
-    from trl import SFTConfig, SFTTrainer
+    from trl import SFTConfig
 
     torch.cuda.set_per_process_memory_fraction(
         min(1.0, cfg["memory_cap_gb"] / (torch.cuda.get_device_properties(0).total_memory / GB))
@@ -88,10 +111,13 @@ def train_lora(cfg: dict, train_convs: list[dict], val_convs: list[dict], out: P
             load_best_model_at_end=True, metric_for_best_model="eval_loss", greater_is_better=False,
             logging_steps=1, report_to="none", disable_tqdm=True, seed=seed, data_seed=seed,
         )
-        trainer = SFTTrainer(
+        trainer = _token_weighted_trainer()(
             model=model, args=args, train_dataset=train, eval_dataset=evaluation, processing_class=tok,
             callbacks=[_eval_at_end_callback()],
         )
+        trainer.mean_eval_tokens = sum(
+            sum(l != -100 for l in row["labels"][1:]) for row in trainer.eval_dataset
+        ) / len(trainer.eval_dataset)
         torch.cuda.reset_peak_memory_stats()
         start = time.perf_counter()
         trainer.train()
