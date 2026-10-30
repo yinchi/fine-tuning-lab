@@ -92,6 +92,10 @@ def crash_heavy(out: Path, deps: Deps):
     (out / "partial.txt").write_text("half")
     os._exit(3)
 
+@artifact("onheavy", deps=["heavy_7"])
+def onheavy(out: Path, deps: Deps):
+    (out / "o.txt").write_text("on:" + deps["heavy_7"].file("h.txt").read_text())
+
 @artifact("boom")
 def boom(out: Path, deps: Deps):
     (out / "partial.txt").write_text("half")
@@ -278,6 +282,43 @@ def test_allow_stale_loads_old_result_but_still_raises_on_missing(toy, monkeypat
     assert h.stale and h.file("h.txt").read_text() == "5"
     with pytest.raises(A.StaleArtifactError):
         reg.get("heavy_6")  # never built: ALLOW_STALE does not help
+
+
+def test_allow_stale_builds_a_light_artifact_from_a_stale_heavy_input_without_saving_it(toy, monkeypatch):
+    monkeypatch.setenv("RUN_HEAVY", "1")
+    reg = toy.registry()
+    reg.get("onheavy")
+    monkeypatch.delenv("RUN_HEAVY")
+    toy.edit('str(n))\n\n@artifact("crash', 'str(n + 1))\n\n@artifact("crash')
+    reg.catalog.load()
+    with pytest.raises(A.StaleArtifactError):
+        reg.get("onheavy")                                # the heavy input is stale: strict policy refuses
+    saved = (reg.dir / "onheavy" / "node.json").read_text()
+    monkeypatch.setenv("ALLOW_STALE", "1")
+    h = reg.get("onheavy")
+    assert h.stale and h.file("o.txt").read_text() == "on:7"
+    assert h.path != reg.dir / "onheavy"                  # built elsewhere, for this use
+    assert (reg.dir / "onheavy" / "node.json").read_text() == saved   # nothing recorded
+    assert reg.status("onheavy").kind == "stale"
+
+
+def test_allow_stale_builds_a_missing_light_artifact_from_a_stale_heavy_input(toy, monkeypatch):
+    monkeypatch.setenv("RUN_HEAVY", "1")
+    reg = toy.registry()
+    reg.get("heavy_7")
+    monkeypatch.delenv("RUN_HEAVY")
+    toy.edit('str(n))\n\n@artifact("crash', 'str(n + 1))\n\n@artifact("crash')
+    reg.catalog.load()
+    monkeypatch.setenv("ALLOW_STALE", "1")
+    h = reg.get("onheavy")                                # never built
+    assert h.stale and h.file("o.txt").read_text() == "on:7"
+    assert reg.status("onheavy").kind == "missing"        # and still missing on disk
+
+
+def test_allow_stale_does_not_build_from_a_heavy_input_that_was_never_built(toy, monkeypatch):
+    monkeypatch.setenv("ALLOW_STALE", "1")
+    with pytest.raises(A.StaleArtifactError):
+        toy.registry().get("onheavy")
 
 
 def test_build_command_builds_heavy_artifact(toy, monkeypatch):

@@ -9,9 +9,12 @@ Module-level `artifact` and `get` work on the default registry, `DEFAULT`.
 
 from __future__ import annotations
 
+import atexit
 import contextlib
 import os
+import shutil
 import sys
+import tempfile
 import time
 import warnings
 from pathlib import Path
@@ -20,7 +23,7 @@ from . import subprocess_build
 from .catalog import Catalog, active_catalog
 from .errors import BuildError, StaleArtifactError
 from .handles import Deps, Files, Handle, InputFile, Status
-from .hashing import is_framework
+from .hashing import hash_outputs, is_framework, sha256_json
 from .policy import Action, Policy, refusal_message, show_stale_warning
 from .provenance import drift_notes, provenance
 from .records import ChapterRecords
@@ -216,21 +219,7 @@ class Registry:
                 fd = os.open(self.store.log_path(name), os.O_WRONLY | os.O_CREAT | os.O_APPEND)
                 os.dup2(fd, 1)
                 os.dup2(fd, 2)
-            config = spec.config(params, self.root)
-            if missing := [rel for rel, h in config["files"].items() if h is None]:
-                raise BuildError(f"cannot build {name!r}: declared input file(s) missing: {missing}")
-            # The builder sees the very hashes recorded in the config, read once.
-            files = Files({rel: InputFile(self.root / rel, h) for rel, h in config["files"].items()})
-            args = [out, Deps(dep_handles)] + ([files] if spec.files else [])
-            before = set(sys.modules)
-            started = time.time()
-            with preserved_rng_state(), contextlib.chdir(out):
-                seed_everything(config["seed"])
-                spec.fn(*args, **params)
-            dynamic = sorted(
-                m for m in set(sys.modules) - before
-                if (m == "convfinqa" or m.startswith("convfinqa.")) and not is_framework(m)
-            )
+            config, dynamic, started = self._call_builder(name, spec, params, out, dep_handles)
             self.store.commit(name, {
                 "name": name,
                 "version": spec.version,
@@ -242,6 +231,61 @@ class Registry:
                 "built_at": time.strftime("%Y-%m-%dT%H:%M:%S%z"),
                 "duration_s": round(time.time() - started, 1),
             })
+
+    def _call_builder(self, name: str, spec, params: dict, out: Path, dep_handles: dict) -> tuple[dict, list, float]:
+        """Run the builder of `name` into `out`, as `execute` and `_provisional` both do.
+
+        Checks the declared input files, calls the builder as `fn(out, deps, [files], **fields)` with the
+        random state seeded from the build seed (and restored afterwards) and the working directory set
+        to `out`, and finds the `convfinqa` modules it loaded beyond the static import analysis.
+
+        Returns:
+            The config, the sorted dynamic modules, and the start time.
+        """
+        config = spec.config(params, self.root)
+        if missing := [rel for rel, h in config["files"].items() if h is None]:
+            raise BuildError(f"cannot build {name!r}: declared input file(s) missing: {missing}")
+        # The builder sees the very hashes recorded in the config, read once.
+        files = Files({rel: InputFile(self.root / rel, h) for rel, h in config["files"].items()})
+        args = [out, Deps(dep_handles)] + ([files] if spec.files else [])
+        before = set(sys.modules)
+        started = time.time()
+        with preserved_rng_state(), contextlib.chdir(out):
+            seed_everything(config["seed"])
+            spec.fn(*args, **params)
+        dynamic = sorted(
+            m for m in set(sys.modules) - before
+            if (m == "convfinqa" or m.startswith("convfinqa.")) and not is_framework(m)
+        )
+        return config, dynamic, started
+
+    def _provisional(self, name: str) -> Handle:
+        """Build the light artifact `name` for this use only, from inputs that may be stale (`ALLOW_STALE`).
+
+        Nothing is recorded: no `node.json` is written and the artifact on disk is left as it is, so it
+        stays stale or missing and is rebuilt properly once its inputs are. The result is in a temporary
+        directory, removed when the process ends, and the handle is marked `stale`. A heavy input that
+        is stale is used as it is; one that was never built, or a light input that cannot be made
+        this way, raises `StaleArtifactError`.
+        """
+        spec, params = self.catalog.resolve(name)
+        dep_handles = {}
+        for d in spec.dep_names(params):
+            dep_spec, _ = self.catalog.resolve(d)
+            dep_status = self.status(d)
+            if dep_status.fresh:
+                dep_handles[d] = self.store.handle(d)
+            elif not dep_spec.heavy:
+                dep_handles[d] = self._provisional(d)
+            elif dep_status.kind == "stale":
+                dep_handles[d] = self.store.handle(d, stale=True)
+            else:
+                raise StaleArtifactError(refusal_message(d, dep_status))
+        out = Path(tempfile.mkdtemp(prefix=f"{name}.provisional-"))
+        atexit.register(shutil.rmtree, out, ignore_errors=True)
+        self._call_builder(name, spec, params, out, dep_handles)
+        outputs = hash_outputs(out)
+        return Handle(name, out, sha256_json(outputs), True, frozenset(outputs))
 
     def _refresh_light_inputs(self, name: str) -> None:
         """Rebuild, in this process, the stale or missing light artifacts that `name` is built from.
@@ -265,8 +309,9 @@ class Registry:
 
         `policy` defaults to the one the environment asks for (`RUN_HEAVY`, `ALLOW_STALE`). The light
         artifacts `name` is built from are brought up to date first. If `name` is light and cannot be
-        rebuilt because a heavy input is stale, `allow_stale` loads its old result, like a heavy one;
-        that handle has `stale=True`.
+        rebuilt because a heavy input is stale, `allow_stale` builds it for this use from the stale input
+        (`_provisional`, nothing is saved); failing that, it loads the artifact's old result, like a heavy
+        one. Either handle has `stale=True`.
 
         The use is recorded for the running chapter (`records`), so that the chapter is executed again
         when the artifact changes. Raises `StaleArtifactError` if the policy refuses, `BuildError` if
@@ -286,10 +331,16 @@ class Registry:
                     h = self.ensure(name, allow_heavy=policy.run_heavy)
                 except StaleArtifactError:
                     # Only a light artifact gets here: its rebuild needs a heavy input that is not allowed.
-                    if not (policy.allow_stale and st.kind == "stale"):
+                    if not policy.allow_stale:
                         raise
-                    h = self.store.handle(name, stale=True)
-                    show_stale_warning(name, st.reason)
+                    try:
+                        h = self._provisional(name)
+                        show_stale_warning(name, "built for this use from stale inputs, and not saved")
+                    except StaleArtifactError:
+                        if st.kind != "stale":
+                            raise
+                        h = self.store.handle(name, stale=True)
+                        show_stale_warning(name, st.reason)
             case Action.USE_STALE:
                 h = self.store.handle(name, stale=True)
                 show_stale_warning(name, st.reason)

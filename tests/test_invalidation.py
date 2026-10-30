@@ -281,12 +281,21 @@ def test_without_allow_stale_a_light_artifact_with_a_stale_heavy_input_is_refuse
         reg.get("table", policy=Policy())
 
 
-def test_allow_stale_cannot_load_a_light_artifact_that_was_never_built(book):
+def test_allow_stale_builds_a_light_artifact_that_was_never_built_without_saving_it(book):
     book.write("301_a", chapter(DATA, TRAIN, TABLE))
     reg = book.registry()
     reg.get("train", policy=BUILD_ALL)  # train exists; table does not
     book.write("301_a", book.read("301_a").replace('"model of "', '"retrained model of "'))
-    with pytest.raises(A.StaleArtifactError):
+    reg = book.registry()
+    h = reg.get("table", policy=Policy(allow_stale=True))
+    assert h.stale and h.file("t.txt").read_text() == "table of model of v1"  # from the old, stale train
+    assert reg.status("table").kind == "missing"  # nothing was recorded
+    assert reg.status("train").kind == "stale"
+
+
+def test_allow_stale_cannot_build_a_light_artifact_from_a_heavy_input_that_was_never_built(book):
+    book.write("301_a", chapter(DATA, TRAIN, TABLE))
+    with pytest.raises(A.StaleArtifactError, match="Heavy artifact 'train' is missing"):
         book.registry().get("table", policy=Policy(allow_stale=True))
 
 

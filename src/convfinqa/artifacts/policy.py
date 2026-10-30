@@ -8,9 +8,10 @@ not given a policy):
 
 A light artifact that is stale or missing is built in this process, after the light artifacts it is
 built from. If that needs a heavy build that is not allowed (a heavy input is stale and `RUN_HEAVY` is
-not set), `get` loads the light artifact's old result under `ALLOW_STALE` (it must exist) and
-otherwise refuses. A missing artifact is never loaded, and when both switches are set `RUN_HEAVY`
-wins: the artifact is rebuilt.
+not set), `ALLOW_STALE` builds it for this use only, from the stale input, with a visible warning and
+nothing saved; if that cannot be done either, it loads the light artifact's old result (which must
+exist), and otherwise `get` refuses. A missing heavy artifact is never loaded, and when both switches
+are set `RUN_HEAVY` wins: the artifact is rebuilt.
 """
 
 from __future__ import annotations
