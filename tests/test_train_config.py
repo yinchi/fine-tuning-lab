@@ -42,3 +42,19 @@ def test_a_run_changes_nothing_in_the_others():
     cfg = json.loads(json.dumps(CFG))
     cfg["runs"]["extra"] = {"model": "m", "lr": 1.0}
     assert run_config(cfg, "main") == before
+
+
+def test_the_final_step_is_evaluated_even_when_it_is_not_a_multiple_of_eval_steps():
+    from types import SimpleNamespace as NS
+
+    from convfinqa.finetune import _eval_at_end_callback
+
+    callback = _eval_at_end_callback()
+    args = NS(eval_steps=50)
+    for step, expected in [(49, False), (50, False), (51, False), (342, True), (300, False)]:
+        control = NS(should_evaluate=False)
+        callback.on_step_end(args, NS(global_step=step, max_steps=342), control)
+        assert control.should_evaluate is expected
+    control = NS(should_evaluate=False)
+    callback.on_step_end(args, NS(global_step=50, max_steps=50), control)
+    assert control.should_evaluate is False       # a multiple: the Trainer evaluates there itself

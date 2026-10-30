@@ -1,6 +1,11 @@
 {
   "common": {
-    "lora": {"r": 16, "alpha": 32, "dropout": 0.05, "target_modules": "all-linear"},
+    "lora": {
+      "r": 16,
+      "alpha": 32,
+      "dropout": 0.05,
+      "target_modules": "all-linear"
+    },
     "lr": 0.0002,
     "scheduler": "cosine",
     "warmup_ratio": 0.03,
@@ -13,10 +18,17 @@
     "max_length": 3584,
     "eval_every": 50,
     "gradient_checkpointing": true,
-    "memory_cap_gb": 80
+    "memory_cap_gb": 80,
+    "check_turns": 200
   },
   "runs": {
-    "smoke": {"model": "Qwen/Qwen2.5-0.5B-Instruct", "max_steps": 50, "eval_every": 10},
-    "main": {"model": "Qwen/Qwen3-4B-Instruct-2507"}
+    "smoke": {
+      "model": "Qwen/Qwen2.5-0.5B-Instruct",
+      "max_steps": 50,
+      "eval_every": 10
+    },
+    "main": {
+      "model": "Qwen/Qwen3-4B-Instruct-2507"
+    }
   }
 }

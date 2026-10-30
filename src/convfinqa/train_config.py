@@ -4,7 +4,7 @@ from __future__ import annotations
 
 REQUIRED = (
     "model", "lora", "lr", "scheduler", "warmup_ratio", "weight_decay", "max_grad_norm", "epochs", "max_steps",
-    "micro_batch", "accumulation", "max_length", "eval_every", "gradient_checkpointing", "memory_cap_gb",
+    "micro_batch", "accumulation", "max_length", "eval_every", "gradient_checkpointing", "memory_cap_gb", "check_turns",
 )
 
 
