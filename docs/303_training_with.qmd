@@ -3,7 +3,9 @@
 **You will learn:**
 
 - the settings of the training run, and why each one has the value it has;
-- how the work is organised: a short check on a small model, then the main run.
+- how the work is organised: a short check on a small model, then the main run;
+- what the run did to the loss, and what the trained adapter looks like: the size and rank of its updates, and what
+  they do to the model's view of the gold answers.
 
 @sec-fine-tuning showed what one training step does, and @sec-lora what a LoRA adapter is. This chapter puts the two
 to work: it trains an adapter for `Qwen3-4B-Instruct-2507` on the training conversations, formatted as in
@@ -24,6 +26,9 @@ from convfinqa.artifacts import artifact, get
 
 n_fit = sum(1 for _ in get("train_val_split").jsonl("train_fit.jsonl"))
 n_val = sum(1 for _ in get("train_val_split").jsonl("val.jsonl"))
+
+print(f"Number of training conversations: {n_fit}")
+print(f"Number of validation conversations: {n_val}")
 ```
 
 There are `{python} f"{n_fit:,}"` training conversations and `{python} n_val` validation conversations. Every
@@ -31,7 +36,7 @@ conversation is one training example: the system message, then the questions and
 on the answers only (@sec-fine-tuning, "Which tokens count"). The development split is not used here, not even to
 choose a checkpoint. Everything that is decided in this chapter is decided on the validation split.
 
-## The settings
+## The configuration settings
 
 The settings of every run are in one file, `configs/train.json`: the ones all runs share, and a few entries for each
 named run. A light artifact, `train_config_{run}`, merges the two for one run, so a run's settings are a file that can be
@@ -40,6 +45,17 @@ read, and a change to one run's entry does not change what the others were built
 ```{python}
 @artifact("train_config_{run}", files=["configs/train.json"])
 def build_train_config(out, deps, files, *, run: str):
+    """Combine the base train config with the run-specific settings.
+
+    The combined config is written to the output directory as "config.json".
+    
+    Args:
+        out: The output directory for the combined config.
+        deps: Dependencies (unused here).
+        files: Dictionary of input files, keyed by their paths.
+            Here the only key used is "configs/train.json".
+        run: The name of the run to get the specific settings for.
+    """
     import json
 
     from convfinqa.train_config import run_config
@@ -48,79 +64,57 @@ def build_train_config(out, deps, files, *, run: str):
     (out / "config.json").write_text(json.dumps(cfg, indent=2))
 ```
 
-The two runs of this chapter, with the settings that decide how it behaves:
+The settings of the main run that decide how it behaves (the smoke run of the next section differs in three of them):
 
 ```{python}
 #HEAVY
 cfg = get("train_config_main").json("config.json")
 smoke = get("train_config_smoke").json("config.json")
-sci = lambda x: f"{x:.0e}".replace("e-0", "e-")
-demo = get("sft_demo").json("result.json")
-full_lr = max(h["learning_rate"] for h in demo["log_history"] if "learning_rate" in h)
 
-steps_per_epoch = math.ceil(n_fit / (cfg["micro_batch"] * cfg["accumulation"]))
+# Strip leading zero in scientific notation exponent
+sci = lambda x: f"{x:.0e}".replace("e-0", "e-")
+
+# Get the demo run results from 205_how_fine_tuning.qmd
+# and extract the learning rate history.
+demo = get("sft_demo").json("result.json")
+full_lr = max(
+    h["learning_rate"]
+    for h in demo["log_history"]
+    if "learning_rate" in h
+)
+
+# Extract config settings and output as a dataframe
+
+steps_per_epoch = math.ceil(
+    n_fit / (cfg["micro_batch"] * cfg["accumulation"])
+)
 steps = steps_per_epoch * cfg["epochs"]
 warmup = math.ceil(cfg["warmup_ratio"] * steps)
 
 pd.DataFrame([
-    ("model", smoke["model"], cfg["model"]),
+    ("model", cfg["model"]),
     (
         "LoRA rank r / alpha / dropout",
-        f"{smoke['lora']['r']} / {smoke['lora']['alpha']} / {smoke['lora']['dropout']}",
         f"{cfg['lora']['r']} / {cfg['lora']['alpha']} / {cfg['lora']['dropout']}"
     ),
-    (
-        "adapted layers",
-        smoke["lora"]["target_modules"],
-        cfg["lora"]["target_modules"]
-    ),
-    (
-        "learning rate (peak)",
-        sci(smoke["lr"]),
-        sci(cfg["lr"])
-    ),
-    (
-        "schedule, warmup",
-        f"{smoke['scheduler']},{smoke['warmup_ratio']:.0%}",
-        f"{cfg['scheduler']}, {cfg['warmup_ratio']:.0%}"
-    ),
-    (
-        "weight decay",
-        smoke["weight_decay"],
-        cfg["weight_decay"]
-    ),
-    (
-        "gradient clipping (max norm)",
-        smoke["max_grad_norm"],
-        cfg["max_grad_norm"]
-    ),
+    ("adapted layers", cfg["lora"]["target_modules"]),
+    ("learning rate (peak)", sci(cfg["lr"])),
+    ("schedule, warmup", f"{cfg['scheduler']}, {cfg['warmup_ratio']:.0%}"),
+    ("weight decay", cfg["weight_decay"]),
+    ("gradient clipping (max norm)", cfg["max_grad_norm"]),
     (
         "micro-batch × accumulation",
-        f"{smoke['micro_batch']} × {smoke['accumulation']}",
         f"{cfg['micro_batch']} × {cfg['accumulation']}"
     ),
-    ("epochs", smoke["epochs"], cfg["epochs"]),
-    (
-        "optimizer steps",
-        smoke["max_steps"],
-        f"{steps} ({steps_per_epoch} per epoch)"
-    ),
-    (
-        "maximum length (tokens)",
-        f"{smoke['max_length']:,}",
-        f"{cfg['max_length']:,}"
-    ),
-    (
-        "evaluation on validation every",
-        f"{smoke['eval_every']} steps",
-        f"{cfg['eval_every']} steps"
-    ),
+    ("epochs", cfg["epochs"]),
+    ("optimizer steps", f"{steps} ({steps_per_epoch} per epoch)"),
+    ("maximum length (tokens)", f"{cfg['max_length']:,}"),
+    ("evaluation on validation every", f"{cfg['eval_every']} steps"),
     (
         "gradient checkpointing",
-        "on" if smoke["gradient_checkpointing"] else "off",
         "on" if cfg["gradient_checkpointing"] else "off"
     ),
-], columns=["setting", "smoke run", "main run"]).set_index("setting")
+], columns=["setting", "main run"]).set_index("setting")
 ```
 
 Most of these were explained in the chapters before this one. The reasons, in order:
@@ -158,17 +152,6 @@ activations of such long sequences would otherwise take more memory than the wei
 ## The two runs
 
 ```{python}
-#HEAVY
-from convfinqa.step_cost import estimate_hours
-
-step_s = get("step_cost_main_lora_on").json("cost.json")["median_step_s"]
-hours = estimate_hours(
-    step_s,
-    n_fit,
-    cfg["epochs"],
-    cfg["micro_batch"] * cfg["accumulation"]
-)
-
 # the smoke run changes the model and the length of the run,
 # and nothing about how the model learns
 assert {k for k in cfg if cfg[k] != smoke[k]} \
@@ -178,10 +161,10 @@ assert cfg["weight_decay"] == 0
 
 The **smoke run** trains `{python} smoke["model"]` for `{python} smoke["max_steps"]` steps with the same recipe. It
 takes minutes, and is there to check the whole chain (the data, the training, the choice of the best checkpoint, the
-numbers recorded) before the main run spends hours. Nothing is concluded from its accuracy. It changes only the
+numbers recorded) before the main run spends hours. Nothing is concluded from its accuracy, and the book does not build
+it by default: `python -m convfinqa.artifacts build check_lora_smoke_0` runs it. It changes only the
 model, the number of steps and how often the validation loss is measured. The **main run** trains
-`{python} cfg["model"]` for the full `{python} steps` steps. At the `{python} f"{step_s:.0f}"` seconds a step that
-@sec-fine-tuning measured with this recipe, it takes about `{python} f"{hours:.1f}"` hours.
+`{python} cfg["model"]` for the full `{python} steps` steps.
 
 Both runs measure the loss on the validation conversations before the first step and then every
 `{python} cfg["eval_every"]` steps (every `{python} smoke["eval_every"]` for the smoke run), and at the end. Only the
@@ -192,12 +175,10 @@ and in the loss of the untuned model measured in @sec-probing. (The Trainer's ow
 of the conversations instead, which gives a short conversation the weight of a long one; the training code corrects
 for that, so that the first validation loss can be compared with the untuned model's.)
 
-## The code
-
-Two artifacts carry a run. Both are named by the run (`smoke`, `main`) and the seed of the training. `lora_{run}_{seed}`
-trains the adapter and writes it with the loss history. `check_lora_{run}_{seed}` loads the adapter and measures its
-accuracy on a small sample of validation turns. The training itself is `convfinqa.finetune.train_lora`: the chapter
-holds the settings and the calls, the package the logic.
+Two artifacts carry a run, both named by the run (`smoke`, `main`) and the seed of the training.
+`lora_{run}_{seed}` trains the adapter and writes it with the loss history. `check_lora_{run}_{seed}` loads the adapter
+and measures its accuracy on a small sample of validation turns. The training itself is `convfinqa.finetune.train_lora`:
+the chapter holds the settings and the calls, the package the logic.
 
 ```{python}
 @artifact(
@@ -206,6 +187,16 @@ holds the settings and the calls, the package the logic.
     heavy=True,
 )
 def build_lora(out, deps, *, run: str, seed: int):
+    """
+    Build and train the LoRA adapter for a given run and seed.
+
+    Args:
+        out : The output directory for the adapter and training state.
+        deps : The dependencies, including the training configuration
+            and data splits.
+        run : The run identifier, e.g., "smoke" or "main".
+        seed : The random seed for training.
+    """
     import json
 
     from convfinqa.finetune import train_lora
@@ -228,6 +219,19 @@ def build_lora(out, deps, *, run: str, seed: int):
     heavy=True,
 )
 def build_check_lora(out, deps, *, run: str, seed: int):
+    """
+    Evaluate the LoRA adapter trained by `build_lora`.
+
+    Does not call `build_lora` itself; the results are loaded
+    from the dependencies.
+
+    Args:
+        out : The output directory for the check results.
+        deps : The dependencies, including the adapter, training
+            configuration, and data splits.
+        run : The run identifier, e.g., "smoke" or "main".
+        seed : The random seed for training.
+    """
     import json
 
     from convfinqa.finetune import check_adapter
@@ -246,4 +250,301 @@ def build_check_lora(out, deps, *, run: str, seed: int):
     (out / "predictions.jsonl").write_text(
         "".join(json.dumps(p) + "\n" for p in result["predictions"])
     )
+```
+
+## What the runs did
+
+```{python}
+#HEAVY
+import matplotlib.pyplot as plt
+import numpy as np
+
+# Fetch the main run and extract its training log and metrics
+run = get("lora_main_0")
+log = run.json("trainer_state.json")["log_history"]
+metrics = run.json("metrics.json")
+train_loss = [(e["step"], e["loss"]) for e in log if "loss" in e]
+eval_loss = [(e["step"], e["eval_loss"]) for e in log if "eval_loss" in e]
+eval_steps = [s for s, _ in eval_loss]
+eval_values = [v for _, v in eval_loss]
+step0 = metrics["step0_eval_loss"]
+best_step, best = metrics["best_step"], metrics["best_eval_loss"]
+untuned = get("val_gold_nll").json("nll.json")["nll"]
+
+# the first validation loss is the untuned model's loss (val_gold_nll),
+# measured here through the Trainer
+assert abs(step0 - untuned) < 1e-4
+
+# the validation loss falls at every check up to the best step,
+# and is nearly flat after it
+before = [v for s, v in eval_loss if s <= best_step]
+after = [v for s, v in eval_loss if s >= best_step]
+assert before == sorted(before, reverse=True)
+assert max(after) - best < 0.001
+# most of the fall is over after the first check
+assert step0 - eval_values[1] > 0.9 * (step0 - best)
+```
+
+```{python}
+#| label: fig-main-loss
+#| fig-cap: "Loss over the main run. The dots are the training loss of each optimizer step; the squares are the validation loss at step 0 and every 50 steps. The ring marks the checkpoint that is kept, the one with the lowest validation loss."
+#| fig-alt: "Line chart of loss against optimizer step from 0 to 342, on a logarithmic scale. The training loss, plotted as dots, starts above 2, falls steeply within the first fifty steps and then slowly. Squares mark the validation loss: above 2 at step 0, then falling over the next few checks and levelling off in the second half of the run. A ring marks the lowest."
+# Plot the training and validation loss over the course of the main run.
+# See the dataframe output above for the number of steps per epoch and
+# number of examples per step.
+
+fig, ax = plt.subplots(figsize=(7, 3.2))
+ax.plot(
+    *zip(*train_loss), "o-", ms=2, lw=0.6, color="#3b6ea5", alpha=0.6,
+    label="training loss (one step)"
+)
+ax.plot(
+    eval_steps, eval_values, "s-", ms=6, lw=1, color="#b85450",
+    label="validation loss"
+)
+ax.plot(
+    [best_step], [best], "o", ms=14, mfc="none", mec="black",
+    label="kept checkpoint"
+)
+ax.set_xlabel("optimizer step")
+ax.set_ylabel("loss")
+ax.set_yscale("log")
+ax.legend(frameon=False)
+fig.tight_layout()
+plt.show()
+```
+
+The validation loss starts at `{python} f"{step0:.4f}"`, which is the untuned model's loss of @sec-probing, now measured
+through the training code, so the two agree. By step `{python} eval_steps[1]` it has fallen to
+`{python} f"{eval_values[1]:.3f}"`, `{python} f"{step0 / eval_values[1]:.0f}"`-fold. It keeps falling at every check up to step `{python} best_step`, where it reaches
+`{python} f"{best:.4f}"`. The first check alone covers over 90% of the whole fall. The last two checks differ from it by less than
+`{python} f"{max(after) - best:.4f}"`: the loss has levelled off while the learning rate falls along the tail of the
+cosine (@fig-lr-schedule). The kept adapter is the one
+from step `{python} best_step`, of the `{python} steps` steps the run took. The loss is not rising again, so the run
+shows no sign of overfitting, and the weight decay of zero was not a problem.
+
+```{python}
+train_tail = np.mean([v for s, v in train_loss if s > steps - 50])
+assert train_tail < best
+```
+
+The training loss over the last 50 steps averages `{python} f"{train_tail:.3f}"`, below the validation loss
+`{python} f"{best:.3f}"` of the kept checkpoint, as expected: the adapter has seen those conversations and not these.
+The training loss is a mean over single batches and is noisy, so the two are compared only roughly.
+
+## A quick check of the adapter
+
+The validation loss says how surprised the model is by the gold answers. It does not say what the model does when it
+writes its own. `check_lora_main_0` generates the answers for a sample of validation turns with the kept adapter, with
+the same machinery as the untuned baseline of @sec-baseline, but with the *gold* history in the prompt, and the training
+prompt: the system message of @sec-formatting, with no examples. The sample is the first conversations of a seeded
+shuffle of the validation split, taken until they hold 200 turns.
+
+```{python}
+#HEAVY
+check = get("check_lora_main_0").json("summary.json")
+kinds = check["by_kind"]
+assert check["invalid_rate"] == 0
+pd.Series(kinds, name="turns").rename(
+    index=lambda k: k.replace("_", " ")
+).to_frame()
+```
+
+On `{python} check["n"]` validation turns the adapted model gets `{python} f"{check['accuracy']:.1%}"` right, and
+none of its outputs fails to be a valid program. The untuned model's invalid outputs
+(@sec-baseline) are gone: it now writes the DSL, and what is left is being wrong within it. This is a sanity check of
+the pipeline on a sample, with the gold history, so it is not comparable with the baseline's numbers; the measurement
+that is comparable comes in the next chapter. It is enough to show that the adapter that was saved is the one that
+learned.
+
+## What the adapter changed
+
+The adapter is a set of pairs $(A, B)$, and each pair stands for an update $\Delta W = \frac{\alpha}{r} B A$ to one
+weight matrix. We can look at the updates themselves. The first artifact reads the saved adapter and, for every one
+of the adapted matrices, the size of the update (its Frobenius norm, the square root of the sum of its squared entries)
+relative to the size of the weight matrix it modifies, and the singular values of the update (explained below).
+
+```{python}
+#HEAVY
+# Generate the adapter-to-base-weight analysis
+# For each layer and matrix kind, compute the ratio of the update's norm
+# to the base weight's norm. Also compute the share of the update's squared norm
+# captured by each singular value.
+@artifact(
+    "adapter_analysis_{run}_{seed}",
+    deps=["lora_{run}_{seed}", "train_config_{run}"],
+)
+def build_adapter_analysis(out, deps, *, run: str, seed: int):
+    import json
+
+    from convfinqa.adapter_stats import adapter_update_stats, base_weight_norms
+
+    cfg = deps[f"train_config_{run}"].json("config.json")
+    stats = adapter_update_stats(deps[f"lora_{run}_{seed}"].path / "adapter")
+    base = base_weight_norms(cfg["model"])
+    for m in stats["matrices"]:
+        m["relative_norm"] = m["norm"] / base[(m["layer"], m["module"])]
+    (out / "stats.json").write_text(json.dumps(stats))
+
+
+stats = get("adapter_analysis_main_0").json("stats.json")
+mods, n_layers = stats["modules"], stats["layers"]
+relative = np.zeros((n_layers, len(mods)))
+for m in stats["matrices"]:
+    relative[m["layer"], mods.index(m["module"])] = m["relative_norm"]
+sq_sv = np.array([m["singular_values"] for m in stats["matrices"]]) ** 2
+sq_share = sq_sv / sq_sv.sum(1, keepdims=True)
+cumulative = sq_share.cumsum(1).mean(0)
+K = 7
+
+# the update is small next to the weight, and does not sit on one direction
+assert relative.max() < 0.02
+assert sq_share[:, 0].mean() < 0.75 and cumulative[7] > 0.85
+```
+
+```{python}
+#| label: fig-adapter-update
+#| fig-cap: "The size of the adapter's update to each adapted matrix, as a percentage of the norm of the matrix, by layer (rows) and kind of matrix (columns)."
+#| fig-alt: "Heat map with 36 rows, one for each layer of the model, and 7 columns, one for each kind of adapted matrix. Every cell is shaded by the size of the update as a percentage of the weight's norm. The values are all around one percent or below, and vary little from layer to layer."
+# Plot a heatmap of the update norm ratios by layer and matrix kind
+fig, ax = plt.subplots(figsize=(6.5, 5))
+im = ax.imshow(100 * relative, aspect="auto", cmap="viridis")
+ax.set_xticks(range(len(mods)), [m.replace("_proj", "") for m in mods])
+ax.set_ylabel("layer")
+ax.set_xlabel("matrix")
+fig.colorbar(im, label="‖ΔW‖ / ‖W‖ (%)")
+fig.tight_layout()
+plt.show()
+```
+
+The updates are small: the largest is `{python} f"{100 * relative.max():.1f}"`% of the norm of its weight matrix, and the
+average over all `{python} len(stats["matrices"])` matrices `{python} f"{100 * relative.mean():.2f}"`%. The model has
+been changed by a small amount in many places, not by a lot in a few: by kind of matrix the averages run from
+`{python} f"{100 * relative.mean(0).min():.2f}"`% (`{python} mods[int(relative.mean(0).argmin())]`) to
+`{python} f"{100 * relative.mean(0).max():.2f}"`% (`{python} mods[int(relative.mean(0).argmax())]`).
+
+The following figure shows how the squared norm of the update is distributed across its singular
+values, indicating the effective rank of the update.
+
+```{python}
+#| label: fig-adapter-rank
+#| fig-cap: "How the squared norm of the update is spread over its directions: the share held by the largest k singular values, averaged over the adapted matrices."
+#| fig-alt: "Line chart of the cumulative share of the update's squared norm against the number of singular values included, from 1 to 16. The curve rises from about one half at one direction to nearly all at sixteen, bending over gradually."
+fig, ax = plt.subplots(figsize=(6, 3))
+ax.plot(range(1, len(cumulative) + 1), cumulative, "o-", ms=4)
+ax.set_xlabel("number of singular values, k")
+ax.set_ylabel("share of squared norm")
+ax.set_ylim(0, 1.02)
+fig.tight_layout()
+plt.show()
+```
+
+The rank $r =$ `{python} stats["r"]` is used: the largest singular value holds on average
+`{python} f"{sq_share[:, 0].mean():.0%}"` of an update's squared norm, and it takes `{python} int(np.argmax(cumulative > 0.9)) + 1`
+of the `{python} stats["r"]` directions to hold 90%.
+
+::: {.callout-note title="Under the hood: what the singular values say"}
+A matrix of rank 16 is a sum of 16 **rank-1 matrices**. A rank-1 matrix is a column times a row, $\sigma\, u v^\top$:
+it reads the input along one direction (the row $v^\top$), scales it by $\sigma$, and writes the result along one
+direction of the output (the column $u$). This is the usual form $U \Sigma V^\top$ of the singular value decomposition
+written out column by column: $\Delta W = \sum_i \sigma_i u_i v_i^\top$, with $\sigma_1 \ge \sigma_2 \ge \dots$ the
+**singular values** and the $u_i$ (and the $v_i$) perpendicular to each other. The squared size of the matrix (the
+squared Frobenius norm) is the sum of the squared singular values, which is why the figure shows squared norms: each
+singular value takes its share.
+
+Keeping only the $k$ largest terms of the sum gives a matrix of rank $k$, and it is the closest matrix of rank $k$ to the
+original: no other comes nearer (the Eckart–Young theorem). The squared distance is the squared singular values that
+were dropped. So the curve of @fig-adapter-rank can be read the other way round: the best stand-in of rank
+`{python} K` for an update of rank `{python} stats["r"]` would be off by
+`{python} f"{1 - cumulative[K - 1]:.0%}"` of the update's squared norm, on average over the matrices.
+
+Two cautions. The stand-in is closest in the weights, not necessarily in what the model does: a small term can still
+matter. And it is not what an adapter of rank `{python} K` trained from scratch would find, because that one is fitted to the
+task, not cut from this one. The rank sweep later in the book tests that directly.
+:::
+
+::: {.callout-note title="Further reading"}
+These sizes are the sizes of the update, not of its effect: a small change in the right place can change the output
+a lot, and a large one in a direction the data never uses changes nothing. The next section looks at the effect
+directly, on the tokens themselves. @hu2022lora found that a very small rank was often enough for the update of a language model, which is
+the other side of the same question.
+:::
+
+## What the adapter changed in the model's view
+
+The effect on the model is easier to see in the gold tokens' log-probabilities. The artifact
+`adapter_logprobs_{run}_{seed}` computes them for the twenty validation conversations that @sec-probing studied, once
+with the base model and once with the adapter attached, in the training format and with the gold history.
+
+```{python}
+#HEAVY
+@artifact(
+    "adapter_logprobs_{run}_{seed}",
+    deps=[
+        "lora_{run}_{seed}", "train_config_{run}",
+        "train_val_split", "probe_val_sample",
+    ],
+    heavy=True,
+)
+def build_adapter_logprobs(out, deps, *, run: str, seed: int):
+    import json
+
+    from convfinqa.adapter_compare import base_vs_adapter_logprobs
+
+    cfg = deps[f"train_config_{run}"].json("config.json")
+    ids = [r["id"] for r in deps["probe_val_sample"].jsonl("surprisal.jsonl")]
+    by_id = {c["id"]: c for c in deps["train_val_split"].jsonl("val.jsonl")}
+    rows = base_vs_adapter_logprobs(
+        cfg["model"],
+        deps[f"lora_{run}_{seed}"].path / "adapter",
+        [by_id[i] for i in ids],
+    )
+    (out / "logprobs.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows)
+    )
+
+
+rows = list(get("adapter_logprobs_main_0").jsonl("logprobs.jsonl"))
+flat_base = np.array([lp for r in rows for lp in r["base"]])
+flat_tuned = np.array([lp for r in rows for lp in r["adapter"]])
+assert flat_tuned.mean() > flat_base.mean()
+surprised_base = (flat_base < -2).mean()
+surprised_tuned = (flat_tuned < -2).mean()
+assert surprised_tuned < surprised_base
+# the tokens that are still surprising are digits of numbers
+left = [
+    (r, i) for r in rows
+    for i, lp in enumerate(r["adapter"]) if lp < -2
+]
+assert left and all(r["tokens"][i].strip().isdigit() for r, i in left)
+```
+
+Over these conversations the mean surprisal of a gold token goes from `{python} f"{-flat_base.mean():.3f}"` to
+`{python} f"{-flat_tuned.mean():.3f}"` nats. Below we show the same conversation as in @sec-probing,
+before and after fine-tuning, with red marking surprisal. After fine-tuning, none of its tokens has a trace of red.
+
+```{python}
+from IPython.display import HTML, display
+
+from convfinqa.book.viz import surprisal_html
+
+shown = next(r for r in rows if r["tokens"].count("<|im_end|>") >= 4)
+assert max(-lp for lp in shown["adapter"]) < 0.1
+print(shown["id"])
+print("untuned:")
+display(HTML(surprisal_html(shown["tokens"], shown["base"])))
+print("with the adapter:")
+display(HTML(surprisal_html(shown["tokens"], shown["adapter"])))
+```
+
+The share of gold tokens that the model gave less than 14% (a surprisal over 2 nats) falls from
+`{python} f"{surprised_base:.1%}"` to `{python} f"{surprised_tuned:.1%}"`. The red that @sec-probing found on the
+operators and the punctuation of the DSL is gone. None of the `{python} len(left)` tokens that are still surprising is in the conversation above: they are all digits
+of numbers, in other conversations. Here is each one with the tokens around it (the adapter's surprisal):
+
+```{python}
+assert all(r["id"] != shown["id"] for r, _ in left)
+for r, i in left:
+    lo, hi = max(0, i - 8), i + 4
+    display(HTML(surprisal_html(r["tokens"][lo:hi], r["adapter"][lo:hi])))
 ```
