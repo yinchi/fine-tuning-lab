@@ -864,3 +864,153 @@ once the adapter is trained, the examples are worth little, and they cost severa
 Note this is one example set (set 0) on one training seed, with no examples in the prompt during training.
 A model trained *with* examples in its prompt might use them
 better, and that is a different training run, left to the end of the book.
+
+## Does merging the adapter change the answers?
+
+Everything above ran the adapter *separately*: a bf16 base model with the adapter's own weights in fp32, as in
+training. A model that is deployed is usually *merged*, with the adapter's correction $\tfrac{\alpha}{r}BA$ added into
+the base weights once, so that inference costs nothing extra. @sec-lora showed on a random adapter that this is the same
+function in fp32 but not in bf16, where rounding the sum back to bf16 can change the model as much as the adapter did.
+The trained adapter is smaller and has structure, so the effect may be smaller; here we measure it, on the same
+validation turns, with the predicted history: the merge rounded into bf16 weights, and the whole model kept in fp32.
+
+```{python}
+@artifact(
+    "merged_{split}_{run}_{seed}_{precision}_{mode}",
+    deps=[
+        "train_val_split", "eval_turns",
+        "lora_{run}_{seed}", "train_config_{run}",
+    ],
+    heavy=True,
+)
+def build_merged(
+    out, deps, *, split: str, run: str, seed: int, precision: str, mode: str
+):
+    """Generate the output of the merged adapter for every turn of a split.
+
+    Args:
+        out: Output directory; `predictions.jsonl` is written to it.
+        deps: The adapter, its settings and the conversations.
+        split: `val`, or `dev` once `configs/FROZEN` exists.
+        run: The training run (`main`).
+        seed: The seed of the training.
+        precision: `bf16` (the merge rounded into bf16 weights) or `fp32`.
+        mode: `gold` or `pred`, the history of the earlier turns.
+    """
+    import json
+    import time
+
+    from convfinqa.merged_eval import generate_merged
+    from convfinqa.tuned_eval import split_conversations
+
+    cfg = deps[f"train_config_{run}"].json("config.json")
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    start, done = time.perf_counter(), 0
+    with open(out / "predictions.jsonl", "w") as f:
+        def sink(row):
+            nonlocal done
+            f.write(json.dumps({
+                k: v for k, v in row.items() if k != "seconds"
+            }) + "\n")
+            f.flush()
+            done += 1
+            if done % 50 == 0:
+                print(
+                    f"{done} turns, {time.perf_counter() - start:.0f} s",
+                    flush=True
+                )
+
+        generate_merged(
+            cfg, deps[f"lora_{run}_{seed}"].path / "adapter",
+            convs, mode, precision, sink
+        )
+    print(f"done: {done} turns in {time.perf_counter() - start:.0f} s")
+
+
+@artifact(
+    "scores_merged_{split}_{run}_{seed}_{precision}_{mode}",
+    deps=["merged_{split}_{run}_{seed}_{precision}_{mode}", "eval_turns"],
+)
+def build_scores_merged(
+    out, deps, *, split: str, run: str, seed: int, precision: str, mode: str
+):
+    """Execute and score the outputs of `merged_…`."""
+    import json
+
+    from convfinqa.evaluate import score_rows, summarize
+    from convfinqa.program_match import add_program_match
+
+    rows = list(
+        deps[f"merged_{split}_{run}_{seed}_{precision}_{mode}"]
+        .jsonl("predictions.jsonl")
+    )
+    turns = list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    scores = add_program_match(score_rows(rows, turns), rows, turns)
+    (out / "scores.jsonl").write_text(
+        "".join(json.dumps(s) + "\n" for s in scores)
+    )
+    (out / "summary.json").write_text(
+        json.dumps(summarize(scores), indent=2)
+    )
+```
+
+```{python}
+#HEAVY
+MERGED = {
+    "bf16": "merged_val_main_0_bf16_pred",
+    "fp32": "merged_val_main_0_fp32_pred",
+}
+reference = {
+    (r["id"], r["turn"]): r["output"]
+    for r in get("tuned_val_main_0_pred").jsonl("predictions.jsonl")
+}
+merged_rows, merged_stats = [], {}
+for precision, name in MERGED.items():
+    out = {
+        (r["id"], r["turn"]): r["output"]
+        for r in get(name).jsonl("predictions.jsonl")
+    }
+    sc = list(get(f"scores_{name}").jsonl("scores.jsonl"))
+    assert out.keys() == reference.keys()
+    diff = paired_difference(sc, scores["pred"])
+    by_key = {(s["id"], s["turn"]): s["correct"] for s in scores["pred"]}
+    flips = sum(by_key[(s["id"], s["turn"])] != s["correct"] for s in sc)
+    merged_stats[precision] = {
+        "different": sum(out[k] != reference[k] for k in reference),
+        "flips": flips,
+        "acc": bootstrap_accuracy(sc)["accuracy"],
+        "diff": diff,
+    }
+    merged_rows.append({
+        "weights": f"merged, {precision}",
+        "accuracy": f"{merged_stats[precision]['acc']:.1%}",
+        "difference to separate adapter": (
+            f"{100 * diff['difference']:+.1f} "
+            f"[{100 * diff['low']:+.1f}, {100 * diff['high']:+.1f}]"
+        ),
+        "outputs with different text": merged_stats[precision]["different"],
+        "turns whose correctness changes": flips,
+    })
+pd.DataFrame(merged_rows).set_index("weights")
+```
+
+```{python}
+#HEAVY
+assert all(not s["diff"]["excludes_zero"] for s in merged_stats.values())
+assert all(
+    s["different"] < 0.05 * len(reference) for s in merged_stats.values()
+)
+```
+
+Merging leaves the accuracy unchanged: the paired difference is
+`{python} f"{100 * merged_stats['bf16']['diff']['difference']:+.1f}"` points for bf16 and
+`{python} f"{100 * merged_stats['fp32']['diff']['difference']:+.1f}"` for fp32, and both intervals contain zero. The text of
+`{python} merged_stats['bf16']['different']` of the
+`{python} f"{len(reference):,}"` outputs differs after the bf16 merge, and
+`{python} merged_stats['fp32']['different']` after the fp32 merge, so the merge is not invisible. The fp32 model
+also differs from the separate adapter, although the sum is exact there; the cause is not something this check
+isolates. For this adapter the answers of this chapter hold for a merged model, at the precision of either row.
