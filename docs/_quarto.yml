@@ -26,6 +26,7 @@ book:
         - 301_formatting_conversations.qmd
         - 302_the_untuned.qmd
         - 303_training_with.qmd
+        - 304_evaluating_the.qmd
   appendices:
     - 902_references.qmd
 
