@@ -566,6 +566,77 @@ with the wrong value. Different numbers are the largest of the three,
 `{python} int(outcomes.loc["wrong numbers", "fine-tuned, predicted"])` of the `{python} wrong["pred"]` wrong turns. That is a
 failure of reading the page and reasoning, and not of writing the language.
 
+### What the fine-tuned model gets wrong
+
+The turns the fine-tuned model gets wrong are valid programs, so the question is why they are wrong. Each wrong turn
+of the predicted-history run gets one label, the first of these that applies: it is not a program that runs; it is
+right when the earlier answers are the gold ones, so the history is the likely cause; the answer is
+off by a power of ten; it is the negative of the gold answer, because a sign was dropped or the operands of a
+subtraction were reversed; a number is not from the page; the program has the same operations as the gold with other
+numbers (or another number was copied where a number was asked for); it has other operations; or none of these.
+
+```{python}
+#HEAVY
+from collections import Counter
+
+from convfinqa.error_labels import label_turns
+from convfinqa.mistake_kinds import count_minimal_sets
+
+pred_rows = list(get("tuned_val_main_0_pred").jsonl("predictions.jsonl"))
+labels = label_turns(scores["pred"], checks["pred"], pred_rows, val_turns, scores["gold"])
+counts = Counter(labels.values())
+n_wrong = len(labels)
+ranked = sorted(counts, key=lambda k: -counts[k])
+shown, rest_labels = ranked[:4], ranked[4:]
+
+def example(label):
+    key = next(k for k, v in labels.items() if v == label)
+    return output_of[key], gold_of[key]
+
+# the labels cover every wrong turn, and nothing here is from outside the page
+assert n_wrong == sum(not x["correct"] for x in scores["pred"])
+assert counts["number not from the page"] == 0
+# four types hold nearly all of the wrong turns
+assert sum(counts[k] for k in shown) > 0.9 * n_wrong
+rows_ = [
+    {
+        "type": label, "turns": counts[label], "share": f"{counts[label] / n_wrong:.0%}",
+        "model": example(label)[0], "gold": example(label)[1],
+    }
+    for label in shown
+]
+rows_.append({
+    "type": "all other types", "turns": sum(counts[k] for k in rest_labels),
+    "share": f"{sum(counts[k] for k in rest_labels) / n_wrong:.0%}", "model": "", "gold": "",
+})
+pd.DataFrame(rows_).set_index("type")
+```
+
+`{python} counts["right with the gold history"]` of the `{python} n_wrong` wrong turns are right when the earlier answers
+are the gold ones. With the predicted history, a mistake at one turn can make the next turns wrong, and these turns
+are most of the gap between the two histories; the model is not wrong at them for a reason of its own. Of the rest,
+`{python} counts["other numbers"]` have the right operations with other numbers, or another number where a number was
+asked for, and `{python} counts["wrong operation"]` have other operations. The remaining types are
+`{python} ", ".join(f"{k} ({counts[k]})" for k in rest_labels)`.
+
+```{python}
+#HEAVY
+minimal = count_minimal_sets([
+    (output_of[(t["id"], t["turn"])], t["program"]) for t in val_turns
+])
+differ = minimal["n"] - minimal["equal"]
+explained = differ - minimal["unexplained"]
+
+# no turn has two alternative smallest explanations
+assert minimal["multiple"] == 0
+```
+
+The program differs from the gold in `{python} differ` of the `{python} minimal["n"]` turns. Four kinds of difference
+are about the form and not the content: a constant written as a number, trailing zeros, signs, and the order of the
+operands of a subtraction or a division. They explain `{python} explained` of the `{python} differ`, alone or together,
+and no turn has two alternative explanations. The other `{python} minimal["unexplained"]` differ in what the program
+says.
+
 ### Accuracy by turn and type of conversation
 
 ```{python}
