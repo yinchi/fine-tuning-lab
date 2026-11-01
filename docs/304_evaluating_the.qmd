@@ -109,13 +109,13 @@ def build_scores_tuned(out, deps, *, split: str, run: str, seed: int, mode: str)
     import json
 
     from convfinqa.evaluate import score_rows, summarize
+    from convfinqa.program_match import add_program_match
 
     rows = list(
         deps[f"tuned_{split}_{run}_{seed}_{mode}"].jsonl("predictions.jsonl")
     )
-    scores = score_rows(
-        rows, list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
-    )
+    turns = list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    scores = add_program_match(score_rows(rows, turns), rows, turns)
     (out / "scores.jsonl").write_text(
         "".join(json.dumps(s) + "\n" for s in scores)
     )
@@ -193,40 +193,378 @@ this is not noise of the validation sample. Giving the model the gold history ra
 ([`{python} f"{100 * gap['low']:+.1f}"`, `{python} f"{100 * gap['high']:+.1f}"`]) over its predicted-history score: that
 gap is what the model loses to its own earlier mistakes.
 
+### Program accuracy
+
+Execution accuracy asks whether the program gives the right number. **Program accuracy** asks whether it is the right
+program, by the rule of the official ConvFinQA script. The two programs are compared as expressions, so the operands of
+an `add` or a `multiply` may come in either order, and a calculation may be split over the steps in another way. The
+arguments are compared as exact text: the numbers must be copied off the page as they are, so `2.70` is not `2.7`, and
+`17%` is not `0.17`. A program that reaches the right answer from other numbers is not the gold program either.
+
+Because the gold program gives the gold answer, a turn that is right by program is right by execution too. The
+interesting counts are the other way round: how much program accuracy loses against execution accuracy, and what the
+turns in between look like.
+
+```{python}
+#HEAVY
+import re
+
+from convfinqa.program_match import equal_up_to_constants
+
+names = {
+    "zero": "untuned_val_e0p_0_pred", "base": "untuned_val_e3p_0_pred",
+    "pred": "tuned_val_main_0_pred", "gold": "tuned_val_main_0_gold",
+}
+for key, name in names.items():
+    scores[key] = list(get(f"scores_{name}").jsonl("scores.jsonl"))
+program = {
+    key: [{**s, "correct": s["program_correct"]} for s in rows_]
+    for key, rows_ in scores.items()
+}
+ci_program = {k: bootstrap_accuracy(v) for k, v in program.items()}
+exact_text = {k: sum(s["text_match"] for s in v) / len(v) for k, v in scores.items()}
+swapped = {  # the same program, written in another order
+    k: sum(s["program_correct"] and not s["text_match"] for s in v)
+    for k, v in scores.items()
+}
+loses = {
+    k: sum(s["correct"] and not s["program_correct"] for s in v)
+    for k, v in scores.items()
+}
+
+# program-correct implies execution-correct
+assert not any(
+    s["program_correct"] and not s["correct"] for v in scores.values() for s in v
+)
+
+pd.DataFrame({
+    label: {
+        "execution accuracy": f"{ci[k]['accuracy']:.1%}",
+        "program accuracy": f"{ci_program[k]['accuracy']:.1%}",
+        "95% interval": f"[{ci_program[k]['low']:.1%}, {ci_program[k]['high']:.1%}]",
+        "same text as gold": f"{exact_text[k]:.1%}",
+        "right answer, other program": loses[k],
+    }
+    for label, k in (
+        ("untuned, e0p", "zero"), ("untuned, e3p", "base"),
+        ("fine-tuned, predicted", "pred"), ("fine-tuned, gold", "gold"),
+    )
+}).T
+```
+
+The row "same text as gold" is the stricter reading, in which the program must also have its operands in the gold order.
+For the fine-tuned model with the predicted history, the symbolic comparison accepts
+`{python} swapped["pred"]` programs that the text comparison rejects, which is
+`{python} f"{100 * (ci_program['pred']['accuracy'] - exact_text['pred']):.1f}"` points of accuracy.
+
+#### Examples with swapped operands in sums and products
+
+```{python}
+#HEAVY
+gold_of = {(t["id"], t["turn"]): t["program"] for t in get("eval_turns").jsonl("val_turns.jsonl")}
+output_of = {(r["id"], r["turn"]): r["output"] for r in get(f"{names['pred']}").jsonl("predictions.jsonl")}
+
+def show(selected, n=5):
+    pd.set_option("display.max_colwidth", None)
+    return pd.DataFrame([
+        {"fine-tuned model": output_of[(s["id"], s["turn"])], "gold program": gold_of[(s["id"], s["turn"])]}
+        for s in selected[:n]
+    ])
+
+reordered = [s for s in scores["pred"] if s["program_correct"] and not s["text_match"]]
+# swapped operands are a small share of the turns
+assert len(reordered) < 0.05 * len(scores["pred"])
+show(reordered)
+```
+
+These are the same program with the operands of a sum or a product swapped, and they are a small share of the turns.
+One of the two comparisons has to be chosen: the book uses the symbolic one, as the official script does.
+
+#### Other programs with the right answer
+
+What does the fine-tuned model lose against its execution accuracy? The turns that have the right answer and another
+program, grouped by how the program differs from the gold one:
+
+```{python}
+#HEAVY
+from convfinqa.mistake_kinds import KINDS, minimal_explanations
+
+other = [s for s in scores["pred"] if s["correct"] and not s["program_correct"]]
+GROUPS = {
+    ("constants",): "a constant written as a number",
+    ("constants", "zeros"): "that, with trailing zeros",
+    ("signs",): "signs dropped, cancelling in a ratio",
+}
+
+def group_of(s):
+    key = (s["id"], s["turn"])
+    found = minimal_explanations(output_of[key], gold_of[key])
+    return tuple(k for k in KINDS if found and k in found[0]) if found else None
+
+members = {}
+for s in other:
+    members.setdefault(GROUPS.get(group_of(s), "other"), []).append(s)
+sizes = [len(v) for k, v in members.items() if k != "other"]
+
+# execution accuracy is much closer to program accuracy for the fine-tuned model than for the untuned one
+assert loses["pred"] < loses["base"] / 2
+# the three named groups hold most of these turns
+assert sum(sizes) > 3 / 4 * len(other)
+pd.DataFrame([
+    {
+        "difference from the gold program": label, "turns": len(v),
+        "model": output_of[(v[0]["id"], v[0]["turn"])], "gold": gold_of[(v[0]["id"], v[0]["turn"])],
+    }
+    for label, v in sorted(members.items(), key=lambda kv: (kv[0] == "other", -len(kv[1])))
+]).set_index("difference from the gold program")
+```
+
+`{python} len(other)` turns have the right answer with another program. The largest group is the spelling of a
+constant: the gold programs write the number 100 as `const_100` in some conversations and as `100` in others, and the
+model chooses one of them. The official rule counts that as a different program, and so do we, but it says little
+about the model. The gold also writes a loss as a negative number, and where the model drops the sign the answer
+survives only if the signs cancel, as in a ratio of two losses. The other
+`{python} len(members["other"])` turns differ in other ways. For the untuned model with `e3p`, many more turns have the
+right answer with another program (`{python} loses["base"]`).
+
+### Where the numbers come from
+
+Program accuracy compares whole programs. The **literal check** looks only at the numbers a program is written with,
+and so it works for any output format. For each turn it asks three things: are the numbers the same as the gold
+program's *as text*, are they the same *as values* (`2.70` is `2.7`, `17%` is `0.17`, `const_100` is `100`), and is
+every number that is not a named constant *from the page*, as text. The gap between the first two is formatting;
+the third says whether the numbers were copied, not made up. The **scale check** is separate: it asks whether the answer
+is the gold answer times a power of ten.
+
+```{python}
+@artifact(
+    "checks_untuned_{split}_{variant}_{seed}_{mode}",
+    deps=[
+        "untuned_{split}_{variant}_{seed}_{mode}",
+        "eval_turns", "train_val_split",
+    ],
+)
+def build_checks_untuned(
+    out, deps, *, split: str, variant: str, seed: int, mode: str
+):
+    """The literal and scale checks of an untuned run."""
+    import json
+
+    from convfinqa.output_checks import check_rows
+    from convfinqa.tuned_eval import split_conversations
+
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    rows = list(
+        deps[f"untuned_{split}_{variant}_{seed}_{mode}"]
+        .jsonl("predictions.jsonl")
+    )
+    checks = check_rows(
+        rows, list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl")), convs
+    )
+    (out / "checks.jsonl").write_text(
+        "".join(json.dumps(c) + "\n" for c in checks)
+    )
+
+
+@artifact(
+    "checks_tuned_{split}_{run}_{seed}_{mode}",
+    deps=[
+        "tuned_{split}_{run}_{seed}_{mode}", "eval_turns", "train_val_split",
+    ],
+)
+def build_checks_tuned(out, deps, *, split: str, run: str, seed: int, mode: str):
+    """The literal and scale checks of a fine-tuned run."""
+    import json
+
+    from convfinqa.output_checks import check_rows
+    from convfinqa.tuned_eval import split_conversations
+
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    rows = list(
+        deps[f"tuned_{split}_{run}_{seed}_{mode}"].jsonl("predictions.jsonl")
+    )
+    checks = check_rows(
+        rows, list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl")), convs
+    )
+    (out / "checks.jsonl").write_text(
+        "".join(json.dumps(c) + "\n" for c in checks)
+    )
+```
+
+```{python}
+#HEAVY
+checks = {
+    "zero": list(get("checks_untuned_val_e0p_0_pred").jsonl("checks.jsonl")),
+    "base": list(get("checks_untuned_val_e3p_0_pred").jsonl("checks.jsonl")),
+    "pred": list(get("checks_tuned_val_main_0_pred").jsonl("checks.jsonl")),
+    "gold": list(get("checks_tuned_val_main_0_gold").jsonl("checks.jsonl")),
+}
+LABELS = {
+    "zero": "untuned, e0p", "base": "untuned, e3p",
+    "pred": "fine-tuned, predicted", "gold": "fine-tuned, gold",
+}
+ran = {k: [c for c in v if c["runs"]] for k, v in checks.items()}
+
+def share(rows_, flag):
+    return f"{sum(c[flag] for c in rows_) / len(rows_):.1%}"
+
+# the same check on the gold programs themselves: the page, as defined here, holds all of their numbers
+from convfinqa.output_checks import check_rows
+
+val_turns = list(get("eval_turns").jsonl("val_turns.jsonl"))
+gold_checks = check_rows(
+    [{"id": t["id"], "turn": t["turn"], "output": t["program"]} for t in val_turns],
+    val_turns, list(get("train_val_split").jsonl("val.jsonl")),
+)
+assert all(c["lit_grounded"] for c in gold_checks)
+# the fine-tuned model writes only numbers of the page, the untuned one with e3p does not
+assert all(c["lit_grounded"] for c in ran["pred"] + ran["gold"])
+assert sum(c["lit_grounded"] for c in ran["base"]) < 0.9 * len(ran["base"])
+
+pd.DataFrame({
+    LABELS[k]: {
+        "outputs that run": len(ran[k]),
+        "same numbers as gold, as text": share(ran[k], "lit_text"),
+        "same numbers as gold, as values": share(ran[k], "lit_value"),
+        "every number comes from the page": share(ran[k], "lit_grounded"),
+    }
+    for k in ran
+}).T
+```
+
+The table counts the outputs that run, so that an output that is not a program (the untuned model's explanations)
+does not count. For the fine-tuned model with the predicted history, the gap between the first two columns is
+`{python} f"{100 * (sum(c['lit_value'] for c in ran['pred']) - sum(c['lit_text'] for c in ran['pred'])) / len(ran['pred']):.1f}"`
+points of the turns that run: the numbers are right but not written as the gold writes them. Every number it
+writes comes from the page (`{python} share(ran["pred"], "lit_grounded")` of its turns), as does every number of the gold
+programs, so the model does not invent numbers; where it is wrong, it picks another number of the page. The test is
+weak, because a page holds many numbers, but the untuned model with `e3p` fails it on
+`{python} f"{100 - 100 * sum(c['lit_grounded'] for c in ran['base']) / len(ran['base']):.0f}"`% of its turns.
+
+The scale check counts the turns whose answer is the gold answer times, or divided by, a power of ten: by exactly 100
+(a proportion where a percentage was asked for, or the reverse), or by another power of ten, from 10 to 10^9 (a
+different unit, a dropped digit, a multiplication where the gold divides).
+
+```{python}
+#HEAVY
+by_scale = pd.DataFrame({
+    LABELS[k]: {
+        "answer off by ×100 or ÷100": sum(c["scale"] == "factor_100" for c in v),
+        "answer off by another power of ten": sum(c["scale"] == "other_power" for c in v),
+    }
+    for k, v in checks.items()
+})
+by_scale
+```
+
+The following table shows the execution accuracy of each model, separated by whether the question involves percentages,
+and by how the gold answer handles them:
+
+```{python}
+#HEAVY
+wrong_scale = {
+    k: sum(c["scale"] is not None for c in v) for k, v in checks.items()
+}
+# a wrong scale is a small part of the failures of the fine-tuned model
+assert wrong_scale["pred"] < 0.15 * sum(not x["correct"] for x in scores["pred"])
+
+PROPORTION = "\"percent\" in the question, gold does not multiply by 100"
+PERCENT = "\"percent\" in the question, gold multiplies by 100"
+
+def form(c):
+    if not c["percent_style"]:
+        return "no \"percent\" in the question"
+    if c["gold_percent"]:
+        return PERCENT
+    return PROPORTION
+
+percent_rows = {}
+for k in ("base", "pred", "gold"):
+    correct_of = {(sc["id"], sc["turn"]): sc["correct"] for sc in scores[k]}
+    for c in checks[k]:
+        percent_rows.setdefault(form(c), {}).setdefault(k, []).append(correct_of[(c["id"], c["turn"])])
+
+accuracy_of = {f: {k: sum(v[k]) / len(v[k]) for k in v} for f, v in percent_rows.items()}
+# the untuned model with e3p gets few of the proportion questions right, the fine-tuned model most
+assert accuracy_of[PROPORTION]["base"] < 0.3 and accuracy_of[PROPORTION]["pred"] > 0.8
+# the percent-by-100 turns are too few to read
+assert len(percent_rows[PERCENT]["pred"]) < 20
+pd.DataFrame({
+    form_: {
+        "turns": len(v["pred"]),
+        **{
+            LABELS[k]: f"{sum(v[k]) / len(v[k]):.1%}" for k in ("base", "pred", "gold")
+        },
+    }
+    for form_, v in percent_rows.items()
+}).T
+```
+
+A wrong scale is a small part of the fine-tuned model's failures: `{python} wrong_scale["pred"]` of its
+`{python} sum(not x["correct"] for x in scores["pred"])` wrong turns, `{python} int(by_scale.loc["answer off by ×100 or ÷100", LABELS["pred"]])`
+of them by a factor of 100. The last table separates the questions that contain the word "percent" by what the gold does: it multiplies
+by 100 to give the percentage itself, or it does not (almost always it ends with a division, so the answer is a
+proportion such as `0.14136`, not `14.136`). Most are of the second kind, and on those the untuned model with `e3p` is
+right on
+`{python} f"{accuracy_of[PROPORTION]['base']:.0%}"` of the turns and the fine-tuned model on
+`{python} f"{accuracy_of[PROPORTION]['pred']:.0%}"`. Only `{python} len(percent_rows[PERCENT]["pred"])` turns want the
+percentage itself, too few to say anything about them.
+
 ### Where the failures are
 
 ```{python}
 #HEAVY
 from convfinqa.evaluate import RUNS
 
-kinds = pd.DataFrame({
-    "untuned, e0p": summary["zero"]["by_kind"],
-    "untuned, e3p": summary["base"]["by_kind"],
-    "fine-tuned, predicted": summary["pred"]["by_kind"],
-    "fine-tuned, gold": summary["gold"]["by_kind"],
-}).fillna(0).astype(int)
-kinds.index = [k.replace("_", " ") for k in kinds.index]
-invalid = {
-    key: sum(v for k, v in summary[key]["by_kind"].items() if k not in RUNS)
-    for key in summary
-}
-wrong = {
-    key: summary[key]["n"] - summary[key]["by_kind"]["correct"]
-    for key in summary
-}
+def by_outcome(summary_):
+    counts = summary_["by_kind"]
+    return {
+        "correct": counts["correct"],
+        "invalid output": sum(v for k, v in counts.items() if k not in RUNS),
+        "wrong operations": counts.get("wrong_operations", 0),
+        "wrong numbers": counts.get("wrong_numbers", 0),
+        "wrong answer, right shape": counts.get("wrong_answer", 0),
+    }
+
+outcomes = pd.DataFrame({
+    "untuned, e0p": by_outcome(summary["zero"]),
+    "untuned, e3p": by_outcome(summary["base"]),
+    "fine-tuned, predicted": by_outcome(summary["pred"]),
+    "fine-tuned, gold": by_outcome(summary["gold"]),
+})
+invalid = {key: by_outcome(summary[key])["invalid output"] for key in summary}
+wrong = {key: summary[key]["n"] - summary[key]["by_kind"]["correct"] for key in summary}
+causes = {k: v for k, v in summary["zero"]["by_kind"].items() if k not in RUNS}
+fence = causes["code_fence"]
 
 # what is left after fine-tuning is almost all valid programs that are wrong
 assert invalid["pred"] <= 0.05 * wrong["pred"]
 assert invalid["pred"] < invalid["base"]
-kinds
+# most of the untuned model's invalid outputs are a program in a code fence
+assert fence == max(causes.values()) and fence > invalid["zero"] / 2
+# the most common failure of the fine-tuned model is other numbers
+assert outcomes.loc["wrong numbers", "fine-tuned, predicted"] == outcomes.loc[
+    ["wrong operations", "wrong numbers", "wrong answer, right shape"], "fine-tuned, predicted"
+].max()
+outcomes
 ```
 
 The untuned model failed on the format of its answer: with the same prompt as the fine-tuned model, `{python} invalid["zero"]`
-of its `{python} wrong["zero"]` wrong turns are not valid programs, and even with the three examples of `e3p`,
-`{python} invalid["base"]` of `{python} wrong["base"]`. After fine-tuning it is `{python} invalid["pred"]` of `{python} wrong["pred"]`
-(`{python} invalid["gold"]` with the gold history). What is left is a valid program that is wrong: a different
-operation, different numbers, or the right shape with the wrong value. That is a failure of reading the page and
-reasoning, and not of writing the language.
+of its `{python} wrong["zero"]` wrong turns are not valid programs, `{python} fence` of them a program wrapped in a code
+fence, and even with the three examples of `e3p`, `{python} invalid["base"]` of `{python} wrong["base"]`. After
+fine-tuning it is `{python} invalid["pred"]` of `{python} wrong["pred"]` (`{python} invalid["gold"]` with the gold
+history). What is left is a valid program that is wrong: a different operation, different numbers, or the right shape
+with the wrong value. Different numbers are the largest of the three,
+`{python} int(outcomes.loc["wrong numbers", "fine-tuned, predicted"])` of the `{python} wrong["pred"]` wrong turns. That is a
+failure of reading the page and reasoning, and not of writing the language.
 
 ### Accuracy by turn and type of conversation
 
@@ -391,12 +729,12 @@ def build_scores_prompted_tuned(
     import json
 
     from convfinqa.evaluate import score_rows, summarize
+    from convfinqa.program_match import add_program_match
 
     name = f"{split}_{run}_{seed}_{variant}_{shots}_{mode}"
     rows = list(deps[f"prompted_tuned_{name}"].jsonl("predictions.jsonl"))
-    scores = score_rows(
-        rows, list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
-    )
+    turns = list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    scores = add_program_match(score_rows(rows, turns), rows, turns)
     (out / "scores.jsonl").write_text(
         "".join(json.dumps(s) + "\n" for s in scores)
     )

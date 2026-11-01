@@ -240,14 +240,14 @@ def build_scores_untuned(
     import json
 
     from convfinqa.evaluate import score_rows, summarize
+    from convfinqa.program_match import add_program_match
 
     rows = list(
         deps[f"untuned_{split}_{variant}_{seed}_{mode}"]
         .jsonl("predictions.jsonl")
     )
-    scores = score_rows(
-        rows, list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
-    )
+    turns = list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    scores = add_program_match(score_rows(rows, turns), rows, turns)
     (out / "scores.jsonl").write_text(
         "".join(json.dumps(s) + "\n" for s in scores)
     )
