@@ -1,0 +1,5 @@
+{
+  "retry": {"max_extra": 2},
+  "vote": {"samples": 5, "temperature": 0.5},
+  "probe_turns": 50
+}

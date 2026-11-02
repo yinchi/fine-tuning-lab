@@ -566,7 +566,7 @@ with the wrong value. Different numbers are the largest of the three,
 `{python} int(outcomes.loc["wrong numbers", "fine-tuned, predicted"])` of the `{python} wrong["pred"]` wrong turns. That is a
 failure of reading the page and reasoning, and not of writing the language.
 
-### What the fine-tuned model gets wrong
+### What the fine-tuned model gets wrong {#sec-evaluating-errors}
 
 The turns the fine-tuned model gets wrong are valid programs, so the question is why they are wrong. Each wrong turn
 of the predicted-history run gets one label, the first of these that applies: it is not a program that runs; it is
@@ -1014,3 +1014,174 @@ Merging leaves the accuracy unchanged: the paired difference is
 `{python} merged_stats['fp32']['different']` after the fp32 merge, so the merge is not invisible. The fp32 model
 also differs from the separate adapter, although the sum is exact there; the cause is not something this check
 isolates. For this adapter the answers of this chapter hold for a merged model, at the precision of either row.
+
+## Does extra compute at inference help?
+
+Everything above is one greedy attempt per turn. The cheapest way to spend more generations on a turn is
+*self-consistency* (@wang2023selfconsistency): sample several programs at a temperature, drop those that do not
+run, and take the answer most of them agree on; the history takes the first program with that answer. The
+temperature is only there to make the samples differ, since greedy decoding would give the same program every
+time. The number of samples and the temperature are in `configs/extra_compute.json`. The question is whether five
+generations per turn beat one, so the row reports its cost in generations and tokens, which do not depend on the
+machine, next to its accuracy. It is a separate row and never enters the headline.
+
+```{python}
+@artifact(
+    "extra_{split}_{run}_{seed}_{strategy}_{scope}",
+    deps=[
+        "train_val_split", "eval_turns",
+        "lora_{run}_{seed}", "train_config_{run}",
+    ],
+    files=["configs/extra_compute.json"],
+    heavy=True,
+)
+def build_extra(
+    out, deps, files, *, split: str, run: str, seed: int, strategy: str,
+    scope: str
+):
+    """Generate the fine-tuned model's output with an extra-compute strategy.
+
+    Args:
+        out: Output directory; `predictions.jsonl` is written to it.
+        deps: The adapter, its settings and the conversations.
+        files: `configs/extra_compute.json`.
+        split: `val`, or `dev` once `configs/FROZEN` exists.
+        run: The training run (`main`).
+        seed: The seed of the training.
+        strategy: `retry` or `vote`.
+        scope: `probe` (the first conversations only) or `full`.
+    """
+    import json
+    import time
+
+    from convfinqa.extra_compute import first_conversations, generate_extra
+    from convfinqa.tuned_eval import split_conversations
+
+    settings = files["configs/extra_compute.json"].json()
+    cfg = deps[f"train_config_{run}"].json("config.json")
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    if scope == "probe":
+        convs = first_conversations(convs, settings["probe_turns"])
+    elif scope != "full":
+        raise ValueError(f"scope must be 'probe' or 'full', not {scope!r}")
+    start, done = time.perf_counter(), 0
+    with open(out / "predictions.jsonl", "w") as f:
+        def sink(row):
+            nonlocal done
+            f.write(json.dumps({
+                k: v for k, v in row.items() if k != "seconds"
+            }) + "\n")
+            f.flush()
+            done += 1
+            if done % 50 == 0:
+                print(
+                    f"{done} turns, {time.perf_counter() - start:.0f} s",
+                    flush=True
+                )
+
+        generate_extra(
+            cfg, deps[f"lora_{run}_{seed}"].path / "adapter",
+            convs, strategy, settings, sink
+        )
+    print(f"done: {done} turns in {time.perf_counter() - start:.0f} s")
+
+
+@artifact(
+    "scores_extra_{split}_{run}_{seed}_{strategy}_{scope}",
+    deps=["extra_{split}_{run}_{seed}_{strategy}_{scope}", "eval_turns"],
+)
+def build_scores_extra(
+    out, deps, *, split: str, run: str, seed: int, strategy: str, scope: str
+):
+    """Execute and score the outputs of `extra_…`; a probe scores its turns only."""
+    import json
+
+    from convfinqa.evaluate import score_rows, summarize
+    from convfinqa.program_match import add_program_match
+
+    rows = list(
+        deps[f"extra_{split}_{run}_{seed}_{strategy}_{scope}"]
+        .jsonl("predictions.jsonl")
+    )
+    turns = list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    if scope == "probe":
+        keys = {(r["id"], r["turn"]) for r in rows}
+        turns = [t for t in turns if (t["id"], t["turn"]) in keys]
+    scores = add_program_match(score_rows(rows, turns), rows, turns)
+    (out / "scores.jsonl").write_text(
+        "".join(json.dumps(s) + "\n" for s in scores)
+    )
+    (out / "summary.json").write_text(
+        json.dumps(summarize(scores), indent=2)
+    )
+```
+
+```{python}
+#HEAVY
+greedy_rows = pd.DataFrame(get("tuned_val_main_0_pred").jsonl("predictions.jsonl"))
+```
+
+```{python}
+#HEAVY
+vote_full = pd.DataFrame(get("extra_val_main_0_vote_full").jsonl("predictions.jsonl"))
+scores["vote"] = list(get("scores_extra_val_main_0_vote_full").jsonl("scores.jsonl"))
+ci["vote"] = bootstrap_accuracy(scores["vote"])
+vote_diff = paired_difference(scores["vote"], scores["pred"])
+assert not (vote_diff["excludes_zero"] and vote_diff["difference"] > 0)
+
+per_turn = (
+    pd.DataFrame(scores["vote"])[["id", "turn", "correct"]]
+    .merge(pd.DataFrame(scores["pred"])[["id", "turn", "correct"]],
+           on=["id", "turn"], suffixes=("_vote", "_greedy"))
+    .merge(vote_full[["id", "turn", "agreement"]], on=["id", "turn"])
+)
+per_turn["unanimous"] = per_turn.agreement == 1
+by_agreement = per_turn.groupby("unanimous").agg(
+    turns=("correct_vote", "size"),
+    vote=("correct_vote", "mean"),
+    greedy=("correct_greedy", "mean"),
+)
+unanimous_share = by_agreement.loc[True, "turns"] / by_agreement.turns.sum()
+assert unanimous_share > 0.8
+assert by_agreement.loc[True, "vote"] > by_agreement.loc[False, "vote"]
+wrong_vote = per_turn[~per_turn.correct_vote]
+wrong_unanimous = wrong_vote.unanimous.mean()
+assert wrong_unanimous > 0.5
+
+rows_full = [
+    ("greedy, one attempt", "pred", 1.0,
+     greedy_rows.prompt_tokens.mean(), greedy_rows.new_tokens.mean()),
+    ("self-consistency, 5 samples", "vote",
+     vote_full.generations.mean(),
+     vote_full.prompt_tokens.mean(), vote_full.new_tokens.mean()),
+]
+pd.DataFrame([
+    {
+        "system": label,
+        "accuracy": f"{ci[key]['accuracy']:.1%}",
+        "95% interval": f"[{ci[key]['low']:.1%}, {ci[key]['high']:.1%}]",
+        "generations per turn": f"{gens:.1f}",
+        "prompt tokens per turn": f"{prompt:,.0f}",
+        "generated tokens per turn": f"{new:.1f}",
+    }
+    for label, key, gens, prompt, new in rows_full
+]).set_index("system")
+```
+
+On the whole validation split, five samples with a vote reach
+`{python} f"{ci['vote']['accuracy']:.1%}"` against `{python} f"{ci['pred']['accuracy']:.1%}"` for one greedy
+answer, a paired difference of `{python} f"{100 * vote_diff['difference']:+.1f}"` points (95% interval
+`{python} f"{100 * vote_diff['low']:+.1f}"` to `{python} f"{100 * vote_diff['high']:+.1f}"`), for
+`{python} f"{vote_full.generations.mean():.0f}"` times the generations and
+`{python} f"{vote_full.new_tokens.mean() / greedy_rows.new_tokens.mean():.1f}"` times the generated tokens. The
+extra generations do not buy accuracy here. The samples are unanimous on
+`{python} f"{unanimous_share:.0%}"` of the turns, so on most turns there is nothing for a vote to decide, and the
+turns where they disagree are the hard ones (`{python} f"{by_agreement.loc[False, 'vote']:.0%}"` correct, against
+`{python} f"{by_agreement.loc[True, 'vote']:.0%}"` when unanimous). Of the turns the vote gets wrong,
+`{python} f"{wrong_unanimous:.0%}"` are turns where all five samples gave the same answer: a majority cannot
+repair an error that the model makes every time. What is wrong is mostly the program, not its syntax
+(@sec-evaluating-errors), and sampling the same model more often does not change that.
