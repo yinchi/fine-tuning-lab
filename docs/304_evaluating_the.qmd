@@ -212,8 +212,10 @@ import re
 from convfinqa.program_match import equal_up_to_constants
 
 names = {
-    "zero": "untuned_val_e0p_0_pred", "base": "untuned_val_e3p_0_pred",
-    "pred": "tuned_val_main_0_pred", "gold": "tuned_val_main_0_gold",
+    "zero": "untuned_val_e0p_0_pred",
+    "base": "untuned_val_e3p_0_pred",
+    "pred": "tuned_val_main_0_pred",
+    "gold": "tuned_val_main_0_gold",
 }
 for key, name in names.items():
     scores[key] = list(get(f"scores_{name}").jsonl("scores.jsonl"))
@@ -222,7 +224,10 @@ program = {
     for key, rows_ in scores.items()
 }
 ci_program = {k: bootstrap_accuracy(v) for k, v in program.items()}
-exact_text = {k: sum(s["text_match"] for s in v) / len(v) for k, v in scores.items()}
+exact_text = {
+    k: sum(s["text_match"] for s in v) / len(v)
+    for k, v in scores.items()
+}
 swapped = {  # the same program, written in another order
     k: sum(s["program_correct"] and not s["text_match"] for s in v)
     for k, v in scores.items()
@@ -234,20 +239,25 @@ loses = {
 
 # program-correct implies execution-correct
 assert not any(
-    s["program_correct"] and not s["correct"] for v in scores.values() for s in v
+    s["program_correct"] and not s["correct"]
+    for v in scores.values()
+    for s in v
 )
 
 pd.DataFrame({
     label: {
         "execution accuracy": f"{ci[k]['accuracy']:.1%}",
         "program accuracy": f"{ci_program[k]['accuracy']:.1%}",
-        "95% interval": f"[{ci_program[k]['low']:.1%}, {ci_program[k]['high']:.1%}]",
+        "95% interval":
+            f"[{ci_program[k]['low']:.1%}, {ci_program[k]['high']:.1%}]",
         "same text as gold": f"{exact_text[k]:.1%}",
         "right answer, other program": loses[k],
     }
     for label, k in (
-        ("untuned, e0p", "zero"), ("untuned, e3p", "base"),
-        ("fine-tuned, predicted", "pred"), ("fine-tuned, gold", "gold"),
+        ("untuned, e0p", "zero"),
+        ("untuned, e3p", "base"),
+        ("fine-tuned, predicted", "pred"),
+        ("fine-tuned, gold", "gold"),
     )
 }).T
 ```
@@ -261,17 +271,29 @@ For the fine-tuned model with the predicted history, the symbolic comparison acc
 
 ```{python}
 #HEAVY
-gold_of = {(t["id"], t["turn"]): t["program"] for t in get("eval_turns").jsonl("val_turns.jsonl")}
-output_of = {(r["id"], r["turn"]): r["output"] for r in get(f"{names['pred']}").jsonl("predictions.jsonl")}
+gold_of = {
+    (t["id"], t["turn"]): t["program"]
+    for t in get("eval_turns").jsonl("val_turns.jsonl")
+}
+output_of = {
+    (r["id"], r["turn"]): r["output"]
+    for r in get(f"{names['pred']}").jsonl("predictions.jsonl")
+}
 
 def show(selected, n=5):
     pd.set_option("display.max_colwidth", None)
     return pd.DataFrame([
-        {"fine-tuned model": output_of[(s["id"], s["turn"])], "gold program": gold_of[(s["id"], s["turn"])]}
+        {
+            "fine-tuned model": output_of[(s["id"], s["turn"])],
+            "gold program": gold_of[(s["id"], s["turn"])]
+        }
         for s in selected[:n]
     ])
 
-reordered = [s for s in scores["pred"] if s["program_correct"] and not s["text_match"]]
+reordered = [
+    s for s in scores["pred"]
+    if s["program_correct"] and not s["text_match"]
+]
 # swapped operands are a small share of the turns
 assert len(reordered) < 0.05 * len(scores["pred"])
 show(reordered)
@@ -306,16 +328,24 @@ for s in other:
     members.setdefault(GROUPS.get(group_of(s), "other"), []).append(s)
 sizes = [len(v) for k, v in members.items() if k != "other"]
 
-# execution accuracy is much closer to program accuracy for the fine-tuned model than for the untuned one
+# execution accuracy is much closer to program accuracy for the
+# fine-tuned model than for the untuned one
 assert loses["pred"] < loses["base"] / 2
+
 # the three named groups hold most of these turns
 assert sum(sizes) > 3 / 4 * len(other)
+
 pd.DataFrame([
     {
-        "difference from the gold program": label, "turns": len(v),
-        "model": output_of[(v[0]["id"], v[0]["turn"])], "gold": gold_of[(v[0]["id"], v[0]["turn"])],
+        "difference from the gold program": label,
+        "turns": len(v),
+        "model": output_of[(v[0]["id"], v[0]["turn"])],
+        "gold": gold_of[(v[0]["id"], v[0]["turn"])],
     }
-    for label, v in sorted(members.items(), key=lambda kv: (kv[0] == "other", -len(kv[1])))
+    for label, v in sorted(
+        members.items(),
+        key=lambda kv: (kv[0] == "other", -len(kv[1]))
+    )
 ]).set_index("difference from the gold program")
 ```
 
@@ -416,7 +446,8 @@ ran = {k: [c for c in v if c["runs"]] for k, v in checks.items()}
 def share(rows_, flag):
     return f"{sum(c[flag] for c in rows_) / len(rows_):.1%}"
 
-# the same check on the gold programs themselves: the page, as defined here, holds all of their numbers
+# the same check on the gold programs themselves: the page,
+# as defined here, holds all of their numbers
 from convfinqa.output_checks import check_rows
 
 val_turns = list(get("eval_turns").jsonl("val_turns.jsonl"))
@@ -425,7 +456,9 @@ gold_checks = check_rows(
     val_turns, list(get("train_val_split").jsonl("val.jsonl")),
 )
 assert all(c["lit_grounded"] for c in gold_checks)
-# the fine-tuned model writes only numbers of the page, the untuned one with e3p does not
+
+# the fine-tuned model writes only numbers of the page,
+# the untuned one with e3p does not
 assert all(c["lit_grounded"] for c in ran["pred"] + ran["gold"])
 assert sum(c["lit_grounded"] for c in ran["base"]) < 0.9 * len(ran["base"])
 
@@ -458,7 +491,8 @@ different unit, a dropped digit, a multiplication where the gold divides).
 by_scale = pd.DataFrame({
     LABELS[k]: {
         "answer off by ×100 or ÷100": sum(c["scale"] == "factor_100" for c in v),
-        "answer off by another power of ten": sum(c["scale"] == "other_power" for c in v),
+        "answer off by another power of ten":
+            sum(c["scale"] == "other_power" for c in v),
     }
     for k, v in checks.items()
 })
@@ -490,18 +524,26 @@ percent_rows = {}
 for k in ("base", "pred", "gold"):
     correct_of = {(sc["id"], sc["turn"]): sc["correct"] for sc in scores[k]}
     for c in checks[k]:
-        percent_rows.setdefault(form(c), {}).setdefault(k, []).append(correct_of[(c["id"], c["turn"])])
+        percent_rows.setdefault(form(c), {}).setdefault(k, [])\
+            .append(correct_of[(c["id"], c["turn"])])
 
-accuracy_of = {f: {k: sum(v[k]) / len(v[k]) for k in v} for f, v in percent_rows.items()}
-# the untuned model with e3p gets few of the proportion questions right, the fine-tuned model most
+accuracy_of = {
+    f: {k: sum(v[k]) / len(v[k]) for k in v}
+    for f, v in percent_rows.items()
+}
+# the untuned model with e3p gets few of the proportion questions
+# right, the fine-tuned model most
 assert accuracy_of[PROPORTION]["base"] < 0.3 and accuracy_of[PROPORTION]["pred"] > 0.8
+
 # the percent-by-100 turns are too few to read
 assert len(percent_rows[PERCENT]["pred"]) < 20
+
 pd.DataFrame({
     form_: {
         "turns": len(v["pred"]),
         **{
-            LABELS[k]: f"{sum(v[k]) / len(v[k]):.1%}" for k in ("base", "pred", "gold")
+            LABELS[k]: f"{sum(v[k]) / len(v[k]):.1%}"
+            for k in ("base", "pred", "gold")
         },
     }
     for form_, v in percent_rows.items()
@@ -541,7 +583,10 @@ outcomes = pd.DataFrame({
     "fine-tuned, gold": by_outcome(summary["gold"]),
 })
 invalid = {key: by_outcome(summary[key])["invalid output"] for key in summary}
-wrong = {key: summary[key]["n"] - summary[key]["by_kind"]["correct"] for key in summary}
+wrong = {
+    key: summary[key]["n"] - summary[key]["by_kind"]["correct"]
+    for key in summary
+}
 causes = {k: v for k, v in summary["zero"]["by_kind"].items() if k not in RUNS}
 fence = causes["code_fence"]
 
@@ -551,9 +596,12 @@ assert invalid["pred"] < invalid["base"]
 # most of the untuned model's invalid outputs are a program in a code fence
 assert fence == max(causes.values()) and fence > invalid["zero"] / 2
 # the most common failure of the fine-tuned model is other numbers
-assert outcomes.loc["wrong numbers", "fine-tuned, predicted"] == outcomes.loc[
-    ["wrong operations", "wrong numbers", "wrong answer, right shape"], "fine-tuned, predicted"
-].max()
+assert outcomes.loc["wrong numbers", "fine-tuned, predicted"]\
+    == outcomes.loc[
+        ["wrong operations", "wrong numbers", "wrong answer, right shape"],
+        "fine-tuned, predicted"
+    ].max()
+
 outcomes
 ```
 
@@ -583,7 +631,9 @@ from convfinqa.error_labels import label_turns
 from convfinqa.mistake_kinds import count_minimal_sets
 
 pred_rows = list(get("tuned_val_main_0_pred").jsonl("predictions.jsonl"))
-labels = label_turns(scores["pred"], checks["pred"], pred_rows, val_turns, scores["gold"])
+labels = label_turns(
+    scores["pred"], checks["pred"], pred_rows, val_turns, scores["gold"]
+)
 counts = Counter(labels.values())
 n_wrong = len(labels)
 ranked = sorted(counts, key=lambda k: -counts[k])
@@ -600,14 +650,18 @@ assert counts["number not from the page"] == 0
 assert sum(counts[k] for k in shown) > 0.9 * n_wrong
 rows_ = [
     {
-        "type": label, "turns": counts[label], "share": f"{counts[label] / n_wrong:.0%}",
-        "model": example(label)[0], "gold": example(label)[1],
+        "type": label, "turns": counts[label],
+        "share": f"{counts[label] / n_wrong:.0%}",
+        "model": example(label)[0],
+        "gold": example(label)[1],
     }
     for label in shown
 ]
 rows_.append({
     "type": "all other types", "turns": sum(counts[k] for k in rest_labels),
-    "share": f"{sum(counts[k] for k in rest_labels) / n_wrong:.0%}", "model": "", "gold": "",
+    "share": f"{sum(counts[k] for k in rest_labels) / n_wrong:.0%}",
+    "model": "",
+    "gold": "",
 })
 pd.DataFrame(rows_).set_index("type")
 ```
@@ -636,6 +690,123 @@ are about the form and not the content: a constant written as a number, trailing
 operands of a subtraction or a division. They explain `{python} explained` of the `{python} differ`, alone or together,
 and no turn has two alternative explanations. The other `{python} minimal["unexplained"]` differ in what the program
 says.
+
+::: {.callout-note title="Under the hood: how close was the right token?"}
+A wrong program is a sequence of choices, and most of them were right. The two programs, the gold one and the
+model's, are the same text up to the first token where they differ, so the model's distribution at that position is
+the one it wrote its own token from. Its *rank* for the gold token there (1 is the most probable token), and the
+*ratio* of the gold token's probability to the probability of the token it wrote, say whether the right answer
+was a near miss or far away. `divergence_{split}_{run}_{seed}` scores the wrong turns of the predicted-history run
+with the same prompts, in one forward pass each.
+
+```{python}
+@artifact(
+    "divergence_{split}_{run}_{seed}",
+    deps=[
+        "train_val_split", "eval_turns",
+        "lora_{run}_{seed}", "train_config_{run}",
+        "tuned_{split}_{run}_{seed}_pred",
+        "scores_tuned_{split}_{run}_{seed}_pred",
+    ],
+    heavy=True,
+)
+def build_divergence(out, deps, *, split: str, run: str, seed: int):
+    """Score the first token where each wrong program differs from the gold one.
+
+    Args:
+        out: Output directory; `divergences.jsonl` is written to it.
+        deps: The adapter, the conversations and the predicted-history run.
+        split: `val`, or `dev` once `configs/FROZEN` exists.
+        run: The training run (`main`).
+        seed: The seed of the training.
+    """
+    import json
+
+    from convfinqa.divergence import score_divergences
+    from convfinqa.tuned_eval import split_conversations
+
+    cfg = deps[f"train_config_{run}"].json("config.json")
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    rows = list(
+        deps[f"tuned_{split}_{run}_{seed}_pred"].jsonl("predictions.jsonl")
+    )
+    turns = list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    scores = deps[f"scores_tuned_{split}_{run}_{seed}_pred"].jsonl(
+        "scores.jsonl"
+    )
+    wrong = {(s["id"], s["turn"]) for s in scores if not s["correct"]}
+    results = score_divergences(
+        cfg, deps[f"lora_{run}_{seed}"].path / "adapter",
+        convs, rows, turns, wrong
+    )
+    (out / "divergences.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in results)
+    )
+```
+:::
+
+```{python}
+#HEAVY
+import numpy as np
+
+div = pd.DataFrame(get("divergence_val_main_0").jsonl("divergences.jsonl"))
+div["label"] = [labels[(i, t)] for i, t in zip(div.id, div.turn)]
+div["close"] = div.gold_over_pred > 0.1
+assert len(div) == n_wrong and div.position.notna().all()
+top3 = (div.rank_gold <= 3).mean()
+top1 = int((div.rank_gold == 1).sum())
+
+# the gold token is usually among the first few choices, and the model's token
+# is the top one
+assert top3 > 0.8
+assert div.chosen_is_top.mean() > 0.95
+
+# in a tie the two tokens have the same probability
+assert (div[div.rank_gold == 1].gold_over_pred == 1).all()
+
+assert np.exp(div.logp_pred).median() > 0.9
+
+by_label = div.groupby("label").agg(
+    turns=("rank_gold", "size"),
+    top3=("rank_gold", lambda r: (r <= 3).mean()),
+    median_ratio=("gold_over_pred", "median"),
+    close=("close", "mean"),
+).loc[shown + [k for k in rest_labels if k in set(div.label)]]
+
+assert by_label.close["sign dropped"]\
+    > by_label.close["right with the gold history"]
+
+by_label.assign(
+    **{
+        "gold token in top 3": by_label.top3.map("{:.0%}".format),
+        "median probability ratio": by_label.median_ratio.map("{:.3f}".format),
+        "within a factor of 10": by_label.close.map("{:.0%}".format),
+    }
+)[[
+    "turns",
+    "gold token in top 3",
+    "median probability ratio",
+    "within a factor of 10"
+]]
+```
+
+At the first token where the two programs differ, the gold token is among the model's top three in
+`{python} f"{top3:.0%}"` of the `{python} len(div)` wrong turns, and in the second place in
+`{python} int((div.rank_gold == 2).sum())` of them. The model's own token was the most probable one in
+`{python} f"{div.chosen_is_top.mean():.0%}"` of the turns, so the re-scoring reproduces what it wrote.
+The gold token ranks first in `{python} top1` turns, where it shares the first place with the model's token in an exact tie. The gap in
+probability is usually larger than the gap in rank suggests: the median ratio of the gold token's probability to the
+model's is `{python} f"{div.gold_over_pred.median():.3f}"`, and the gold token comes within a factor of ten in
+`{python} f"{div.close.mean():.0%}"` of the turns. The model is rarely lost; at the point where it goes wrong it
+had the right token near the top, but gave the token it wrote a median probability of `{python} f"{np.exp(div.logp_pred).median():.0%}"`.
+By type of mistake, the dropped signs are the near misses (the gold token is within a factor of ten in
+`{python} f"{by_label.close['sign dropped']:.0%}"` of those turns), while in the turns that are wrong only because of
+the earlier answers it is within a factor of ten in `{python} f"{by_label.close['right with the gold history']:.0%}"`:
+with its own history in the prompt, the model was sure of the program it wrote.
 
 ### Accuracy by turn and type of conversation
 
@@ -1097,7 +1268,8 @@ def build_extra(
 def build_scores_extra(
     out, deps, *, split: str, run: str, seed: int, strategy: str, scope: str
 ):
-    """Execute and score the outputs of `extra_…`; a probe scores its turns only."""
+    """Execute and score the outputs of `extra_…`; a probe scores its
+    turns only."""
     import json
 
     from convfinqa.evaluate import score_rows, summarize
@@ -1122,13 +1294,18 @@ def build_scores_extra(
 
 ```{python}
 #HEAVY
-greedy_rows = pd.DataFrame(get("tuned_val_main_0_pred").jsonl("predictions.jsonl"))
+greedy_rows = pd.DataFrame(get("tuned_val_main_0_pred")\
+    .jsonl("predictions.jsonl"))
 ```
 
 ```{python}
 #HEAVY
-vote_full = pd.DataFrame(get("extra_val_main_0_vote_full").jsonl("predictions.jsonl"))
-scores["vote"] = list(get("scores_extra_val_main_0_vote_full").jsonl("scores.jsonl"))
+vote_full = pd.DataFrame(
+    get("extra_val_main_0_vote_full").jsonl("predictions.jsonl")
+)
+scores["vote"] = list(
+    get("scores_extra_val_main_0_vote_full").jsonl("scores.jsonl")
+)
 ci["vote"] = bootstrap_accuracy(scores["vote"])
 vote_diff = paired_difference(scores["vote"], scores["pred"])
 assert not (vote_diff["excludes_zero"] and vote_diff["difference"] > 0)
@@ -1185,3 +1362,57 @@ turns where they disagree are the hard ones (`{python} f"{by_agreement.loc[False
 `{python} f"{wrong_unanimous:.0%}"` are turns where all five samples gave the same answer: a majority cannot
 repair an error that the model makes every time. What is wrong is mostly the program, not its syntax
 (@sec-evaluating-errors), and sampling the same model more often does not change that.
+
+## What a turn costs
+
+The systems of this chapter differ in what they cost as well as in what they get right. The cost is counted in
+units that do not depend on the machine: generations per turn, prompt tokens (read once, in one pass) and generated
+tokens (produced one at a time, so a generated token is dearer than a prompt token, and the table keeps them apart).
+Seconds depend on the device and its settings, so they are left out.
+
+```{python}
+#HEAVY
+COST = [
+    ("untuned, e0p", "untuned_val_e0p_0_pred", "zero"),
+    ("untuned, e3p", "untuned_val_e3p_0_pred", "base"),
+    ("fine-tuned", "tuned_val_main_0_pred", "pred"),
+    ("fine-tuned, e3p prompt", "prompted_tuned_val_main_0_e3p_0_pred", "shots"),
+    ("fine-tuned, 5-sample vote", "extra_val_main_0_vote_full", "vote"),
+]
+cost_rows = {}
+for label, name, key in COST:
+    frame = pd.DataFrame(get(name).jsonl("predictions.jsonl"))
+    cost_rows[key] = {
+        "label": label,
+        "generations": frame.get(
+            "generations", pd.Series(1, index=frame.index)
+        ).mean(),
+        "prompt": frame.prompt_tokens.mean(),
+        "generated": frame.new_tokens.mean(),
+    }
+assert cost_rows["pred"]["generated"] < cost_rows["zero"]["generated"]
+assert cost_rows["shots"]["prompt"] > 3 * cost_rows["pred"]["prompt"]
+assert cost_rows["vote"]["generations"] == 5
+assert all(
+    cost_rows["pred"][k] == min(c[k] for c in cost_rows.values())
+    for k in ("prompt", "generated")
+)
+pd.DataFrame([
+    {
+        "system": c["label"],
+        "accuracy": f"{ci[key]['accuracy']:.1%}",
+        "generations per turn": f"{c['generations']:.0f}",
+        "prompt tokens per turn": f"{c['prompt']:,.0f}",
+        "generated tokens per turn": f"{c['generated']:.1f}",
+    }
+    for key, c in cost_rows.items()
+]).set_index("system")
+```
+
+The fine-tuned model with its training prompt reads the fewest prompt tokens and writes the fewest generated tokens
+of the five: it reads `{python} f"{cost_rows['pred']['prompt']:,.0f}"` prompt tokens (the table and the
+conversation, with no examples) and writes `{python} f"{cost_rows['pred']['generated']:.1f}"`, where the untuned
+model with the same prompt writes `{python} f"{cost_rows['zero']['generated']:.1f}"`. The three examples of `e3p`
+make the prompt `{python} f"{cost_rows['shots']['prompt'] / cost_rows['pred']['prompt']:.1f}"` times as long, whether
+the model is tuned or not, and the five-sample vote pays for five of everything. Fine-tuning moves the cost of the
+examples from every call to the training run, which is paid once.
