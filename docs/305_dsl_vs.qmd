@@ -164,7 +164,9 @@ def build_python_untuned(
         raise ValueError(f"variant must be 'e0' or 'e3', not {variant!r}")
     n_examples = int(variant[1:])
     if n_examples == 0 and seed != 0:
-        raise ValueError("a variant with no examples has no example set: use seed 0")
+        raise ValueError(
+            "a variant with no examples has no example set: use seed 0"
+        )
     convs = split_conversations(
         split,
         list(deps["train_val_split"].jsonl("val.jsonl")),
@@ -172,7 +174,9 @@ def build_python_untuned(
     )
     examples = []
     if n_examples:
-        wanted = deps["example_sets"].json("sets.json")["sets"][str(seed)][:n_examples]
+        wanted = deps["example_sets"].json(
+            "sets.json"
+        )["sets"][str(seed)][:n_examples]
         pool = {
             c["id"]: c
             for c in deps["train_val_split"].jsonl("train_fit.jsonl")
@@ -223,3 +227,336 @@ def build_scores_python_untuned(
         json.dumps(summarize(scores), indent=2)
     )
 ```
+
+## Untuned, Python against the DSL {#sec-python-untuned}
+
+Four conditions: with and without examples, and with the earlier turns of the conversation filled in with the
+model's own answers (predicted history) or with the gold ones. The DSL runs are those of @sec-baseline with the plain
+system message (`e0p` and `e3p`), on the same validation turns and, for the runs with examples, the same example set.
+Python has three examples translated to Python, and the DSL has the same three in the DSL.
+
+```{python}
+#HEAVY
+from convfinqa.python_eval import score_python_rows
+from convfinqa.stats import bootstrap_accuracy, paired_difference
+
+CONDITIONS = {
+    "no examples, predicted history": ("e0", "pred"),
+    "three examples, predicted history": ("e3", "pred"),
+    "no examples, gold history": ("e0", "gold"),
+    "three examples, gold history": ("e3", "gold"),
+}
+PYTHON = {
+    ("e0", "pred"): get("scores_python_untuned_val_e0_0_pred"),
+    ("e3", "pred"): get("scores_python_untuned_val_e3_0_pred"),
+    ("e0", "gold"): get("scores_python_untuned_val_e0_0_gold"),
+    ("e3", "gold"): get("scores_python_untuned_val_e3_0_gold"),
+}
+DSL = {
+    ("e0", "pred"): get("scores_untuned_val_e0p_0_pred"),
+    ("e3", "pred"): get("scores_untuned_val_e3p_0_pred"),
+    ("e0", "gold"): get("scores_untuned_val_e0p_0_gold"),
+    ("e3", "gold"): get("scores_untuned_val_e3p_0_gold"),
+}
+py_scores = {k: list(h.jsonl("scores.jsonl")) for k, h in PYTHON.items()}
+dsl_scores = {k: list(h.jsonl("scores.jsonl")) for k, h in DSL.items()}
+py_summary = {k: h.json("summary.json") for k, h in PYTHON.items()}
+dsl_summary = {k: h.json("summary.json") for k, h in DSL.items()}
+py_ci = {k: bootstrap_accuracy(v) for k, v in py_scores.items()}
+dsl_ci = {k: bootstrap_accuracy(v) for k, v in dsl_scores.items()}
+lead = {k: paired_difference(py_scores[k], dsl_scores[k]) for k in PYTHON}
+n_turns = py_summary[("e3", "pred")]["n"]
+assert all(
+    s["n"] == n_turns for s in [*py_summary.values(), *dsl_summary.values()]
+)
+
+pct = lambda x: f"{100 * x:.1f}%"
+pts = lambda x: f"{100 * x:+.1f}"
+rows = []
+for label, key in CONDITIONS.items():
+    for name, ci, summary in [
+        ("DSL", dsl_ci, dsl_summary),
+        ("Python", py_ci, py_summary),
+    ]:
+        rows.append({
+            "condition": label,
+            "output": name,
+            "accuracy": pct(ci[key]["accuracy"]),
+            "95% interval":
+                f"[{pct(ci[key]['low'])}, {pct(ci[key]['high'])}]",
+            "invalid": pct(summary[key]["invalid_rate"]),
+            "hit the limit": pct(summary[key]["truncated"] / n_turns),
+        })
+pd.DataFrame(rows).set_index(["condition", "output"])
+```
+
+```{python}
+#HEAVY
+# the lead of Python over the DSL, in every condition but the one where
+# neither can answer
+assert py_ci[("e0", "pred")]["accuracy"] < 0.01
+assert dsl_ci[("e0", "pred")]["accuracy"] < 0.01
+assert not lead[("e0", "pred")]["excludes_zero"]
+for key in [("e3", "pred"), ("e0", "gold"), ("e3", "gold")]:
+    assert lead[key]["low"] > 0, key
+pd.DataFrame([
+    {
+        "condition": label,
+        "Python − DSL (points)": pts(lead[key]["difference"]),
+        "95% paired interval": f"[{pts(lead[key]['low'])}, {pts(lead[key]['high'])}]",
+    }
+    for label, key in CONDITIONS.items()
+]).set_index("condition")
+```
+
+**Without examples and with the model's own history,** neither format works: the Python outputs are prose and the
+DSL outputs mostly code fences, and the accuracy of Python is `{python} pct(py_ci[("e0", "pred")]["accuracy"])`, against
+`{python} pct(dsl_ci[("e0", "pred")]["accuracy"])` for the DSL. Three rules about *what* to write are not a format
+the model follows by itself.
+
+**With three examples** it does, in both formats, and Python is ahead by
+`{python} pts(lead[("e3", "pred")]["difference"])` points with predicted history (paired interval
+[`{python} pts(lead[("e3", "pred")]["low"])`, `{python} pts(lead[("e3", "pred")]["high"])`]) and by
+`{python} pts(lead[("e3", "gold")]["difference"])` points with the gold history
+([`{python} pts(lead[("e3", "gold")]["low"])`, `{python} pts(lead[("e3", "gold")]["high"])`]). Both intervals are far from
+zero.
+
+**Gold history without examples** is the surprise: the only difference from the run above is that the earlier
+turns of the conversation are written in the format, and the model reaches `{python} pct(py_ci[("e0", "gold")]["accuracy"])` in Python and
+`{python} pct(dsl_ci[("e0", "gold")]["accuracy"])` in the DSL
+(a lead of `{python} pts(lead[("e0", "gold")]["difference"])` points, interval
+[`{python} pts(lead[("e0", "gold")]["low"])`, `{python} pts(lead[("e0", "gold")]["high"])`]). With its own history the same
+prompt reaches `{python} pct(py_ci[("e0", "pred")]["accuracy"])` and `{python} pct(dsl_ci[("e0", "pred")]["accuracy"])`.
+
+### Where the Python runs fail
+
+```{python}
+#HEAVY
+KINDS = [
+    "correct", "wrong_answer", "code_fence", "syntax", "outside_subset",
+    "runtime", "no_ans", "not_a_number", "empty"
+]
+kind_rows = {}
+for label, key in CONDITIONS.items():
+    counts = py_summary[key]["by_kind"]
+    kind_rows[label] = {k: counts.get(k, 0) for k in KINDS if k in counts}
+    assert sum(counts.values()) == n_turns
+pd.DataFrame(kind_rows).fillna(0).astype(int)
+```
+
+```{python}
+#HEAVY
+PREDICTIONS = {
+    ("e0", "pred"): get("python_untuned_val_e0_0_pred"),
+    ("e3", "pred"): get("python_untuned_val_e3_0_pred"),
+    ("e0", "gold"): get("python_untuned_val_e0_0_gold"),
+    ("e3", "gold"): get("python_untuned_val_e3_0_gold"),
+}
+val_turns = list(get("eval_turns").jsonl("val_turns.jsonl"))
+stripped = {
+    k: score_python_rows(
+        list(h.jsonl("predictions.jsonl")), val_turns, strip_fences=True
+    )
+    for k, h in PREDICTIONS.items()
+}
+stripped_acc = {
+    k: sum(s["correct"] for s in v) / len(v) for k, v in stripped.items()
+}
+fence_rate = {
+    k: py_summary[k]["by_kind"].get("code_fence", 0) / n_turns for k in PYTHON
+}
+no_syntax = {
+    k: py_summary[k]["by_kind"].get("outside_subset", 0) for k in PYTHON
+}
+```
+
+An output that is invalid in Python is, in every condition, a syntax error or a code fence; the evaluator's own
+limit does not appear: `{python} sum(no_syntax.values())` outputs are valid Python outside the subset. A fence is
+rare once the model has seen examples (`{python} pct(fence_rate[("e3", "pred")])` of the turns with predicted history,
+`{python} pct(fence_rate[("e3", "gold")])` with the gold history). Stripping the fences before running leaves the accuracy of the runs with examples at
+`{python} pct(stripped_acc[("e3", "pred")])` (predicted history) and `{python} pct(stripped_acc[("e3", "gold")])` (gold history).
+
+```{python}
+#HEAVY
+# the claims of the paragraph above
+assert sum(no_syntax.values()) == 0
+assert all(
+    py_summary[k]["by_kind"].get("syntax", 0)
+    > py_summary[k]["by_kind"].get("code_fence", 0)
+    for k in PYTHON
+)
+assert all(
+    py_summary[("e0", m)]["truncated"] > 3 * py_summary[("e3", m)]["truncated"]
+    for m in ("pred", "gold")
+)
+assert fence_rate[("e3", "pred")] < 0.01 and fence_rate[("e3", "gold")] < 0.01
+assert all(
+    abs(stripped_acc[k] - py_ci[k]["accuracy"]) < 0.01
+    for k in PYTHON if k[0] == "e3"
+)
+```
+
+The generation limit is `{python} MAX_NEW_TOKENS` tokens for Python and 96 for the DSL, and the share of turns that
+hit it is in the table: it is much larger without examples than with them.
+
+### By kind of turn
+
+```{python}
+#HEAVY
+by_turn = {}
+for label, key in [
+    ("predicted history", ("e3", "pred")),
+    ("gold history", ("e3", "gold")),
+]:
+    for name, summary in [("DSL", dsl_summary), ("Python", py_summary)]:
+        by_turn[(label, name)] = {
+            kind: pct(summary[key]["by_number_turn"][kind]["accuracy"])
+            for kind in ("number", "program")
+        }
+pd.DataFrame(by_turn).T.rename(
+    columns={
+        "number": "answer is a number on the page",
+        "program": "answer needs a computation"
+    }
+)
+```
+
+```{python}
+#HEAVY
+number_gap = {
+    k: py_summary[k]["by_number_turn"]["number"]["accuracy"]
+    - dsl_summary[k]["by_number_turn"]["number"]["accuracy"]
+    for k in [("e3", "pred"), ("e3", "gold")]
+}
+program_gap = {
+    k: py_summary[k]["by_number_turn"]["program"]["accuracy"]
+    - dsl_summary[k]["by_number_turn"]["program"]["accuracy"]
+    for k in [("e3", "pred"), ("e3", "gold")]
+}
+# Python is ahead on both kinds, and by more on the turns that need a computation
+assert all(g > 0 for g in number_gap.values())
+assert all(program_gap[k] > number_gap[k] for k in number_gap)
+```
+
+Python is ahead on both kinds of turn, and by more where a computation is needed: on the turns that need one, by
+`{python} pts(program_gap[("e3", "pred")])` points with predicted history and `{python} pts(program_gap[("e3", "gold")])` with the
+gold history, and on the turns whose answer is a number from the page, by `{python} pts(number_gap[("e3", "pred")])` and
+`{python} pts(number_gap[("e3", "gold")])`.
+
+### First turns and follow-ups
+
+The first turn of a conversation has no history, so the two history modes give it the same prompt. The follow-up
+turns are where they differ.
+
+```{python}
+#HEAVY
+def split_first(scores):
+    """Accuracy of the first turn of each conversation, and of the others."""
+    first_turn = {}
+    for s in scores:
+        first_turn[s["id"]] = min(first_turn.get(s["id"], s["turn"]), s["turn"])
+    groups = {True: [], False: []}
+    for s in scores:
+        groups[s["turn"] == first_turn[s["id"]]].append(s["correct"])
+    return {
+        "first": sum(groups[True]) / len(groups[True]),
+        "later": sum(groups[False]) / len(groups[False]),
+        "n_first": len(groups[True]),
+        "n_later": len(groups[False]),
+    }
+
+
+split = {
+    (fmt, v, m): split_first(sc[(v, m)])
+    for fmt, sc in [("DSL", dsl_scores), ("Python", py_scores)]
+    for v in ("e0", "e3")
+    for m in ("pred", "gold")
+}
+pd.DataFrame(
+    [
+        {
+            "output": fmt,
+            "examples": "none" if v == "e0" else "three",
+            "history": m,
+            "first turn": pct(r["first"]),
+            "follow-ups": pct(r["later"]),
+        }
+        for (fmt, v, m), r in split.items()
+    ]
+).set_index(["output", "examples", "history"])
+```
+
+```{python}
+#HEAVY
+for fmt in ("DSL", "Python"):
+    for v in ("e0", "e3"):
+        # the same prompt, so the same answers
+        assert split[(fmt, v, "pred")]["first"] \
+            == split[(fmt, v, "gold")]["first"]
+    # without examples, nothing is right until the history shows the format
+    assert split[(fmt, "e0", "pred")]["later"] < 0.01
+    assert split[(fmt, "e0", "gold")]["later"] > 0.3
+    assert split[(fmt, "e0", "gold")]["first"] < 0.01
+    # with examples, the gold history is worth something on follow-ups
+    assert split[(fmt, "e3", "gold")]["later"] \
+        > split[(fmt, "e3", "pred")]["later"]
+    # and with the model's own history, follow-ups are worse than first turns
+    assert split[(fmt, "e3", "pred")]["later"] \
+        < split[(fmt, "e3", "pred")]["first"]
+# the first turns do not favour Python
+assert split[("DSL", "e3", "pred")]["first"] \
+    > split[("Python", "e3", "pred")]["first"]
+# with gold history they are worse in the DSL and better in Python
+assert split[("DSL", "e3", "gold")]["later"] \
+    < split[("DSL", "e3", "gold")]["first"]
+assert split[("Python", "e3", "gold")]["later"] \
+    > split[("Python", "e3", "gold")]["first"]
+```
+
+**Without examples,** all of the gain from the gold history is on the follow-ups. The first turn is
+`{python} pct(split[("Python", "e0", "gold")]["first"])` in Python and `{python} pct(split[("DSL", "e0", "gold")]["first"])`
+in the DSL, whichever history it is given. The follow-ups go from `{python} pct(split[("Python", "e0", "pred")]["later"])` to
+`{python} pct(split[("Python", "e0", "gold")]["later"])` in Python and from
+`{python} pct(split[("DSL", "e0", "pred")]["later"])` to `{python} pct(split[("DSL", "e0", "gold")]["later"])` in the DSL. Once
+the answer to the first question is in the conversation in the right format, the model copies the format: the gold
+turns act as the examples that the prompt does not have.
+
+**With examples,** the follow-ups are worse than the first turn when the model's own answers are the history
+(`{python} pct(split[("Python", "e3", "pred")]["later"])` against `{python} pct(split[("Python", "e3", "pred")]["first"])` in
+Python, `{python} pct(split[("DSL", "e3", "pred")]["later"])` against `{python} pct(split[("DSL", "e3", "pred")]["first"])` in
+the DSL). The gold history helps them
+(`{python} pts(split[("Python", "e3", "gold")]["later"] - split[("Python", "e3", "pred")]["later"])` and
+`{python} pts(split[("DSL", "e3", "gold")]["later"] - split[("DSL", "e3", "pred")]["later"])` points), but not to the level of the first
+turn in the DSL (`{python} pct(split[("DSL", "e3", "gold")]["later"])`), while in Python it is above it
+(`{python} pct(split[("Python", "e3", "gold")]["later"])`). This table does not separate how hard the follow-up questions are from how well the model uses the history. What it
+shows is that the Python lead sits on the follow-ups: on first turns the DSL is ahead by
+`{python} pts(split[("DSL", "e3", "pred")]["first"] - split[("Python", "e3", "pred")]["first"])` points.
+
+## Is a Python adapter worth training?
+
+The rule set before the runs was to train one only if untuned Python is clearly ahead of untuned DSL. It is: in
+every condition where either format works, the paired interval of the lead excludes zero. That is a statement about
+the untuned model, and what the model does after fine-tuning is a separate question.
+
+```{python}
+#HEAVY
+fewer_invalid = {
+    k: dsl_summary[k]["invalid_rate"] - py_summary[k]["invalid_rate"]
+    for k in [("e3", "pred"), ("e3", "gold")]
+}
+# most of the lead is invalid outputs that the DSL runs produce and the
+# Python runs do not
+assert all(fewer_invalid[k] > 0.8 * lead[k]["difference"] for k in fewer_invalid)
+```
+
+With examples, the DSL runs produce `{python} pts(fewer_invalid[("e3", "pred")])` and
+`{python} pts(fewer_invalid[("e3", "gold")])` points more invalid outputs than the Python runs (predicted and gold
+history), against leads of `{python} pts(lead[("e3", "pred")]["difference"])` and
+`{python} pts(lead[("e3", "gold")]["difference"])`. The lead is about as large as the difference in invalid output, so it may be largely the untuned model failing to
+write the DSL, which tuning removes: an adapter for the DSL writes a valid program on all but one turn of the validation data
+(@sec-evaluating-errors). If a lead remains after tuning, it is a lead in the reasoning, and the only way to see it is
+to train.
+
+The next step is one adapter for Python with the hyperparameters of the DSL adapter,
+scored on the validation data in both history modes. It reaches the development data only if its lead over the DSL
+adapter has a paired interval that excludes zero.
