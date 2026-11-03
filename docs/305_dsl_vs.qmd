@@ -560,3 +560,114 @@ to train.
 The next step is one adapter for Python with the hyperparameters of the DSL adapter,
 scored on the validation data in both history modes. It reaches the development data only if its lead over the DSL
 adapter has a paired interval that excludes zero.
+
+## The Python adapter
+
+The adapter for Python is trained like the DSL adapter of @sec-fine-tuning, with the same settings: the run `python`
+of `configs/train.json` has the same entries as `main`, so `train_config_python` is the same configuration. Only the
+data differ. Every gold program is translated by `to_python`, and the system message is the Python prompt, so the
+adapter is trained on the prompt it is evaluated with, and the loss counts the Python answers only.
+`convfinqa.python_finetune` holds the data and the call; the training is `finetune.train_lora`.
+
+```{python}
+@artifact(
+    "python_lora_{seed}",
+    deps=["train_val_split", "train_config_python"],
+    heavy=True,
+)
+def build_python_lora(out, deps, *, seed: int):
+    """Train the Python adapter on the train-fit split.
+
+    Args:
+        out: The output directory for the adapter and training state.
+        deps: The conversations and the `python` run's settings.
+        seed: The random seed for training.
+    """
+    import json
+
+    from convfinqa.python_finetune import train_lora_python
+
+    cfg = deps["train_config_python"].json("config.json")
+    fit = list(deps["train_val_split"].jsonl("train_fit.jsonl"))
+    val = list(deps["train_val_split"].jsonl("val.jsonl"))
+    result = train_lora_python(cfg, fit, val, out, seed)
+    history = {k: result.pop(k) for k in ("log_history", "max_steps")}
+    (out / "trainer_state.json").write_text(json.dumps(history))
+    (out / "metrics.json").write_text(json.dumps(result, indent=2))
+
+
+@artifact(
+    "python_tuned_{split}_{seed}_{mode}",
+    deps=[
+        "python_lora_{seed}", "train_config_python",
+        "train_val_split", "eval_turns",
+    ],
+    heavy=True,
+)
+def build_python_tuned(out, deps, *, split: str, seed: int, mode: str):
+    """Generate the Python adapter's answer for every turn of a split.
+
+    Args:
+        out: Output directory; `predictions.jsonl` is written to it.
+        deps: The adapter, its settings and the conversations.
+        split: `val`, or `dev` once `configs/FROZEN` exists.
+        seed: The training seed of the adapter.
+        mode: `gold` or `pred`, the history of the earlier turns.
+    """
+    import json
+    import time
+
+    from convfinqa.python_finetune import generate_tuned_python
+    from convfinqa.tuned_eval import split_conversations
+
+    cfg = deps["train_config_python"].json("config.json")
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    start, done = time.perf_counter(), 0
+    with open(out / "predictions.jsonl", "w") as f:
+        def sink(row):
+            nonlocal done
+            f.write(json.dumps({
+                k: v for k, v in row.items() if k != "seconds"
+            }) + "\n")
+            f.flush()
+            done += 1
+            if done % 50 == 0:
+                print(
+                    f"{done} turns, {time.perf_counter() - start:.0f} s",
+                    flush=True
+                )
+
+        generate_tuned_python(
+            cfg, deps[f"python_lora_{seed}"].path / "adapter",
+            convs, mode, sink,
+        )
+    print(f"done: {done} turns in {time.perf_counter() - start:.0f} s")
+
+
+@artifact(
+    "scores_python_tuned_{split}_{seed}_{mode}",
+    deps=["python_tuned_{split}_{seed}_{mode}", "eval_turns"],
+)
+def build_scores_python_tuned(out, deps, *, split: str, seed: int, mode: str):
+    """Execute and score the outputs of `python_tuned_…`."""
+    import json
+
+    from convfinqa.evaluate import summarize
+    from convfinqa.python_eval import score_python_rows
+
+    rows = list(
+        deps[f"python_tuned_{split}_{seed}_{mode}"].jsonl("predictions.jsonl")
+    )
+    turns = list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    scores = score_python_rows(rows, turns)
+    (out / "scores.jsonl").write_text(
+        "".join(json.dumps(s) + "\n" for s in scores)
+    )
+    (out / "summary.json").write_text(
+        json.dumps(summarize(scores), indent=2)
+    )
+```

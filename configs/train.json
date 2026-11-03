@@ -29,6 +29,9 @@
     },
     "main": {
       "model": "Qwen/Qwen3-4B-Instruct-2507"
+    },
+    "python": {
+      "model": "Qwen/Qwen3-4B-Instruct-2507"
     }
   }
 }
