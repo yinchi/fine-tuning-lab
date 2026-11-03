@@ -101,11 +101,15 @@ def to_python(program: str) -> str:
         The Python source, one assignment per line.
 
     Raises:
-        executor.ProgramError: If the program cannot be parsed.
+        executor.ProgramError: If the program cannot be parsed or has a reference to a step that does not exist.
     """
     steps = executor.parse_program(program)
     if not steps:
         return f"ans = {_render(_literal(program))}"
+    for i, step in enumerate(steps):
+        for a in step.args:
+            if a.startswith("#") and not (a[1:].isdigit() and int(a[1:]) < i):
+                raise executor.ProgramError(executor.BAD_REFERENCE, f"bad reference {a!r} in step {i}")
     needed = {len(steps) - 1}
     for i in reversed(range(len(steps))):
         if i in needed:

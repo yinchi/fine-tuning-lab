@@ -44,6 +44,12 @@ def test_constants_percentages_and_negative_numbers():
     assert pf.to_python("add(1234, 5)") == "ans = 1234 + 5"
 
 
+def test_a_reference_to_a_step_that_does_not_exist_is_an_error_not_a_crash():
+    for bad in ("add(1, #0)", "add(1, 2), add(#5, 1)", "add(1, #x)"):
+        with pytest.raises(executor.ProgramError):
+            pf.to_python(bad)
+
+
 def test_greater_is_a_comparison_and_gives_yes_or_no():
     code = pf.to_python("greater(5, 3)")
     assert code == "ans = 5 > 3"

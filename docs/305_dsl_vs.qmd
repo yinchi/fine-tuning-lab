@@ -1,0 +1,225 @@
+# DSL or Python? {#sec-python-format}
+
+**You will learn:**
+
+- why the book's program language is a question worth testing, and what a fair test of it looks like;
+- how a ConvFinQA program is written as Python, and how Python written by a model is run without trusting it;
+- how much of the DSL's difficulty the untuned model already avoids when it writes Python.
+
+Every program in this book so far is in the ConvFinQA DSL: `subtract(5, 3), divide(#0, 3)`. The DSL is small and
+exact, and it is also unlike anything the model saw in pretraining. A model trained on a great deal of code might
+write Python, which it knows, more reliably than a language invented for one dataset. The ConvFinQA paper
+[@chen2022convfinqa] reports that GPT-3 did better with ordinary math notation than with the DSL, and
+program-of-thought prompting [@chen2022program] writes Python for the same reason. This chapter tests it on our model.
+
+The test is on the **untuned** model first. The question is how well the model already knows Python, and an adapter
+trained to write one format or the other would answer a different question. An adapter for Python is trained only if
+the untuned model does clearly better in Python than in the DSL (see the end of the chapter).
+
+## Python as an output format
+
+A program in the DSL is a list of steps. The Python form keeps the arithmetic and writes it the way a person would:
+a step that is used once is put inside the expression that uses it, a step that is used more than once is named, and
+the answer is assigned to `ans`. `convfinqa.dsl.python_format.to_python` does the translation, and it keeps the
+structure of the program exactly, with parentheses where it needs them, so that the operations are the same and in the
+same order.
+
+```{python}
+from collections import Counter
+
+import pandas as pd
+
+from convfinqa.artifacts import artifact, get
+from convfinqa.data.tables import turn_rows
+from convfinqa.dsl import executor, python_format
+
+train_fit = list(get("train_val_split").jsonl("train_fit.jsonl"))
+programs = [r["program"] for r in turn_rows(train_fit)]
+translated = [python_format.to_python(p) for p in programs]
+same_answer = [
+    python_format.try_execute_python(code)[0] == executor.try_execute(p)[0]
+    for p, code in zip(programs, translated)
+]
+named = [p for p, code in zip(programs, translated) if "\n" in code]
+assert all(same_answer)
+# naming a step is the exception
+assert len(named) < 0.01 * len(programs)
+
+
+def first(condition):
+    return next(p for p in programs if condition(p, python_format.to_python(p)))
+
+
+examples = [
+    first(lambda p, c: "(" not in p),
+    first(lambda p, c: p.count("(") == 1 and "%" not in p and "greater" not in p),
+    first(lambda p, c: p.count("(") == 2 and "\n" not in c and "%" not in p),
+    first(lambda p, c: "%" in p),
+    first(lambda p, c: "greater" in p),
+    first(lambda p, c: "\n" in c),
+]
+pd.DataFrame({
+    "DSL": examples,
+    "Python": [python_format.to_python(p).replace("\n", "; ") for p in examples],
+    "answer": [executor.execute(p) for p in examples],
+}).set_index("DSL")
+```
+
+A percentage such as `4.02%` is written `4.02 / 100`, which keeps the digits that are on the page. The constants
+`const_100` and `const_m1` become the numbers `100` and `-1`. Of the `{python} f"{len(programs):,}"` gold programs in the
+training conversations, every one gives the same answer as Python as in the DSL, and only `{python} len(named)` need a
+named step.
+
+## Running Python written by a model
+
+A model asked for "a valid Python program" may write anything. Running that with `exec` would run whatever it wrote.
+Instead, `python_format.execute_python` parses the code with `ast` and walks the tree itself. It accepts assignments;
+arithmetic and comparisons on numbers; names that were assigned; and the calls `round`, `abs`, `min`, `max` and `sum`.
+All numbers are floats, so a huge power overflows and does not hang. The answer is the value of `ans`, rounded to five
+places as in the DSL, or `yes` or `no` for a comparison.
+
+Code that is valid Python but outside this list, such as a function definition, an import, a loop or `math.sqrt`, is
+not run, and it is reported as its own kind of invalid output, **outside the subset**. The limit of the evaluator is
+then visible in the results, and is not mistaken for a mistake of the model.
+
+```{python}
+SNIPPETS = [
+    "ans = (5 - 3) / 3",
+    "x = 4\nans = round(x * 2.567, 1)",
+    "ans = 3 > 2",
+    "```python\nans = 1 + 2\n```",
+    "import math\nans = math.sqrt(4)",
+    "def f():\n    return 1\nans = f()",
+    "ans = 1 +",
+    "ans = x + 1",
+    "ans = 1 / 0",
+    "result = 5",
+]
+pd.DataFrame([
+    {
+        "code": code.replace("\n", "; "),
+        "value": python_format.try_execute_python(code)[0],
+        "kind": python_format.try_execute_python(code)[1] or "runs",
+    }
+    for code in SNIPPETS
+]).set_index("code")
+```
+
+## The prompt
+
+The DSL prompts of @sec-baseline describe the language. The Python prompt has three rules and nothing else, so that it
+measures what the model already knows: a valid Python program, numbers that appear on the page, and the answer
+assigned to `ans`. It says nothing about the structure of the program and nothing about the syntax.
+
+```{python}
+from convfinqa.python_eval import MAX_NEW_TOKENS, SYSTEM_PYTHON
+
+print(SYSTEM_PYTHON)
+```
+
+There are two variants. With no examples the prompt is these rules alone. With examples, the three conversations of
+example set 0 are shown first, as in @sec-baseline, with their gold programs translated by `to_python`. Those answers
+mostly read `ans = a - b`, so the style of the translation is part of what the examples teach, and the results with
+examples are partly a result about that style.
+
+A fence around the code counts as invalid, as in the DSL, and the fence rate is reported next to the accuracy. Free-form
+Python is longer than a DSL program, so the generation limit is `{python} MAX_NEW_TOKENS` tokens and not 96, and the
+share of generations that reach it is reported.
+
+## The code
+
+`python_untuned_{split}_{variant}_{seed}_{mode}` generates the answers with the untuned model; the variant `e0` has no
+examples and `e3` has three from example set `seed`. `scores_python_untuned_…` is light: it executes and scores
+the outputs. The scores have the fields of the DSL scores, so everything that compares systems works on them.
+
+```{python}
+@artifact(
+    "python_untuned_{split}_{variant}_{seed}_{mode}",
+    deps=["train_val_split", "eval_turns", "example_sets"],
+    files=["configs/baseline.json"],
+    heavy=True,
+)
+def build_python_untuned(
+    out, deps, files, *, split: str, variant: str, seed: int, mode: str
+):
+    """Generate the untuned model's Python answer for every turn of a split.
+
+    Args:
+        out: Output directory; `predictions.jsonl` is written to it.
+        deps: The conversations and the example sets.
+        files: `configs/baseline.json` (the model).
+        split: `val`, or `dev` once `configs/FROZEN` exists.
+        variant: `e0` (no examples) or `e3` (three examples).
+        seed: The example set; 0 for `e0`.
+        mode: `gold` or `pred`, the history of the earlier turns.
+    """
+    import json
+    import time
+
+    from convfinqa.python_eval import generate_untuned_python
+    from convfinqa.tuned_eval import split_conversations
+
+    cfg = files["configs/baseline.json"].json()
+    if variant not in ("e0", "e3"):
+        raise ValueError(f"variant must be 'e0' or 'e3', not {variant!r}")
+    n_examples = int(variant[1:])
+    if n_examples == 0 and seed != 0:
+        raise ValueError("a variant with no examples has no example set: use seed 0")
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    examples = []
+    if n_examples:
+        wanted = deps["example_sets"].json("sets.json")["sets"][str(seed)][:n_examples]
+        pool = {
+            c["id"]: c
+            for c in deps["train_val_split"].jsonl("train_fit.jsonl")
+        }
+        examples = [pool[i] for i in wanted]
+    start, done = time.perf_counter(), 0
+    with open(out / "predictions.jsonl", "w") as f:
+        def sink(row):
+            nonlocal done
+            f.write(json.dumps({
+                k: v for k, v in row.items() if k != "seconds"
+            }) + "\n")
+            f.flush()
+            done += 1
+            if done % 50 == 0:
+                print(
+                    f"{done} turns, {time.perf_counter() - start:.0f} s",
+                    flush=True
+                )
+
+        generate_untuned_python(cfg, convs, examples, mode, sink)
+    print(f"done: {done} turns in {time.perf_counter() - start:.0f} s")
+
+
+@artifact(
+    "scores_python_untuned_{split}_{variant}_{seed}_{mode}",
+    deps=["python_untuned_{split}_{variant}_{seed}_{mode}", "eval_turns"],
+)
+def build_scores_python_untuned(
+    out, deps, *, split: str, variant: str, seed: int, mode: str
+):
+    """Execute and score the outputs of `python_untuned_…`."""
+    import json
+
+    from convfinqa.evaluate import summarize
+    from convfinqa.python_eval import score_python_rows
+
+    rows = list(
+        deps[f"python_untuned_{split}_{variant}_{seed}_{mode}"]
+        .jsonl("predictions.jsonl")
+    )
+    turns = list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl"))
+    scores = score_python_rows(rows, turns)
+    (out / "scores.jsonl").write_text(
+        "".join(json.dumps(s) + "\n" for s in scores)
+    )
+    (out / "summary.json").write_text(
+        json.dumps(summarize(scores), indent=2)
+    )
+```
