@@ -28,6 +28,7 @@ book:
         - 303_training_with.qmd
         - 304_evaluating_the.qmd
         - 305_dsl_vs.qmd
+        - 306_constrained_decoding.qmd
   appendices:
     - 902_references.qmd
 
