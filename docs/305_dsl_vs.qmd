@@ -303,7 +303,8 @@ pd.DataFrame([
     {
         "condition": label,
         "Python − DSL (points)": pts(lead[key]["difference"]),
-        "95% paired interval": f"[{pts(lead[key]['low'])}, {pts(lead[key]['high'])}]",
+        "95% paired interval":
+            f"[{pts(lead[key]['low'])}, {pts(lead[key]['high'])}]",
     }
     for label, key in CONDITIONS.items()
 ]).set_index("condition")
@@ -671,3 +672,117 @@ def build_scores_python_tuned(out, deps, *, split: str, seed: int, mode: str):
         json.dumps(summarize(scores), indent=2)
     )
 ```
+
+## Fine-tuned, Python against the DSL {#sec-python-tuned}
+
+The Python adapter is scored on the same validation turns as the DSL adapter of @sec-training, with the same
+history modes and the same bootstrap.
+
+```{python}
+#HEAVY
+tuned_py_h = {
+    "pred": get("scores_python_tuned_val_0_pred"),
+    "gold": get("scores_python_tuned_val_0_gold"),
+}
+tuned_dsl_h = {
+    "pred": get("scores_tuned_val_main_0_pred"),
+    "gold": get("scores_tuned_val_main_0_gold"),
+}
+tuned_py = {m: list(h.jsonl("scores.jsonl")) for m, h in tuned_py_h.items()}
+tuned_dsl = {m: list(h.jsonl("scores.jsonl")) for m, h in tuned_dsl_h.items()}
+tuned_py_summary = {m: h.json("summary.json") for m, h in tuned_py_h.items()}
+tuned_dsl_summary = {m: h.json("summary.json") for m, h in tuned_dsl_h.items()}
+tuned_py_ci = {m: bootstrap_accuracy(v) for m, v in tuned_py.items()}
+tuned_dsl_ci = {m: bootstrap_accuracy(v) for m, v in tuned_dsl.items()}
+tuned_lead = {m: paired_difference(tuned_py[m], tuned_dsl[m]) for m in tuned_py}
+assert all(
+    s["n"] == n_turns
+    for s in [*tuned_py_summary.values(), *tuned_dsl_summary.values()]
+)
+
+rows = []
+for m, label in [("pred", "predicted history"), ("gold", "gold history")]:
+    for name, ci, summary in [
+        ("DSL", tuned_dsl_ci, tuned_dsl_summary),
+        ("Python", tuned_py_ci, tuned_py_summary),
+    ]:
+        rows.append({
+            "history": label,
+            "output": name,
+            "accuracy": pct(ci[m]["accuracy"]),
+            "95% interval": f"[{pct(ci[m]['low'])}, {pct(ci[m]['high'])}]",
+            "invalid": pct(summary[m]["invalid_rate"]),
+            "hit the limit": pct(summary[m]["truncated"] / n_turns),
+        })
+pd.DataFrame(rows).set_index(["history", "output"])
+```
+
+```{python}
+#HEAVY
+# no lead in either history mode: the intervals of the difference contain zero
+assert not any(lead["excludes_zero"] for lead in tuned_lead.values())
+
+# the untuned lead is gone, not reversed: the untuned leads are clear
+assert lead[("e3", "pred")]["excludes_zero"] \
+    and lead[("e3", "gold")]["excludes_zero"]
+
+# neither adapter has invalid outputs to speak of
+assert all(
+    s[m]["invalid_rate"] < 0.01
+    for s in (tuned_py_summary, tuned_dsl_summary)
+    for m in ("pred", "gold")
+)
+
+pd.DataFrame([
+    {
+        "history": label,
+        "untuned, three examples": f"{pts(lead[('e3', m)]['difference'])} [{pts(lead[('e3', m)]['low'])}, {pts(lead[('e3', m)]['high'])}]",
+        "fine-tuned": f"{pts(tuned_lead[m]['difference'])} [{pts(tuned_lead[m]['low'])}, {pts(tuned_lead[m]['high'])}]",
+    }
+    for m, label in [("pred", "predicted history"), ("gold", "gold history")]
+]).set_index("history")
+```
+
+The table above gives, in points of accuracy, the lead of Python over the DSL, with its paired 95% interval: for the
+untuned model with three examples, and for the fine-tuned adapters. Fine-tuning takes the untuned lead of
+`{python} pts(lead[("e3", "pred")]["difference"])` points with predicted history to
+`{python} pts(tuned_lead["pred"]["difference"])` (interval [`{python} pts(tuned_lead["pred"]["low"])`,
+`{python} pts(tuned_lead["pred"]["high"])`]), and the lead of `{python} pts(lead[("e3", "gold")]["difference"])`
+points with gold history to `{python} pts(tuned_lead["gold"]["difference"])`
+([`{python} pts(tuned_lead["gold"]["low"])`, `{python} pts(tuned_lead["gold"]["high"])`]). Both intervals contain zero:
+once the model is fine-tuned, the data do not show a difference between the formats, in either direction. The
+adapters make `{python} tuned_py_summary["pred"]["by_kind"].get("code_fence", 0) + tuned_py_summary["pred"]["by_kind"].get("syntax", 0)`
+invalid outputs in Python and
+`{python} round(tuned_dsl_summary["pred"]["invalid_rate"] * n_turns)` in the DSL with predicted history, out of
+`{python} f"{n_turns:,}"` turns. That fits the untuned lead being mostly about how well the model follows the format, which the adapters have
+learned in either language.
+
+```{python}
+#HEAVY
+metrics_py = get("python_lora_0").json("metrics.json")
+metrics_dsl = get("lora_main_0").json("metrics.json")
+assert metrics_py["best_step"] == metrics_dsl["best_step"]
+```
+
+The training runs agree. The validation loss starts at `{python} f"{metrics_dsl['step0_eval_loss']:.2f}"` for the DSL and
+`{python} f"{metrics_py['step0_eval_loss']:.2f}"` for Python, and ends at `{python} f"{metrics_dsl['best_eval_loss']:.4f}"` and
+`{python} f"{metrics_py['best_eval_loss']:.4f}"` (both at step `{python} metrics_py["best_step"]`). The two losses are measured
+on different token sequences, so they say that both runs converge, not that one format is easier.
+
+By the rule of the plan, then, the fine-tuned Python rows are not run on the development data, and the book keeps the
+DSL for the rest of the work. The untuned Python rows are still run on the development data, so that the untuned
+comparison of this chapter is reported there too.
+
+## Summary
+
+- A ConvFinQA program written as Python is the same computation: all `{python} f"{len(programs):,}"` training programs give
+  the same answer in both, and only `{python} len(named)` need a named step. Python written by a model is run by a
+  whitelist evaluator, never by `exec`.
+- Untuned, with three examples, Python is `{python} pts(lead[("e3", "pred")]["difference"])` points ahead of the DSL with
+  predicted history and `{python} pts(lead[("e3", "gold")]["difference"])` with gold history, and both intervals exclude
+  zero. The lead is about as large as the difference in invalid output, so much of it may be the untuned model not yet
+  writing the DSL.
+- After fine-tuning the formats are not different on validation data: the leads are
+  `{python} pts(tuned_lead["pred"]["difference"])` and `{python} pts(tuned_lead["gold"]["difference"])` points, and both
+  intervals include zero.
+- Python is not carried forward: the fine-tuned Python rows stay on the validation data, and the later stages use the DSL.
