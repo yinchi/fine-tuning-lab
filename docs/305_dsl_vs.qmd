@@ -4,7 +4,8 @@
 
 - why the book's program language is a question worth testing, and what a fair test of it looks like;
 - how a ConvFinQA program is written as Python, and how Python written by a model is run without trusting it;
-- how much of the DSL's difficulty the untuned model already avoids when it writes Python.
+- how much of the DSL's difficulty the untuned model already avoids when it writes Python, and whether the difference
+  survives fine-tuning.
 
 Every program in this book so far is in the ConvFinQA DSL: `subtract(5, 3), divide(#0, 3)`. The DSL is small and
 exact, and it is also unlike anything the model saw in pretraining. A model trained on a great deal of code might
@@ -13,8 +14,10 @@ write Python, which it knows, more reliably than a language invented for one dat
 program-of-thought prompting [@chen2022program] writes Python for the same reason. This chapter tests it on our model.
 
 The test is on the **untuned** model first. The question is how well the model already knows Python, and an adapter
-trained to write one format or the other would answer a different question. An adapter for Python is trained only if
-the untuned model does clearly better in Python than in the DSL (see the end of the chapter).
+trained to write one format or the other would answer a different question. A second stage trains an adapter for
+Python, and compares it with the DSL adapter of @sec-training, because a difference between the untuned models might not
+survive fine-tuning. That stage was planned to run only if the untuned model did clearly better in Python, and it did.
+Every number in this chapter is measured on the validation split; the development split is not used.
 
 ## Python as an output format
 
@@ -25,8 +28,6 @@ structure of the program exactly, with parentheses where it needs them, so that 
 same order.
 
 ```{python}
-from collections import Counter
-
 import pandas as pd
 
 from convfinqa.artifacts import artifact, get
@@ -67,7 +68,7 @@ pd.DataFrame({
 
 A percentage such as `4.02%` is written `4.02 / 100`, which keeps the digits that are on the page. The constants
 `const_100` and `const_m1` become the numbers `100` and `-1`. Of the `{python} f"{len(programs):,}"` gold programs in the
-training conversations, every one gives the same answer as Python as in the DSL, and only `{python} len(named)` need a
+training conversations, every one gives the same answer in Python as in the DSL, and only `{python} len(named)` need a
 named step.
 
 ## Running Python written by a model
@@ -113,18 +114,43 @@ assigned to `ans`. It says nothing about the structure of the program and nothin
 
 ```{python}
 from convfinqa.python_eval import MAX_NEW_TOKENS, SYSTEM_PYTHON
+from convfinqa.tuned_eval import MAX_NEW_TOKENS as DSL_MAX_NEW_TOKENS
 
 print(SYSTEM_PYTHON)
 ```
 
 There are two variants. With no examples the prompt is these rules alone. With examples, the three conversations of
-example set 0 are shown first, as in @sec-baseline, with their gold programs translated by `to_python`. Those answers
-mostly read `ans = a - b`, so the style of the translation is part of what the examples teach, and the results with
-examples are partly a result about that style.
+example set 0 are shown first, as in @sec-baseline, with their gold programs translated by `to_python`. This is the
+chat for the first question of a validation conversation, with the long texts cut:
+
+```{python}
+from textwrap import shorten
+
+from convfinqa.prompts import prompt_chat
+from convfinqa.python_eval import python_conversation
+
+pool = {c["id"]: c for c in train_fit}
+shown = get("example_sets").json("sets.json")["sets"]["0"][:3]
+first_val = list(get("train_val_split").jsonl("val.jsonl"))[0]
+chat = prompt_chat(
+    python_conversation(first_val), 0, SYSTEM_PYTHON,
+    [python_conversation(pool[i]) for i in shown],
+)
+for message in chat:
+    print(f"[{message['role']}] " + shorten(
+        message["content"].replace("\n", " "), 100, placeholder=" ..."
+    ))
+single = sum(p.count("(") <= 1 for p in programs) / len(programs)
+assert single > 0.5
+```
+
+Most answers in the examples are short: `{python} f"{100 * single:.0f}"`% of the gold programs of the training conversations
+are a number or a single operation, which Python writes as `ans = a - b`. The style of the translation is therefore
+part of what the examples teach, and the results with examples are partly a result about that style.
 
 A fence around the code counts as invalid, as in the DSL, and the fence rate is reported next to the accuracy. Free-form
-Python is longer than a DSL program, so the generation limit is `{python} MAX_NEW_TOKENS` tokens and not 96, and the
-share of generations that reach it is reported.
+Python is longer than a DSL program, so the generation limit is `{python} MAX_NEW_TOKENS` tokens and not
+`{python} DSL_MAX_NEW_TOKENS`, and the share of generations that reach it is reported.
 
 ## The code
 
@@ -310,8 +336,16 @@ pd.DataFrame([
 ]).set_index("condition")
 ```
 
-**Without examples and with the model's own history,** neither format works: the Python outputs are prose and the
-DSL outputs mostly code fences, and the accuracy of Python is `{python} pct(py_ci[("e0", "pred")]["accuracy"])`, against
+```{python}
+#HEAVY
+dsl_fence = dsl_summary[("e0", "pred")]["by_kind"]["code_fence"] / n_turns
+py_unparsed = py_summary[("e0", "pred")]["by_kind"]["syntax"] / n_turns
+assert dsl_fence > 0.5 and py_unparsed > 0.9
+```
+
+**Without examples and with the model's own history,** neither format works: `{python} pct(py_unparsed)` of the Python
+outputs do not parse as Python, and `{python} pct(dsl_fence)` of the DSL outputs
+are code fences. The accuracy of Python is `{python} pct(py_ci[("e0", "pred")]["accuracy"])`, against
 `{python} pct(dsl_ci[("e0", "pred")]["accuracy"])` for the DSL. Three rules about *what* to write are not a format
 the model follows by itself.
 
@@ -329,7 +363,7 @@ turns of the conversation are written in the format, and the model reaches `{pyt
 [`{python} pts(lead[("e0", "gold")]["low"])`, `{python} pts(lead[("e0", "gold")]["high"])`]). With its own history the same
 prompt reaches `{python} pct(py_ci[("e0", "pred")]["accuracy"])` and `{python} pct(dsl_ci[("e0", "pred")]["accuracy"])`.
 
-### Where the Python runs fail
+### What the Python runs produce
 
 ```{python}
 #HEAVY
@@ -366,21 +400,26 @@ stripped_acc = {
 fence_rate = {
     k: py_summary[k]["by_kind"].get("code_fence", 0) / n_turns for k in PYTHON
 }
-no_syntax = {
+outside = {
     k: py_summary[k]["by_kind"].get("outside_subset", 0) for k in PYTHON
 }
 ```
 
 An output that is invalid in Python is, in every condition, a syntax error or a code fence; the evaluator's own
-limit does not appear: `{python} sum(no_syntax.values())` outputs are valid Python outside the subset. A fence is
-rare once the model has seen examples (`{python} pct(fence_rate[("e3", "pred")])` of the turns with predicted history,
-`{python} pct(fence_rate[("e3", "gold")])` with the gold history). Stripping the fences before running leaves the accuracy of the runs with examples at
-`{python} pct(stripped_acc[("e3", "pred")])` (predicted history) and `{python} pct(stripped_acc[("e3", "gold")])` (gold history).
+limit does not appear: `{python} sum(outside.values())` outputs are valid Python outside the subset. A fence is rare
+once the model has seen examples (`{python} pct(fence_rate[("e3", "pred")])` of the turns with predicted history,
+`{python} pct(fence_rate[("e3", "gold")])` with the gold history). Stripping the fences before running leaves the
+accuracy of the runs with examples at `{python} pct(stripped_acc[("e3", "pred")])` (predicted history) and
+`{python} pct(stripped_acc[("e3", "gold")])` (gold history).
 
 ```{python}
 #HEAVY
 # the claims of the paragraph above
-assert sum(no_syntax.values()) == 0
+assert sum(outside.values()) == 0
+assert all(
+    set(py_summary[k]["by_kind"]) <= {"correct", "wrong_answer", "syntax", "code_fence"}
+    for k in PYTHON
+)
 assert all(
     py_summary[k]["by_kind"].get("syntax", 0)
     > py_summary[k]["by_kind"].get("code_fence", 0)
@@ -397,8 +436,8 @@ assert all(
 )
 ```
 
-The generation limit is `{python} MAX_NEW_TOKENS` tokens for Python and 96 for the DSL, and the share of turns that
-hit it is in the table: it is much larger without examples than with them.
+The generation limit is `{python} MAX_NEW_TOKENS` tokens for Python and `{python} DSL_MAX_NEW_TOKENS` for the DSL, and the
+share of turns that hit it is in the table: it is much larger without examples than with them.
 
 ### By kind of turn
 
@@ -518,9 +557,9 @@ assert split[("Python", "e3", "gold")]["later"] \
 `{python} pct(split[("Python", "e0", "gold")]["first"])` in Python and `{python} pct(split[("DSL", "e0", "gold")]["first"])`
 in the DSL, whichever history it is given. The follow-ups go from `{python} pct(split[("Python", "e0", "pred")]["later"])` to
 `{python} pct(split[("Python", "e0", "gold")]["later"])` in Python and from
-`{python} pct(split[("DSL", "e0", "pred")]["later"])` to `{python} pct(split[("DSL", "e0", "gold")]["later"])` in the DSL. Once
-the answer to the first question is in the conversation in the right format, the model copies the format: the gold
-turns act as the examples that the prompt does not have.
+`{python} pct(split[("DSL", "e0", "pred")]["later"])` to `{python} pct(split[("DSL", "e0", "gold")]["later"])` in the DSL. This fits the gold turns doing the
+work of the examples that the prompt does not have: once the answer to the first question is in the conversation in
+the right format, the model follows it.
 
 **With examples,** the follow-ups are worse than the first turn when the model's own answers are the history
 (`{python} pct(split[("Python", "e3", "pred")]["later"])` against `{python} pct(split[("Python", "e3", "pred")]["first"])` in
@@ -529,8 +568,9 @@ the DSL). The gold history helps them
 (`{python} pts(split[("Python", "e3", "gold")]["later"] - split[("Python", "e3", "pred")]["later"])` and
 `{python} pts(split[("DSL", "e3", "gold")]["later"] - split[("DSL", "e3", "pred")]["later"])` points), but not to the level of the first
 turn in the DSL (`{python} pct(split[("DSL", "e3", "gold")]["later"])`), while in Python it is above it
-(`{python} pct(split[("Python", "e3", "gold")]["later"])`). This table does not separate how hard the follow-up questions are from how well the model uses the history. What it
-shows is that the Python lead sits on the follow-ups: on first turns the DSL is ahead by
+(`{python} pct(split[("Python", "e3", "gold")]["later"])`). This table does not separate how hard the follow-up
+questions are from how well the model uses the history. What it shows is that the Python lead sits on the follow-ups:
+on first turns the DSL is ahead by
 `{python} pts(split[("DSL", "e3", "pred")]["first"] - split[("Python", "e3", "pred")]["first"])` points.
 
 ## Is a Python adapter worth training?
@@ -553,9 +593,9 @@ assert all(fewer_invalid[k] > 0.8 * lead[k]["difference"] for k in fewer_invalid
 With examples, the DSL runs produce `{python} pts(fewer_invalid[("e3", "pred")])` and
 `{python} pts(fewer_invalid[("e3", "gold")])` points more invalid outputs than the Python runs (predicted and gold
 history), against leads of `{python} pts(lead[("e3", "pred")]["difference"])` and
-`{python} pts(lead[("e3", "gold")]["difference"])`. The lead is about as large as the difference in invalid output, so it may be largely the untuned model failing to
-write the DSL, which tuning removes: an adapter for the DSL writes a valid program on all but one turn of the validation data
-(@sec-evaluating-errors). If a lead remains after tuning, it is a lead in the reasoning, and the only way to see it is
+`{python} pts(lead[("e3", "gold")]["difference"])`. The lead is about as large as the difference in invalid output, so it
+may be largely the untuned model failing to write the DSL, which tuning removes: an adapter for the DSL writes a valid
+program on all but one turn of the validation data (@sec-evaluating-errors). If a lead remains after tuning, it is a lead in the reasoning, and the only way to see it is
 to train.
 
 The next step is one adapter for Python with the hyperparameters of the DSL adapter,
@@ -754,8 +794,12 @@ once the model is fine-tuned, the data do not show a difference between the form
 adapters make `{python} tuned_py_summary["pred"]["by_kind"].get("code_fence", 0) + tuned_py_summary["pred"]["by_kind"].get("syntax", 0)`
 invalid outputs in Python and
 `{python} round(tuned_dsl_summary["pred"]["invalid_rate"] * n_turns)` in the DSL with predicted history, out of
-`{python} f"{n_turns:,}"` turns. That fits the untuned lead being mostly about how well the model follows the format, which the adapters have
-learned in either language.
+`{python} f"{n_turns:,}"` turns. That fits the untuned lead being mostly about how well the model follows the format,
+which the adapters have learned in either language.
+
+Each adapter is one training run (seed 0). The intervals above cover the variation between validation conversations, and
+not the variation between training runs, so a difference of a point or two between the formats could be hidden by
+either.
 
 ```{python}
 #HEAVY
@@ -773,6 +817,149 @@ By the rule of the plan, then, the fine-tuned Python rows are not run on the dev
 DSL for the rest of the work. The untuned Python rows are still run on the development data, so that the untuned
 comparison of this chapter is reported there too.
 
+## Numbers from the page, and the scale {#sec-python-numbers}
+
+The prompt asks for numbers that appear on the page. Two checks from @sec-evaluating-errors show whether the
+outputs follow it, here for Python. The literal check compares the numbers written in the code with those of the
+translated gold program, as text and as values, and tests whether each comes from the page. Python has no named
+constants, so a program that needs `100` writes `100`; the numbers the DSL's named constants stand for (1 to 9, the
+powers of ten up to 10^9, and -1) count as allowed. The scale check runs the code and looks for an answer that is the
+gold answer times, or over, a power of ten. `convfinqa.python_checks` holds both.
+
+```{python}
+@artifact(
+    "checks_python_untuned_{split}_{variant}_{seed}_{mode}",
+    deps=[
+        "python_untuned_{split}_{variant}_{seed}_{mode}",
+        "eval_turns", "train_val_split",
+    ],
+)
+def build_checks_python_untuned(
+    out, deps, *, split: str, variant: str, seed: int, mode: str
+):
+    """The literal and scale checks of an untuned Python run."""
+    import json
+
+    from convfinqa.python_checks import check_python_rows
+    from convfinqa.tuned_eval import split_conversations
+
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    rows = list(
+        deps[f"python_untuned_{split}_{variant}_{seed}_{mode}"]
+        .jsonl("predictions.jsonl")
+    )
+    checks = check_python_rows(
+        rows, list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl")), convs
+    )
+    (out / "checks.jsonl").write_text(
+        "".join(json.dumps(c) + "\n" for c in checks)
+    )
+
+
+@artifact(
+    "checks_python_tuned_{split}_{seed}_{mode}",
+    deps=[
+        "python_tuned_{split}_{seed}_{mode}", "eval_turns", "train_val_split",
+    ],
+)
+def build_checks_python_tuned(out, deps, *, split: str, seed: int, mode: str):
+    """The literal and scale checks of a Python adapter run."""
+    import json
+
+    from convfinqa.python_checks import check_python_rows
+    from convfinqa.tuned_eval import split_conversations
+
+    convs = split_conversations(
+        split,
+        list(deps["train_val_split"].jsonl("val.jsonl")),
+        list(deps["eval_turns"].jsonl("dev.jsonl")),
+    )
+    rows = list(
+        deps[f"python_tuned_{split}_{seed}_{mode}"].jsonl("predictions.jsonl")
+    )
+    checks = check_python_rows(
+        rows, list(deps["eval_turns"].jsonl(f"{split}_turns.jsonl")), convs
+    )
+    (out / "checks.jsonl").write_text(
+        "".join(json.dumps(c) + "\n" for c in checks)
+    )
+```
+
+```{python}
+#HEAVY
+from convfinqa.python_checks import check_python_rows
+
+py_checks = {
+    "untuned, three examples, predicted": list(
+        get("checks_python_untuned_val_e3_0_pred").jsonl("checks.jsonl")
+    ),
+    "untuned, three examples, gold": list(
+        get("checks_python_untuned_val_e3_0_gold").jsonl("checks.jsonl")
+    ),
+    "fine-tuned, predicted": list(
+        get("checks_python_tuned_val_0_pred").jsonl("checks.jsonl")
+    ),
+    "fine-tuned, gold": list(
+        get("checks_python_tuned_val_0_gold").jsonl("checks.jsonl")
+    ),
+}
+py_ran = {k: [c for c in v if c["runs"]] for k, v in py_checks.items()}
+
+# the same check on the translated gold programs: the page holds all of their numbers
+gold_python = check_python_rows(
+    [
+        {"id": t["id"], "turn": t["turn"], "output": python_format.to_python(t["program"])}
+        for t in val_turns
+    ],
+    val_turns, list(get("train_val_split").jsonl("val.jsonl")),
+)
+assert all(c["lit_grounded"] and c["lit_text"] for c in gold_python)
+
+share = lambda rows_, flag: pct(sum(c[flag] for c in rows_) / len(rows_))
+ungrounded = {
+    k: 1 - sum(c["lit_grounded"] for c in v) / len(v) for k, v in py_ran.items()
+}
+off_scale = {
+    k: sum(c["scale"] is not None for c in v) for k, v in py_checks.items()
+}
+# the adapters write only numbers of the page; the untuned model does not
+assert ungrounded["fine-tuned, predicted"] == 0
+assert ungrounded["fine-tuned, gold"] == 0
+assert all(ungrounded[k] > 0.02 for k in py_ran if k.startswith("untuned"))
+# and the adapters are off by a power of ten on fewer turns
+assert all(
+    off_scale[a] > 2 * off_scale[b]
+    for a, b in [
+        ("untuned, three examples, predicted", "fine-tuned, predicted"),
+        ("untuned, three examples, gold", "fine-tuned, gold"),
+    ]
+)
+
+pd.DataFrame({
+    k: {
+        "outputs that run": len(v),
+        "same numbers as gold, as text": share(v, "lit_text"),
+        "same numbers as gold, as values": share(v, "lit_value"),
+        "every number comes from the page": share(v, "lit_grounded"),
+        "answer off by a power of ten (of all turns)": off_scale[k],
+    }
+    for k, v in py_ran.items()
+}).T
+```
+
+Every number in the translated gold programs is on the page or is a constant, so the check can pass. The adapters
+pass it on every turn that runs: they write only numbers from the page, so their mistakes are not invented numbers. The untuned model with examples fails it on `{python} pct(ungrounded["untuned, three examples, predicted"])` of
+its turns that run with predicted history and `{python} pct(ungrounded["untuned, three examples, gold"])` with the gold
+history. The untuned model is also off by a power of ten on `{python} off_scale["untuned, three examples, predicted"]`
+and `{python} off_scale["untuned, three examples, gold"]` turns, against
+`{python} off_scale["fine-tuned, predicted"]` and `{python} off_scale["fine-tuned, gold"]` for the adapters. The test for
+numbers from the page is weak, since a page holds many numbers, so it can show that a model invents numbers, and not
+that it picks the right ones.
+
 ## Summary
 
 - A ConvFinQA program written as Python is the same computation: all `{python} f"{len(programs):,}"` training programs give
@@ -785,4 +972,8 @@ comparison of this chapter is reported there too.
 - After fine-tuning the formats are not different on validation data: the leads are
   `{python} pts(tuned_lead["pred"]["difference"])` and `{python} pts(tuned_lead["gold"]["difference"])` points, and both
   intervals include zero.
+- Without examples, all of the gain from the gold history is on the follow-up turns, where the earlier answers show the
+  format. With examples, the Python lead is on the follow-ups too: on first turns the DSL is slightly ahead.
+- Checked on the outputs that run, the adapters write only numbers from the page and are rarely off by a power of ten;
+  the untuned model with examples is not, so these checks separate tuned from untuned and not Python from the DSL.
 - Python is not carried forward: the fine-tuned Python rows stay on the validation data, and the later stages use the DSL.
