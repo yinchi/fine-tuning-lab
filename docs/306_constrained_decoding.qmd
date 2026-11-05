@@ -59,6 +59,70 @@ pd.DataFrame([
 ]).set_index("text")
 ```
 
+## One decoding step
+
+The mask is a list of the tokens that may come next. To see it, we feed a prefix to the grammar and ask which of the
+model's `{python} f"{151936:,}"` output tokens remain possible.
+
+```{python}
+import torch
+import xgrammar as xgr
+
+VOCAB = 151936
+
+
+def allowed_tokens(compiled, prefix: str) -> list[int]:
+    """The ids of the tokens that may follow `prefix` under the grammar."""
+    matcher = xgr.GrammarMatcher(compiled, terminate_without_stop_token=True)
+    assert prefix == "" or matcher.accept_string(prefix)
+    mask = xgr.allocate_token_bitmask(1, VOCAB)
+    matcher.fill_next_token_bitmask(mask)
+    logits = torch.zeros(1, VOCAB)
+    xgr.apply_token_bitmask_inplace(logits, mask)
+    return torch.nonzero(torch.isfinite(logits[0])).flatten().tolist()
+
+
+STEPS = {
+    "start of the answer": "",
+    "after `subtract(`": "subtract(",
+    "after `subtract(5, 3), `": "subtract(5, 3), ",
+}
+step_ids = {name: allowed_tokens(dsl, prefix) for name, prefix in STEPS.items()}
+pd.DataFrame([
+    {
+        "position": name,
+        "tokens allowed": len(ids),
+        "a few of them": " ".join(repr(tok.decode([i])) for i in ids[:12]),
+    }
+    for name, ids in step_ids.items()
+]).set_index("position")
+```
+
+```{python}
+#HEAVY
+# the first token of the untuned model's answer to the first turn of the
+# first conversation, without examples and without a grammar
+first = next(get("untuned_val_e0p_0_pred").jsonl("predictions.jsonl"))
+first_token = tok.encode(first["output"], add_special_tokens=False)[0]
+assert first_token not in step_ids["start of the answer"]
+assert len(step_ids["start of the answer"]) < 100
+```
+
+At the start of an answer, `{python} len(step_ids["start of the answer"])` tokens are allowed: digits, a minus sign,
+a point, and the first letters of the operators and of `const_`. The untuned model's own first token for the first
+turn, without examples, is `{python} repr(tok.decode([first_token]))`, the start of a code fence. It is not among them.
+
+::: {.callout-note title="Under the hood: what the processor does to the logits"}
+The model produces one score (logit) per token. Before the next token is chosen, the processor sets the score of every
+token that the grammar does not allow to minus infinity. After the softmax those tokens have probability zero and the
+others share the whole probability between them, in the proportions the model gave them. Greedy decoding then picks
+the allowed token with the highest score. The model's preferences among valid continuations are untouched, and this
+is why a grammar can only repair syntax: it never makes the model prefer the correct operation.
+
+The matcher keeps the parse state, so the mask is recomputed after every token. `xgrammar` prechecks the tokens whose
+validity does not depend on the parse stack and checks only the others at run time [@dong2024xgrammar].
+:::
+
 ## The code
 
 A run with a grammar is the run without one, with the logits processor added: the same prompts, the same greedy
@@ -373,3 +437,458 @@ def build_scores_constrained_python_untuned(
         json.dumps(summarize(scores), indent=2)
     )
 ```
+
+## The same prompt, with the grammar off and on {#sec-constrained-results}
+
+Validation turns only (@sec-formatting), predicted history, greedy, one attempt, an invalid answer counts as wrong. Each
+row is one prompt run twice, with the same decoding and the grammar on or off, on the same turns, so the difference is
+paired. The grammar is the unbounded one (`free`); @sec-constrained-bounds compares it with the bounded one.
+
+```{python}
+#HEAVY
+import re
+
+from convfinqa.stats import bootstrap_accuracy, paired_difference
+
+SYSTEMS = {
+    "untuned DSL": (
+        get("scores_untuned_val_e3p_0_pred"),
+        get("scores_constrained_untuned_val_e3p_0_pred_free"),
+    ),
+    "untuned Python": (
+        get("scores_python_untuned_val_e3_0_pred"),
+        get("scores_constrained_python_untuned_val_e3_0_pred_free"),
+    ),
+    "fine-tuned DSL": (
+        get("scores_tuned_val_main_0_pred"),
+        get("scores_constrained_tuned_val_main_0_pred_free"),
+    ),
+}
+off = {k: list(v[0].jsonl("scores.jsonl")) for k, v in SYSTEMS.items()}
+on = {k: list(v[1].jsonl("scores.jsonl")) for k, v in SYSTEMS.items()}
+off_sum = {k: v[0].json("summary.json") for k, v in SYSTEMS.items()}
+on_sum = {k: v[1].json("summary.json") for k, v in SYSTEMS.items()}
+off_ci = {k: bootstrap_accuracy(v) for k, v in off.items()}
+on_ci = {k: bootstrap_accuracy(v) for k, v in on.items()}
+gain = {k: paired_difference(on[k], off[k]) for k in SYSTEMS}
+n_val = off_sum["untuned DSL"]["n"]
+assert all(s["n"] == n_val for s in [*off_sum.values(), *on_sum.values()])
+
+pct = lambda x: f"{100 * x:.1f}%"
+pts = lambda x: f"{100 * x:+.1f}"
+rows = []
+for k in SYSTEMS:
+    for label, ci, summary in [
+        ("off", off_ci, off_sum), ("on", on_ci, on_sum)
+    ]:
+        rows.append({
+            "system": k,
+            "grammar": label,
+            "accuracy": pct(ci[k]["accuracy"]),
+            "95% interval": f"[{pct(ci[k]['low'])}, {pct(ci[k]['high'])}]",
+            "invalid": pct(summary[k]["invalid_rate"]),
+            "hit the limit": pct(summary[k]["truncated"] / n_val),
+        })
+pd.DataFrame(rows).set_index(["system", "grammar"])
+```
+
+```{python}
+#HEAVY
+# the grammar removes invalid answers from the untuned models ...
+for k in ["untuned DSL", "untuned Python"]:
+    assert on_sum[k]["invalid_rate"] < off_sum[k]["invalid_rate"], k
+assert on_sum["fine-tuned DSL"]["invalid_rate"] \
+    <= off_sum["fine-tuned DSL"]["invalid_rate"]
+# ... but the untuned models gain less than half of what they stop getting
+# wrong by being invalid; the fine-tuned model gains nothing worth the name
+for k in ["untuned DSL", "untuned Python"]:
+    assert gain[k]["low"] > 0, k
+    dropped = off_sum[k]["invalid_rate"] - on_sum[k]["invalid_rate"]
+    assert gain[k]["difference"] < dropped / 2, k
+assert gain["fine-tuned DSL"]["difference"] < 0.01
+pd.DataFrame([
+    {
+        "system": k,
+        "grammar on − off (points)": pts(gain[k]["difference"]),
+        "95% paired interval":
+            f"[{pts(gain[k]['low'])}, {pts(gain[k]['high'])}]",
+        "invalid answers removed (points)":
+            f"{100 * (off_sum[k]['invalid_rate'] - on_sum[k]['invalid_rate']):.1f}",
+    }
+    for k in SYSTEMS
+]).set_index("system")
+```
+
+The grammar takes the invalid rate of the untuned DSL from `{python} pct(off_sum["untuned DSL"]["invalid_rate"])` to
+`{python} pct(on_sum["untuned DSL"]["invalid_rate"])`, and that of untuned Python from
+`{python} pct(off_sum["untuned Python"]["invalid_rate"])` to `{python} pct(on_sum["untuned Python"]["invalid_rate"])`.
+Accuracy rises by `{python} pts(gain["untuned DSL"]["difference"])` points for the DSL and
+`{python} pts(gain["untuned Python"]["difference"])` for Python, and both paired intervals exclude zero. That is less
+than half of the invalid output that disappeared, so most of the turns the grammar rescues are valid programs that are
+still wrong. The fine-tuned model has almost no invalid answers to start with
+(`{python} pct(off_sum["fine-tuned DSL"]["invalid_rate"])` without the grammar, `{python} pct(on_sum["fine-tuned DSL"]["invalid_rate"])` with it), and the grammar moves its accuracy by
+`{python} pts(gain["fine-tuned DSL"]["difference"])` points.
+
+### Number turns and program turns
+
+A *number turn* is one whose gold program is a single number from the page; a *program turn* has operations
+(@sec-convfinqa).
+
+```{python}
+#HEAVY
+KINDS = ["number", "program"]
+by_kind = {
+    (k, state): summary[k]["by_number_turn"]
+    for k in SYSTEMS
+    for state, summary in [("off", off_sum), ("on", on_sum)]
+}
+pd.DataFrame([
+    {
+        "system": k,
+        "kind of turn": kind,
+        "turns": by_kind[(k, "off")][kind]["n"],
+        "grammar off": pct(by_kind[(k, "off")][kind]["accuracy"]),
+        "grammar on": pct(by_kind[(k, "on")][kind]["accuracy"]),
+    }
+    for k in SYSTEMS
+    for kind in KINDS
+]).set_index(["system", "kind of turn"])
+```
+
+```{python}
+#HEAVY
+def kind_gain(k, kind):
+    return (
+        by_kind[(k, "on")][kind]["accuracy"]
+        - by_kind[(k, "off")][kind]["accuracy"]
+    )
+
+
+for k in ["untuned DSL", "untuned Python"]:
+    assert kind_gain(k, "program") > kind_gain(k, "number") > 0, k
+```
+
+For both untuned systems the gain is larger on program turns (`{python} pts(kind_gain("untuned DSL", "program"))` points
+for the DSL, `{python} pts(kind_gain("untuned Python", "program"))` for Python) than on number turns
+(`{python} pts(kind_gain("untuned DSL", "number"))` and `{python} pts(kind_gain("untuned Python", "number"))`). A number
+turn is a single number and has almost no syntax to get wrong; a program has brackets, commas and references to earlier steps.
+
+## What the grammar cannot fix {#sec-constrained-gap}
+
+How far does an untuned model with the best prompt and a grammar get towards the fine-tuned one? The grammar only
+repairs syntax, so there is a ceiling: an untuned model whose every invalid answer became a correct one would score its
+accuracy plus its invalid rate.
+
+```{python}
+#HEAVY
+tuned_off = off_ci["fine-tuned DSL"]["accuracy"]
+tuned_on = on_ci["fine-tuned DSL"]["accuracy"]
+gap = {}
+for k in ["untuned DSL", "untuned Python"]:
+    start = off_ci[k]["accuracy"]
+    gap[k] = {
+        "ceiling": start + off_sum[k]["invalid_rate"],
+        "with grammar": on_ci[k]["accuracy"],
+        "total gap": tuned_off - start,
+        "closed": (on_ci[k]["accuracy"] - start) / (tuned_off - start),
+    }
+    assert gap[k]["ceiling"] < tuned_off, k
+vs_tuned = paired_difference(
+    on["fine-tuned DSL"], on["untuned DSL"]
+)
+assert vs_tuned["low"] > 0
+pd.DataFrame([
+    {
+        "system": k,
+        "no grammar": pct(off_ci[k]["accuracy"]),
+        "ceiling": pct(g["ceiling"]),
+        "with grammar": pct(g["with grammar"]),
+        "fine-tuned, no grammar": pct(tuned_off),
+        "share of the gap closed": pct(g["closed"]),
+    }
+    for k, g in gap.items()
+]).set_index("system")
+```
+
+For the DSL, the ceiling is `{python} pct(gap["untuned DSL"]["ceiling"])`, below the fine-tuned model's
+`{python} pct(tuned_off)`; for Python it is `{python} pct(gap["untuned Python"]["ceiling"])`. Even a grammar that made
+every invalid answer correct could not reach the fine-tuned model. The grammar closes
+`{python} pct(gap["untuned DSL"]["closed"])` of the gap for the DSL and `{python} pct(gap["untuned Python"]["closed"])`
+for Python (the Python gap is measured against the same fine-tuned DSL model). With the grammar on both, the fine-tuned
+DSL model is `{python} pts(vs_tuned["difference"])` points ahead of the untuned one (interval
+[`{python} pts(vs_tuned["low"])`, `{python} pts(vs_tuned["high"])`]).
+
+What is left is choosing the operations and the numbers. In the error kinds of @sec-baseline, the untuned DSL with the
+grammar still has `{python} on_sum["untuned DSL"]["by_kind"]["wrong_operations"]` turns with different operations from
+the gold program, `{python} on_sum["untuned DSL"]["by_kind"]["wrong_numbers"]` with the same operations and different
+numbers, and `{python} on_sum["untuned DSL"]["by_kind"]["wrong_answer"]` with the same shape and a different answer.
+The fine-tuned model has `{python} on_sum["fine-tuned DSL"]["by_kind"]["wrong_operations"]`,
+`{python} on_sum["fine-tuned DSL"]["by_kind"]["wrong_numbers"]` and
+`{python} on_sum["fine-tuned DSL"]["by_kind"]["wrong_answer"]`. The classifier compares the operations first, so a
+turn with the wrong operations and the wrong numbers is counted once, as wrong operations. What fine-tuning changes
+most is the first of these.
+
+## Description or enforcement? {#sec-constrained-2x2}
+
+The plain system message names no syntax rules for the DSL; the description message spells them out. They are two
+ways to tell the model the syntax, and the grammar is a third. The 2×2 below, with three examples, separates them.
+
+```{python}
+#HEAVY
+CELLS = {
+    ("plain", "off"): get("scores_untuned_val_e3p_0_pred"),
+    ("plain", "on"): get("scores_constrained_untuned_val_e3p_0_pred_free"),
+    ("description", "off"): get("scores_untuned_val_e3d_0_pred"),
+    ("description", "on"): get("scores_constrained_untuned_val_e3d_0_pred_free"),
+}
+cell = {k: list(h.jsonl("scores.jsonl")) for k, h in CELLS.items()}
+cell_sum = {k: h.json("summary.json") for k, h in CELLS.items()}
+cell_ci = {k: bootstrap_accuracy(v) for k, v in cell.items()}
+enforce = {
+    p: paired_difference(cell[(p, "on")], cell[(p, "off")])
+    for p in ["plain", "description"]
+}
+describe = {
+    g: paired_difference(cell[("description", g)], cell[("plain", g)])
+    for g in ["off", "on"]
+}
+for p in enforce:
+    assert enforce[p]["low"] > 0, p
+# the two intervals for the grammar's gain overlap
+assert (
+    enforce["plain"]["low"] < enforce["description"]["high"]
+    and enforce["description"]["low"] < enforce["plain"]["high"]
+)
+# with the grammar on, the description is the lower of the two prompts
+assert describe["on"]["high"] < 0
+assert (
+    cell_sum[("description", "on")]["by_kind"]["bad_reference"]
+    > cell_sum[("plain", "on")]["by_kind"]["bad_reference"]
+)
+pd.DataFrame([
+    {
+        "system message": p,
+        "grammar": g,
+        "accuracy": pct(cell_ci[(p, g)]["accuracy"]),
+        "invalid": pct(cell_sum[(p, g)]["invalid_rate"]),
+    }
+    for (p, g) in CELLS
+]).set_index(["system message", "grammar"])
+```
+
+The grammar helps with either message: `{python} pts(enforce["plain"]["difference"])` points with the plain one
+(interval [`{python} pts(enforce["plain"]["low"])`, `{python} pts(enforce["plain"]["high"])`]) and
+`{python} pts(enforce["description"]["difference"])` with the description
+([`{python} pts(enforce["description"]["low"])`, `{python} pts(enforce["description"]["high"])`]). The two intervals
+overlap, so this run does not show that the gain differs. Changing the plain message for the description changes
+accuracy by `{python} pts(describe["off"]["difference"])` points without a grammar
+([`{python} pts(describe["off"]["low"])`, `{python} pts(describe["off"]["high"])`]) and by
+`{python} pts(describe["on"]["difference"])` with one
+([`{python} pts(describe["on"]["low"])`, `{python} pts(describe["on"]["high"])`]). With the description the grammar
+brings the invalid rate from `{python} pct(cell_sum[("description", "off")]["invalid_rate"])` to
+`{python} pct(cell_sum[("description", "on")]["invalid_rate"])`, against `{python} pct(cell_sum[("plain", "off")]["invalid_rate"])`
+to `{python} pct(cell_sum[("plain", "on")]["invalid_rate"])` with the plain message. What remains with the description
+is mostly references to steps that do not exist (`bad_reference`: `{python} cell_sum[("description", "on")]["by_kind"]["bad_reference"]`
+turns, against `{python} cell_sum[("plain", "on")]["by_kind"]["bad_reference"]` with the plain message), which no grammar of
+this kind rules out. So the description does not make the grammar redundant, and the grammar does not make the
+description worth having: with the grammar on, the description is the lower of the two.
+
+## Without examples {#sec-constrained-e0}
+
+The three-example prompts show the format twice over: in the examples, and in the model's own earlier answers when
+they are valid. The prompt with no examples (`e0p`, the training prompt) shows it in neither. Without a grammar,
+the model with its own history is at the floor (@sec-python-untuned).
+
+```{python}
+#HEAVY
+E0 = {
+    "grammar off, predicted history": get("scores_untuned_val_e0p_0_pred"),
+    "grammar on, predicted history": get(
+        "scores_constrained_untuned_val_e0p_0_pred_free"
+    ),
+    "grammar off, gold history": get("scores_untuned_val_e0p_0_gold"),
+}
+e0 = {k: list(h.jsonl("scores.jsonl")) for k, h in E0.items()}
+e0_sum = {k: h.json("summary.json") for k, h in E0.items()}
+first_turn = lambda rows: [r for r in rows if r["turn"] == 0]
+follow_up = lambda rows: [r for r in rows if r["turn"] > 0]
+acc = lambda rows: sum(r["correct"] for r in rows) / len(rows)
+e0_gain = paired_difference(
+    e0["grammar on, predicted history"], e0["grammar off, predicted history"]
+)
+off_first = acc(first_turn(e0["grammar off, predicted history"]))
+on_first = acc(first_turn(e0["grammar on, predicted history"]))
+on_follow = acc(follow_up(e0["grammar on, predicted history"]))
+gold_follow = acc(follow_up(e0["grammar off, gold history"]))
+assert e0_gain["low"] > 0.1
+assert on_first > 10 * off_first
+assert on_follow < gold_follow
+pd.DataFrame([
+    {
+        "run": k,
+        "all turns": pct(acc(rows)),
+        "first turns": pct(acc(first_turn(rows))),
+        "follow-ups": pct(acc(follow_up(rows))),
+        "invalid": pct(e0_sum[k]["invalid_rate"]),
+        "hit the limit": pct(e0_sum[k]["truncated"] / n_val),
+    }
+    for k, rows in e0.items()
+]).set_index("run")
+```
+
+With the grammar, the untuned model with no examples goes from `{python} pct(acc(e0["grammar off, predicted history"]))`
+to `{python} pct(acc(e0["grammar on, predicted history"]))`, a change of `{python} pts(e0_gain["difference"])` points
+(interval [`{python} pts(e0_gain["low"])`, `{python} pts(e0_gain["high"])`]). The first turn has no history, so its
+change is the effect of the grammar alone: from `{python} pct(off_first)` to `{python} pct(on_first)`. The grammar is
+the only thing here that tells the model what an answer looks like, and it is enough for some answers.
+
+The follow-up turns reach `{python} pct(on_follow)` with the grammar and the model's own history. With the gold
+history and no grammar they reach `{python} pct(gold_follow)`. The two runs differ in the history (valid but mostly
+wrong, against correct) and in the grammar, so this does not separate what each contributes.
+
+Many of these answers do not stop: `{python} pct(e0_sum["grammar on, predicted history"]["truncated"] / n_val)` of the
+turns hit the generation limit, with digits that keep coming. That is what the bounded grammar is for.
+
+## Bounding the numbers {#sec-constrained-bounds}
+
+A grammar guarantees syntax, not termination. The bounded variant allows at most the digits that the gold programs
+use (ten before the point, four after it), so a run of digits must end.
+
+```{python}
+#HEAVY
+BOUNDS = {
+    "untuned DSL, three examples": (
+        get("scores_constrained_untuned_val_e3p_0_pred_free"),
+        get("scores_constrained_untuned_val_e3p_0_pred_bounded"),
+    ),
+    "untuned DSL, no examples": (
+        get("scores_constrained_untuned_val_e0p_0_pred_free"),
+        get("scores_constrained_untuned_val_e0p_0_pred_bounded"),
+    ),
+}
+free = {k: list(v[0].jsonl("scores.jsonl")) for k, v in BOUNDS.items()}
+bounded = {k: list(v[1].jsonl("scores.jsonl")) for k, v in BOUNDS.items()}
+free_sum = {k: v[0].json("summary.json") for k, v in BOUNDS.items()}
+bounded_sum = {k: v[1].json("summary.json") for k, v in BOUNDS.items()}
+bound_gain = {k: paired_difference(bounded[k], free[k]) for k in BOUNDS}
+for k in BOUNDS:
+    assert not bound_gain[k]["excludes_zero"], k
+    assert (
+        bounded_sum[k]["truncated"] < free_sum[k]["truncated"]
+    ), k
+assert bounded_sum["untuned DSL, no examples"]["truncated"] == 0
+pd.DataFrame([
+    {
+        "run": k,
+        "free": pct(free_sum[k]["accuracy"]),
+        "bounded": pct(bounded_sum[k]["accuracy"]),
+        "bounded − free (points)": pts(bound_gain[k]["difference"]),
+        "95% paired interval":
+            f"[{pts(bound_gain[k]['low'])}, {pts(bound_gain[k]['high'])}]",
+        "hit the limit, free": free_sum[k]["truncated"],
+        "hit the limit, bounded": bounded_sum[k]["truncated"],
+    }
+    for k in BOUNDS
+]).set_index("run")
+```
+
+The bounded grammar cuts the turns that hit the limit
+(`{python} free_sum["untuned DSL, no examples"]["truncated"]` to
+`{python} bounded_sum["untuned DSL, no examples"]["truncated"]` with no examples), and accuracy does not change: the
+paired intervals include zero in both rows. So the unbounded grammar was not hiding accuracy, and the numbers in the
+rest of the chapter are those of the unbounded one. The bounded grammar is the safer one to use when a run must end, and costs nothing here.
+
+## The time it takes {#sec-constrained-time}
+
+```{python}
+#HEAVY
+def log_seconds(handle):
+    text = (handle.path / "build.log").read_text()
+    return int(re.findall(r"done: \d+ turns in (\d+) s", text)[-1])
+
+
+def tokens(handle):
+    return sum(r["new_tokens"] for r in handle.jsonl("predictions.jsonl"))
+
+
+RUNS = {
+    "untuned DSL": (
+        get("untuned_val_e3p_0_pred"),
+        get("constrained_untuned_val_e3p_0_pred_free"),
+    ),
+    "untuned Python": (
+        get("python_untuned_val_e3_0_pred"),
+        get("constrained_python_untuned_val_e3_0_pred_free"),
+    ),
+    "fine-tuned DSL": (
+        get("tuned_val_main_0_pred"),
+        get("constrained_tuned_val_main_0_pred_free"),
+    ),
+}
+timing = {
+    k: {
+        "off": (log_seconds(a), tokens(a)),
+        "on": (log_seconds(b), tokens(b)),
+    }
+    for k, (a, b) in RUNS.items()
+}
+assert all(t["on"][0] <= t["off"][0] for t in timing.values())
+assert all(t["on"][1] <= t["off"][1] for t in timing.values())
+pd.DataFrame([
+    {
+        "system": k,
+        "seconds, off": t["off"][0],
+        "seconds, on": t["on"][0],
+        "tokens generated, off": f"{t['off'][1]:,}",
+        "tokens generated, on": f"{t['on'][1]:,}",
+    }
+    for k, t in timing.items()
+]).set_index("system")
+```
+
+These are the durations that the build logs of the runs report, and they do not isolate the cost of the grammar. The
+runs were made in separate sessions, and the runs without a grammar generated at least as many tokens (invalid answers
+can run on). What the table can say is that no run with the grammar took longer than the run without it
+(the largest ratio is `{python} f"{max(t['on'][0] / t['off'][0] for t in timing.values()):.2f}"`). The overhead of the grammar
+is not measured in this book.
+
+## Discussion {#sec-constrained-discussion}
+
+A grammar fixes the form and leaves the content, and the results above are what that looks like. Two pieces of
+related work are worth comparing.
+
+- **Format restrictions can hurt reasoning.** @tam2024speak compare language models restricted to
+  structured output formats such as JSON or XML with free-form answers. They report a drop in reasoning ability under
+  the restriction, larger for stricter formats. That concerns a model
+  that reasons in the text it writes and is then made to write it in a format. Here the output is the program: there is
+  no free text for the grammar to cut short, and the fine-tuned model does not change under the grammar. This
+  chapter's runs do not test their claim.
+- **FinQA's decoder was restricted too.** The program generator of the original FinQA model takes its
+  output tokens from three sources: the tokens of the question and the retrieved facts (the numbers), the special
+  tokens of the DSL, and tokens for the results of earlier steps. At inference time it also applies masks from the
+  grammar of the DSL at every decoding step, to keep the program well formed [@chen2021finqa]. Its output space is
+  narrower than that of the syntax grammar of this chapter, which lets any number be written. A grammar that restricts the numbers to those
+  of the page in the same way comes later, with the final results.
+
+::: {.callout-tip title="Further reading"}
+- @dong2024xgrammar describe `xgrammar`, the library used here.
+- @tam2024speak study the effect of format restrictions on reasoning.
+:::
+
+## Summary
+
+- A grammar sets the probability of every token it does not allow to zero and leaves the rest as the model had them.
+  At the start of a DSL answer, `{python} len(step_ids["start of the answer"])` of
+  `{python} f"{VOCAB:,}"` tokens remain.
+- On validation turns with predicted history, the grammar takes the untuned DSL from
+  `{python} pct(off_ci["untuned DSL"]["accuracy"])` to `{python} pct(on_ci["untuned DSL"]["accuracy"])` and untuned
+  Python from `{python} pct(off_ci["untuned Python"]["accuracy"])` to `{python} pct(on_ci["untuned Python"]["accuracy"])`,
+  and invalid answers nearly disappear. The fine-tuned model is unchanged
+  (`{python} pct(off_ci["fine-tuned DSL"]["accuracy"])` to `{python} pct(on_ci["fine-tuned DSL"]["accuracy"])`).
+- The gain is under half of the invalid output removed, and mostly on program turns. The grammar closes
+  `{python} pct(gap["untuned DSL"]["closed"])` of the gap between the untuned and the fine-tuned model; the ceiling is
+  below the fine-tuned accuracy.
+- The grammar helps with the plain and the description prompt alike, and, with no examples, takes the model from the
+  floor to `{python} pct(acc(e0["grammar on, predicted history"]))`.
+- The bounded number rule removes the runaway digits and does not change accuracy.
+- The comparison is repeated on the dev data in the final results, a later chapter.
