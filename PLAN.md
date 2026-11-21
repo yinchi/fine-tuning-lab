@@ -1,7 +1,7 @@
 # Plan: A Quarto-driven lab for LLM fine-tuning on ConvFinQA (Hugging Face, LoRA SFT)
 
 ## Context
-The goal is to learn the Hugging Face fine-tuning workflow end to end, using ConvFinQA as the task: data inspection, formatting, LoRA training, evaluation, and authoring new examples in the same format. `fine-tuning-lab/` is empty.
+The goal is to learn the Hugging Face fine-tuning workflow end to end, using ConvFinQA as the task: data inspection, formatting, LoRA training, and evaluation. `fine-tuning-lab/` is empty.
 
 **The lab is a Quarto book, written as teaching material.** It does two jobs:
 1. It **explains** what LLMs and fine-tuning actually do, hands-on with the real models and ConvFinQA examples. This is Part 2, Foundations.
@@ -74,12 +74,12 @@ Hardware: DGX Spark (NVIDIA GB10, ~121 GB unified memory, aarch64, CUDA 13.2).
   4. No retraining on train-fit plus val: the models trained on train-fit are the final models.
   5. Allowed uses of dev before the freeze: its page ids (the overlap report) and its gold programs and answers, to test code that has no model in it (the executor, the translator round trip, grammar acceptance). Never model outputs scored on dev.
 - **Final rebuild.** After the dev evaluations, the code is reviewed and restructured once, with the whole book's code in view (modules may move; behaviour may not change, and the tests must pass). Then **everything is rebuilt from a clean checkout, training included**, and that rebuild is the **reported run**. The earlier run is archived as a pilot, and the differences between the two are reported honestly (they measure training noise). Nothing is picked between them. Because the dev numbers will change, prose that quotes a result is generated from the artifacts (inline expressions), and the claims that cannot be generated are checked by hand after the rebuild (each chapter's conclusions against the new numbers; key ones are guarded by asserts).
-- **Where dev appears: one chapter.** Every dev number is reported in §4.2 ("The final results") and nowhere else. The topic chapters (§3.2 to §3.6, §4.1, §4.3) hold the machinery, the design decisions and the val results only, label every number "validation", and end by naming the comparison that §4.2 repeats on dev. The error analysis is done on val, so no dev failure is read before the freeze or used to decide anything. Mechanics:
+- **Where dev appears: one chapter.** Every dev number is reported in §4.2 ("The final results") and nowhere else. The topic chapters (§3.2 to §3.6, §4.3) hold the machinery, the design decisions and the val results only, label every number "validation", and end by naming the comparison that §4.2 repeats on dev. The error analysis is done on val, so no dev failure is read before the freeze or used to decide anything. Mechanics:
   - Every builder that touches evaluation data takes the split as a name field (`..._{split}_...`), as the §3.2 builders do, so §4.2 calls the same builders with `split="dev"` and needs none of its own. Training builders use train-fit and val only. A new builder that is val-only by name is a sign its logic belongs in a topic chapter.
   - Builders refuse dev until `configs/FROZEN` exists (`evaluate.py`; tested). A test fails if any chapter before §4.2 calls a dev artifact.
   - §4.2's cells are `get` calls with literal names (so `build --all` finds them), calls into `convfinqa` functions for the tables, and plotting code.
   - The rule for extra training seeds (§3.4: a CI that straddles 0) is written into the freeze entry before the dev runs, because a dev result triggers it.
-- **Order of work.** Everything that does not need dev first: §3.1 data and formatting; the evaluation machinery (`evaluate.py`, `stats.py`) and its tests; §3.2 prompt choice on val; §3.3 training and val checks; §3.4 evaluation code run on val; §3.5 translator, safe evaluator, training and val evaluation; §3.6 grammars and val evaluation; §4.1; the rank sweep of §4.3 (val). Then the freeze entry, then all the dev evaluations, then §4.2, written last, then the final rebuild.
+- **Order of work.** Everything that does not need dev first: §3.1 data and formatting; the evaluation machinery (`evaluate.py`, `stats.py`) and its tests; §3.2 prompt choice on val; §3.3 training and val checks; §3.4 evaluation code run on val; §3.5 translator, safe evaluator, training and val evaluation; §3.6 grammars and val evaluation; the rank sweep of §4.3 (val). Then the freeze entry, then all the dev evaluations, then §4.2, written last, then the final rebuild.
 
 ## What ConvFinQA looks like (content of §1.2)
 Source: github.com/czyssrs/ConvFinQA (`data.zip`), from Chen et al., EMNLP 2022. Conversations are built from FinQA: earnings-report pages, each with a table and the text around it.
@@ -166,7 +166,6 @@ fine-tuning-lab/
     data/                   # imports dsl at most
       raw.py                #   download, load splits, Turn, turns(); render.py: table→markdown, context, pretty-print
       splits.py             #   (planned) page-grouped val split
-      authoring.py          #   (planned) schema validation, grounding check, answer filling for new examples
     formatting.py           # conversation → chat messages; assistant-only label mask; per-turn eval prompts
     constrained.py          # EBNF grammars (DSL, Python subset); xgrammar HF logits processor
     train.py, evaluate.py   # (planned) TRL SFTTrainer + PEFT; evaluation; heavy artifact builders. They and formatting/constrained move
@@ -195,7 +194,7 @@ fine-tuning-lab/
       viz.py                #   token displays and next-token plots
       diagrams/             #   SVG generators: `python -m convfinqa.book.diagrams`
   scripts/pre_render.py     # Quarto pre-render shim: starts the venv's Python for `artifacts refresh`
-  tests/                    # test_executor, test_python_format, test_formatting, test_constrained, test_stats, test_authoring, test_splits
+  tests/                    # test_executor, test_python_format, test_formatting, test_constrained, test_stats, test_splits
   docs/                     # THE LAB: Quarto book
     _quarto.yml             # type: book; parts as below; number-sections: true; execute: freeze: auto;
                             #   jupyter: fine-tuning-lab; bibliography: references.bib; code-fold
@@ -221,7 +220,6 @@ fine-tuning-lab/
     305_dsl_vs.qmd                # 3.5 DSL vs Python output            (HEAVY)
     306_constrained_decoding.qmd  # 3.6 Constrained decoding            (HEAVY)
     # Part 4 — Beyond
-    401_writing_your.qmd          # 4.1 Writing your own examples
     402_the_final.qmd             # 4.2 The final results (dev)         (HEAVY)
     403_retrospective.qmd         # 4.3 Retrospective
     # Appendices
@@ -448,22 +446,7 @@ This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters
 
 ### Part 4 — Beyond
 
-**4.1 Writing your own examples** (`401_writing_your.qmd`)
-- **Source material:** take a 10-K page from SEC EDGAR, or reuse a FinQA page. Extract one table into `table` (rows, header first) and the surrounding sentences into `pre_text` and `post_text`.
-- **Write a target calculation** as a FinQA program.
-- **Decompose it into turns** the ConvFinQA way:
-  1. number-selection turns first;
-  2. then partial computations;
-  3. then a final turn that restates the full program with `#k` references.
-
-  Use follow-up phrasing so later turns depend on the earlier ones. Optionally, chain a second program on the same page to make a Type II conversation (`qa_split` 0s then 1s).
-- **Validate** with `authoring.py`:
-  - check the schema;
-  - execute each `turn_program` and fill in `exe_ans_list`;
-  - check grounding: every literal number must appear in the table or text.
-- The chapter shows one hand-written example passing and two failing: a wrong answer and an ungrounded number.
-- **Scale-up (optional):** an LLM drafts candidate dialogues, and only examples that pass validation are kept.
-- New examples share the raw JSON shape, so §3.1's code consumes them unchanged. Keep them out of dev.
+**4.1** was planned as "Writing your own examples" and is dropped (decision of 2026-11-21); the part keeps the numbers 4.2 and 4.3.
 
 **4.2 The final results** (`402_the_final.qmd`, HEAVY)
 - The only chapter with dev numbers. It opens with the freeze: what was chosen on val, the commit, and the seed rule, as recorded in the decision log.
@@ -472,18 +455,18 @@ This is inference-only and reuses the §3.2 base model, the §3.3/§3.5 adapters
 - Written last, after the freeze and the dev runs, and rebuilt in the final rebuild.
 
 **4.3 Retrospective** (`403_retrospective.qmd`)
-- What worked, what didn't, and what to try next:
-  - model size (Qwen3.5-4B/9B);
-  - a **LoRA rank sweep**, below and above the main run's r=16 (e.g. r = 8, 16, 32, 64, 128, 256, with alpha = 2r), on the same data, scored on val with the §3.4 evaluation. It shows how much capacity the task needs; full fine-tuning is the high-capacity end (the rank ceiling of Qwen3-4B's matrices is 2,560, and LoRA has no fewer parameters than full fine-tuning above ranks of about 730 to 2,030 depending on the matrix; see §2.6);
-  - adding synthetic data from §4.1;
-  - predicted-history training;
-  - SFT on reasoning traces followed by the DSL;
-  - RL with an execution-match reward. This is TRL GRPO, the route Fin-R1 took to 85.
-  - a REPL-style Python variant where variables persist across turns;
-  - constraining `#k` references so they can only point to earlier steps, which needs a step-count-aware grammar;
-  - a **grounded grammar**, compiled per example, where numbers may only be literals from that page's text, table, and earlier turns, plus `const_*`:
-    - First measure coverage: the share of gold programs it can still produce. Unit scaling and percentage forms will break some. That coverage is the accuracy ceiling.
-    - Then rerun the §3.6 evaluations with it.
+- What worked, what didn't, and what to try next. One experiment is run; the rest are described in a line or two each, with the evidence from the book, and marked not needed or not tried (decision of 2026-11-21):
+  - **Run: a LoRA rank sweep**, below and above the main run's r=16 (e.g. r = 8, 16, 32, 64, 128, 256, with alpha = 2r), on the same data, scored on val with the §3.4 evaluation. It shows how much capacity the task needs; full fine-tuning is the high-capacity end (the rank ceiling of Qwen3-4B's matrices is 2,560, and LoRA has no fewer parameters than full fine-tuning above ranks of about 730 to 2,030 depending on the matrix).
+  - **Not needed, with the evidence:**
+    - a **grounded grammar** (numbers only from the page): the adapters' literals are already 100% on the page (§3.5); only the untuned model writes off-page numbers;
+    - constraining **`#k` references** to earlier steps: the fine-tuned model has 1 invalid turn of 1,125 on val (§3.6);
+    - a **REPL-style Python** variant: fine-tuned Python tied the DSL (§3.5);
+    - **adding synthetic data**: a hand-authoring chapter (§4.1) was planned and dropped.
+  - **Not tried, with the reason:**
+    - **a stronger model**, untuned or fine-tuned (Qwen3.5-9B/27B, Qwen3.6/3.8-27B, all vision-language models that think by default; they fit the machine for inference and, for 9B, LoRA): an untuned stronger model says little about this project, which fine-tunes a small model on the DSL; a larger fine-tuned one is a project of its own;
+    - **page images** with a vision-language model (and LoRA on its language layers only): the source report PDFs are not in the data and the dataset pages do not say where to get them (checked 2026-11-21), so there is nothing to feed it;
+    - **RL with an execution-match reward** (TRL GRPO, the route Fin-R1 took from 81 to 85; installed TRL 1.16.0): it needs a reward from the executor, one prompt per turn with gold history, and a start from the SFT adapter; with the model about 85% right, many groups of samples would be all right and give no signal, the cost per prompt is G full-length sequences, and a gain of one or two points is below what one seed on val can show;
+    - **predicted-history training** (needs custom rollouts, like RL) and **SFT on reasoning traces** (needs a teacher model).
 
 ### Appendices
 - **A.1 Glossary** (`901_glossary.qmd`): every term the chapters link to, e.g. logits, teacher forcing, exposure bias, LoRA rank, effective batch, execution accuracy, paired bootstrap.
@@ -569,7 +552,7 @@ Mark each item `[x]` when it's done and verified. Add a short note (run id, head
 - [x] 3.4 Evaluation: both history modes, invalid breakdown, self-consistency, bootstrap CIs, error analysis. Done and committed so far (val, `main_0`): both history modes, bootstrap CIs, program accuracy, literal check, wrong-scale check, the `e3p`-on-tuned row, error analysis, merged-adapter check (bf16 and fp32 merges: 83.5%, same as unmerged), self-consistency (`extra_val_main_0_vote_full`: 82.6%, paired −0.9 [−2.2, +0.3], 5 generations per turn); cost-per-turn table (generations, prompt and generated tokens; seconds left out), log-probability comparison on the 186 wrong turns (`divergence_val_main_0`: gold token in the model's top 3 in 89%, rank 2 in 125; median probability ratio gold/chosen 0.013, within a factor of 10 in 28%). Not done, by choice: the optional by-turn view of the error labels
 - [x] 3.5 DSL or Python: translator + safe evaluator (`dsl/python_format.py`, round trip on all train and dev gold programs), `python_eval.py`, `python_finetune.py`. Untuned on val, three examples: Python 64.5% vs DSL 57.2% (predicted history, +7.4 [+3.9, +10.8]) and 74.7% vs 66.0% (gold, +8.6 [+6.2, +11.1]); no examples: 0.0% / 0.3% (predicted), 38.8% / 28.1% (gold). Fine-tuned (`python_lora_0`, best 0.0357 at step 250): 83.1% vs 83.5% (predicted, −0.4 [−2.3, +1.5]) and 91.2% vs 90.6% (gold, +0.6 [−0.4, +1.7]), so no difference after tuning. Literal and scale checks for Python (`python_checks.py`): the adapters write only numbers of the page; first turns against follow-ups added.
 - [x] 3.6 Constrained decoding: `grammars.py` (DSL and Python EBNF, free and bounded numbers; both accept all 8,981 gold programs), `constrained_eval.py`. Val, predicted history, grammar off → on: untuned DSL `e3p` 57.2% → 60.4% (+3.3 [+1.9, +4.9]; invalid 16.4% → 1.3%), untuned Python `e3` 64.5% → 68.4% (+3.8 [+2.2, +5.6]; invalid 8.9% → 0%), fine-tuned DSL `main` 83.5% → 83.6% (+0.1 [+0.0, +0.3]). The grammar closes 12.5% (DSL) / 20.2% (Python) of the gap to the fine-tuned model; ceiling 73.5% < 83.5%. 2×2 at `e3`: plain 57.2 → 60.4, description 55.3 → 57.2. `e0p`: 0.3% → 20.8% (turn 1: 0.7% → 16.3%). Bounded numbers: truncation 314 → 0 (`e0p`), 7 → 3 (`e3p`), accuracy unchanged. Grammar overhead not measured (build-log times only, with the caveat)
-- [ ] 4.1 Writing your own examples
+- [-] 4.1 Writing your own examples: dropped (decision of 2026-11-21)
 - [ ] 4.2 The final results (dev): the freeze entry, the dev runs, the dev tables and chart
 - [ ] 4.3 Retrospective (the rank sweep on val first)
 - [ ] Final: code review and restructure; full rebuild from a clean checkout (the reported run, the earlier one archived as a pilot); audit prose for hard-coded results and re-check the conclusions that are not generated
@@ -632,7 +615,7 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-10-28: Post-hoc prompt variants. The val errors of `e2d` (231 of 266 invalid outputs nest calls) motivate a `flat` system message and variants `e0f e2f e3f`, flagged as post-hoc, chosen among by the same rule on val; the description stays limited to the language (no annotation conventions such as the scale of percentages). `e2f`, the strongest prompt-only candidate, is the basis for asking in §3.4 whether a good prompt is all this task needs, answered as the share of the gap to fine-tuning that it closes, with the cost of each route reported. Implementation waits for the running val queue, so that its runs stay consistent.
 
 ## Verification
-- `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and the formatting and authoring tests pass.
+- `uv run pytest`: the executor reproduces the gold `exe_ans_list` values, and and the formatting tests pass.
   - The formatting test decodes the tokens where `labels != -100` and asserts they are exactly the assistant programs, plus the end-of-turn tokens.
   - The Python translation round trip: every gold `turn_program` in train and dev, once translated and run by the safe evaluator, equals the DSL executor's result.
   - The safe evaluator rejects `__import__('os')`, attribute access, calls, and loops.
@@ -669,3 +652,5 @@ Dated entries, newest last. A changed decision gets a new entry; old ones are ne
 - 2026-11-03: **No fine-tuned Python on dev; the book keeps the DSL.** The Python adapter (`python_lora_0`, the settings of `main`) scored 83.1% (predicted history) and 91.2% (gold) on val, against 83.5% and 90.6% for the DSL adapter: paired leads of −0.4 [−2.3, +1.5] and +0.6 [−0.4, +1.7] points, both intervals containing zero. The untuned leads (+7.4 and +8.6) are about the size of the difference in invalid output, which tuning removes. By the rule of 2026-11-02 the fine-tuned Python rows are not run on dev, and §3.6 has no fine-tuned Python rows on dev (6 evaluations there); the untuned Python rows are run on dev. §4.1 and the rank sweep stay in the DSL.
 - 2026-11-04: §3.5's Python adapter stays at one training seed (0). The paired interval of its comparison with the DSL adapter includes zero, which would trigger the extra-seed rule for tuned comparisons, but a format tie that is only reported on val does not warrant two more trainings of each adapter; the chapter says that the intervals do not cover the variation between training runs. `python_checks.py` adds the literal and scale checks for Python output (DSL constants count as allowed numbers).
 - 2026-11-04: **§3.6 ran 7 grammar runs on val (predicted history only), and adds `e0p` and a bounded check.** Runs: untuned DSL `e3p`, untuned Python `e3`, fine-tuned DSL `main` (free grammar); `e3d` for the 2×2; `e0p` (free and bounded) because without examples the grammar is the only format signal; `e3p` bounded because 7 turns hit the limit. Bounding the numbers removes runaway digits and does not change accuracy, so the free grammar is the one reported. The speed overhead is reported from build logs with the caveat that they do not isolate it; a controlled timing (same prompts, one session, processor attached and detached) is skipped by decision, and the chapter says the overhead is not measured. Dev: the 6 evaluations of the plan, plus `e0p`, in §4.2.
+- 2026-11-21: **§4.1 "Writing your own examples" is dropped.** A first version was written (a validator for hand-written conversations, with one example on a train-fit page and two failing ones) and removed before it was committed: it used no model, built one example, and could check only form and consistency, so it did not show how authored or synthetic examples would enter or be needed by the rest of the book. The numbers 4.2 and 4.3 stay as they are. The mentions of §4.1 in earlier entries refer to this chapter.
+- 2026-11-21: **§4.3 runs one experiment, the rank sweep; the other ideas are described, not run.** Checked first: the source PDFs of the pages are not in the data and the FinQA/ConvFinQA pages do not say where to get them, so no image experiment; Qwen3.5/3.6/3.8 vision-language models (3.8-27B newest dense; thinking on by default, switched off with `enable_thinking=False`) fit the machine for inference, but a stronger untuned model does not test this project's question and a larger fine-tuned one is out of scope. The GRPO pilot is not run (weak signal, high cost, gain below the detectable size). Grounded grammar, `#k` grammar and REPL Python are marked not needed from the §3.5 and §3.6 results; synthetic data went with §4.1.
