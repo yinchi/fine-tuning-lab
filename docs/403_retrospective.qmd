@@ -146,3 +146,101 @@ accuracy rose with the rank beyond 16, or fell sharply at the low end (at rank 4
 Rank 64 is four times the default, and the evidence above gives no reason to expect the task to use more. The sweep
 stops there unless the accuracy is still rising at rank 64, that is, unless rank 64 differs from `main` by a paired
 interval that excludes zero. In that case ranks 128 and 256 are the next runs, and this chapter will say so.
+
+## Other things one could try {#sec-other-things}
+
+The sweep is the one new experiment of this chapter. The other ideas that came up while writing the book are not run,
+for one of two reasons: the results we already have say that they would not help, or they cost more than the project
+can show a gain for. The first kind is checked below against the validation results; the second is described, with the
+reason.
+
+### Not needed: what the results already say
+
+```{python}
+#HEAVY
+import json
+
+from convfinqa.stats import bootstrap_accuracy, paired_difference
+
+main_pred = get("scores_tuned_val_main_0_pred")
+main_scores = list(main_pred.jsonl("scores.jsonl"))
+main_sum = main_pred.json("summary.json")
+n_val = main_sum["n"]
+n_invalid = round(main_sum["invalid_rate"] * n_val)
+n_bad_reference = main_sum["by_kind"]["bad_reference"]
+
+# DSL adapter: the numbers it writes, checked against the page (@sec-evaluating-errors)
+dsl_checks = [
+    c for c in get("checks_tuned_val_main_0_pred").jsonl("checks.jsonl")
+    if c["runs"]
+]
+dsl_off_page = sum(not c["lit_grounded"] for c in dsl_checks)
+assert dsl_off_page == 0
+assert n_invalid == n_bad_reference == 1
+
+# Python adapter against the DSL adapter (@sec-python-numbers)
+py_scores = list(
+    get("scores_python_tuned_val_0_pred").jsonl("scores.jsonl")
+)
+py_lead = paired_difference(py_scores, main_scores)
+assert not py_lead["excludes_zero"]
+pts = lambda x: f"{100 * x:+.1f}"
+```
+
+Three ideas would add a constraint or a variant that the results show to be unnecessary.
+
+- **A grammar that allows only numbers from the page.** `{python} dsl_off_page` of the `{python} f"{len(dsl_checks):,}"`
+  programs of the adapter that run contain a number that is not on the page (@sec-evaluating-errors), so such a
+  grammar would have nothing to forbid. It is the untuned model that writes numbers that are not on the page
+  (@sec-python-numbers).
+- **A grammar for the `#k` references to earlier steps.** Of the `{python} f"{n_val:,}"` validation turns of the
+  fine-tuned model, `{python} n_invalid` is invalid, and it is a reference to a step that does not exist (@sec-constrained-results). A grammar for references could fix at most that turn.
+- **A Python variant where variables persist across turns,** like a notebook. The Python adapter is
+  `{python} pts(py_lead["difference"])` points from the DSL adapter on the validation turns, with a paired interval of
+  `{python} pts(py_lead["low"])` to `{python} pts(py_lead["high"])` (predicted history), so a second Python variant
+  would be measured against a tie.
+
+A fourth idea, more training data written by hand or generated, was planned as a chapter of its own and dropped: the
+chapter used no model, built one example, and could check only its form, so it did not show how such data would be
+used by the rest of the book.
+
+### Not tried, and why
+
+```{python}
+#HEAVY
+vote = list(get("extra_val_main_0_vote_full").jsonl("predictions.jsonl"))
+group = vote[0]["generations"]
+unanimous = sum(v["agreement"] == 1 for v in vote) / len(vote)
+half_width = bootstrap_accuracy(main_scores)
+half_width = (half_width["high"] - half_width["low"]) / 2
+assert unanimous > 0.8
+assert half_width > 0.02
+```
+
+- **A stronger model**, untuned or fine-tuned. An untuned stronger model says little about this project, which asks what
+  fine-tuning a small model on the language of the task gains. A fine-tuned larger one is the same experiment at
+  another size, and a project of its own, with its own cost.
+- **Page images in place of text,** with a vision-language model, and LoRA on its language layers only. The data gives
+  each page as extracted text and a table, and the reports they come from are not part of it; we did not find
+  where to get them. There is nothing to give such a model.
+- **Reinforcement learning with the executor as the reward.** The execution of a program already gives a reward that
+  needs no judge: 1 if the answer matches, 0 if not. Group Relative Policy Optimization (GRPO)
+  [@shao2024deepseekmath] samples a group of programs per prompt, scores each, and moves the model towards the ones
+  that score above the average of their group. @liu2025finr1 trained a 7B model this way, starting from a model that
+  had been fine-tuned on examples, and report on ConvFinQA a score of 81.0 for the model before and 85.0 after, on
+  their own sample of questions and prompts, so the numbers are not comparable with ours. Three things argue against
+  running it here, and the first two can be read from the book.
+
+  First, the signal. The samples of a group that agree on the answer get the same reward, and a group with a single
+  reward has no program that scores above the others. In the self-consistency run of @sec-evaluating,
+  `{python} group` samples per turn agreed on the answer for `{python} f"{unanimous:.0%}"` of the validation turns. A
+  group of eight, which is what TRL uses by default, has more room to disagree, but most of the turns would still give
+  little. Second, the size of a gain. The accuracy of the fine-tuned model on this split has an interval of about
+  ±`{python} f"{100 * half_width:.1f}"` points, so a gain of one or two points is small beside it. A paired comparison
+  is tighter than that, but one seed adds a variation that is not measured (see "What is decided before the
+  results" above). Third, the cost: each prompt needs a full-length sequence for each member of the group, generated
+  during training. The idea is left for a project with more data, more seeds and more budget.
+- **Training on the model's own predicted history,** which would remove the gap between training and use that
+  @sec-evaluating measures, and **fine-tuning on reasoning traces,** which needs a teacher model to write them. The
+  first needs generation inside the training loop, like the reinforcement learning above, and the second needs a
+  model that we do not have.
