@@ -18,7 +18,9 @@ The run trains on **[train-fit](901_glossary.qmd#gloss-train-fit)**, and the **v
 
 ```{python}
 #HEAVY
+import json
 import math
+from pathlib import Path
 
 import pandas as pd
 
@@ -91,6 +93,10 @@ steps_per_epoch = math.ceil(
 steps = steps_per_epoch * cfg["epochs"]
 warmup = math.ceil(cfg["warmup_ratio"] * steps)
 
+# the longest conversation, from the lengths chapter
+lengths = json.loads(Path("../artifacts/processed/lengths.json").read_text())
+assert lengths["longest"] <= cfg["max_length"]
+
 pd.DataFrame([
     ("model", cfg["model"]),
     (
@@ -123,7 +129,7 @@ Most of these were explained in the chapters before this one. The reasons, in or
 $\alpha / r =$ `{python} f"{cfg['lora']['alpha'] / cfg['lora']['r']:g}"`), dropout `{python} cfg["lora"]["dropout"]`
 on the adapter's input, and an adapter on every linear layer of the decoder (`{python} cfg["lora"]["target_modules"]`):
 the seven matrices of @sec-lora. The model's own weights stay in bf16 and the adapter, which is what trains, in fp32.
-The rank is a guess at how much freedom the task needs, and the book returns to it at the end.
+The rank is a guess at how much freedom the task needs, and @sec-rank-sweep returns to it.
 
 **The learning rate and its schedule.** A peak of `{python} sci(cfg["lr"])`, reached after a linear warmup of
 `{python} warmup` steps and then falling along half a cosine wave to zero by step `{python} steps`
@@ -145,7 +151,7 @@ towards where it started, which the learning rate and the choice of checkpoint c
 validation loss turns up while the training loss still falls, this is the first setting to revisit.
 
 **Length and memory.** Conversations are cut at `{python} f"{cfg['max_length']:,}"` tokens (the longest in the data is
-3,460, @sec-convfinqa, so nothing is cut). Gradient checkpointing is on, as in @sec-fine-tuning, because the
+`{python} f"{lengths['longest']:,}"`, @sec-convfinqa, so nothing is cut). Gradient checkpointing is on, as in @sec-fine-tuning, because the
 activations of such long sequences would otherwise take more memory than the weights do. The process is capped at
 `{python} cfg["memory_cap_gb"]` GB of the GPU's memory, which the desktop shares.
 
@@ -537,7 +543,7 @@ print("with the adapter:")
 display(HTML(surprisal_html(shown["tokens"], shown["adapter"])))
 ```
 
-The share of gold tokens that the model gave less than 14% (a surprisal over 2 nats) falls from
+The share of gold tokens that the model gave less than `{python} f"{math.exp(-2):.0%}"` (a surprisal over 2 nats) falls from
 `{python} f"{surprised_base:.1%}"` to `{python} f"{surprised_tuned:.1%}"`. The red that @sec-probing found on the
 operators and the punctuation of the DSL is gone. None of the `{python} len(left)` tokens that are still surprising is in the conversation above: they are all digits
 of numbers, in other conversations. Here is each one with the tokens around it (the adapter's surprisal):

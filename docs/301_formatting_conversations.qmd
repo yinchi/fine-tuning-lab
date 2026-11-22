@@ -127,14 +127,24 @@ Two training runs, one in each layout, are therefore equivalent up to batching (
 more answer tokens than a step of 16 turns) and rounding (different padding and batching change bf16 results), but
 not step for step.
 
-The saving is the one counted in @sec-base-instruct: the per-turn layout of @fig-sequence-layout reads about
-3.5 times as many tokens for the same answers. The price is the one named there too, **exposure bias**: during
-training every earlier answer in the context is the gold one. Nothing is cut by `max_length`: the longest full
-conversation of the data is 3,460 tokens (@sec-convfinqa) and `max_length` is 3,584.
+The saving is the one counted in @sec-base-instruct: the per-turn layout of @fig-sequence-layout reads several
+times as many tokens for the same answers. The price is the one named there too, **exposure bias**: during
+training every earlier answer in the context is the gold one.
+
+```{python}
+import json
+from pathlib import Path
+
+lengths = json.loads(Path("../artifacts/processed/lengths.json").read_text())
+assert lengths["longest"] <= lengths["max_length"]
+```
+
+Nothing is cut by `max_length`: the longest full
+conversation of the data is `{python} f"{lengths['longest']:,}"` tokens (@sec-convfinqa) and `max_length` is `{python} f"{lengths['max_length']:,}"`.
 
 ## Train, validation and dev
 
-`train.json` has 3,037 conversations. We hold out a tenth of them as **[validation](901_glossary.qmd#gloss-validation)** data, for the choices that
+`train.json` is the training file. We hold out a tenth of its conversations as **[validation](901_glossary.qmd#gloss-validation)** data, for the choices that
 the project makes (the prompt, the checkpoint, the grammar) and train on the rest. Several conversations are
 written from the same report page, so the split is made **by page**: the group key is the conversation id
 without its `Single_` or `Double_` prefix and its `-N` suffix. A page then lies entirely on one side, and the model
@@ -173,6 +183,8 @@ print(
     f"{len(pages(dev) & (pages(fit) | pages(val)))} of {len(pages(dev))}"
 )
 ```
+
+Train-fit and val together are `{python} f"{len(fit) + len(val):,}"` conversations, the whole of `train.json`.
 
 The split is made once, with a fixed seed, and saved as the artifact `train_val_split`. **Dev is never used to
 make a choice.** The one use that the plan allows before the final evaluations is the one above: the page

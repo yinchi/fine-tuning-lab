@@ -134,7 +134,7 @@ The fine-tuned model uses the adapter that @sec-training kept (the checkpoint wi
 one-line system message and no examples, denoted `e0p` in @sec-baseline. This is compared against the untuned model
 using both `e0p` and `e3p`, which adds three examples to the system prompt: the former shows what fine-tuning
 changed, while the latter shows what is left for fine-tuning to add after the prompt has done its best. All the
-systems are scored on the same 1,125 turns, so differences between them are measured *paired*, by resampling whole conversations (@sec-baseline, "Under the hood: why
+systems are scored on the same validation turns, so differences between them are measured *paired*, by resampling whole conversations (@sec-baseline, "Under the hood: why
 pair, and why resample conversations").
 
 ```{python}

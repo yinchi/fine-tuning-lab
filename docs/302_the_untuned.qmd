@@ -136,8 +136,29 @@ input held fixed. It plays no part in the choice of the baseline.
 
 ### Generation
 
-Decoding is greedy and stops at the end-of-turn token or after 96 new tokens, which is well above the longest gold
-program (58 tokens). Prompts are run **one at a time**: with prompts this long the model spends its time reading, so
+```{python}
+import json
+from pathlib import Path
+
+from transformers import AutoTokenizer
+
+from convfinqa import data
+from convfinqa.artifacts import get
+
+max_new = json.loads(Path("../configs/baseline.json").read_text())["max_new_tokens"]
+tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+split = get("train_val_split")
+gold_longest = max(
+    len(tok(t.program).input_ids)
+    for name in ("train_fit.jsonl", "val.jsonl")
+    for c in split.jsonl(name)
+    for t in data.turns(c)
+)
+assert max_new >= 1.5 * gold_longest  # clearly above, so no program is cut
+```
+
+Decoding is greedy and stops at the end-of-turn token or after `{python} max_new` new tokens, which is above the longest gold
+program (`{python} gold_longest` tokens, over train-fit and validation). Prompts are run **one at a time**: with prompts this long the model spends its time reading, so
 batching gains little, and a prompt's output then cannot depend on which other prompts share its batch (bf16 results
 change slightly with the batch). An output that reaches the limit is scored as written. Every prediction is stored with the
 conversation id, the turn, the text, the number of tokens and why generation stopped, and scoring reads these files, so

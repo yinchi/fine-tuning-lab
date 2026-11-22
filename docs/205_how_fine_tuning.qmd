@@ -385,7 +385,7 @@ shows 34 GB for the longest *four*). **[Gradient accumulation](901_glossary.qmd#
 4. take one optimizer step on the sum, and clear the gradients.
 
 In the Trainer these are `per_device_train_batch_size=4` and `gradient_accumulation_steps=4`. The
-effective batch, $4 \times 4 = 16$, is what sets the number of steps per epoch (171) and so the whole
+effective batch, $4 \times 4 = 16$, is what sets the number of steps per epoch (`{python} math.ceil(n_fit / effective_batch)`) and so the whole
 schedule of the previous section. The micro-batch size only affects speed and memory.
 
 ### The loss must be divided by the right number
