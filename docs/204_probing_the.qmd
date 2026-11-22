@@ -11,7 +11,7 @@ The earlier chapters used one conversation. Here we look at a sample of them. Th
 
 ## The validation split
 
-`train.json` has 3,037 conversations. We hold out a tenth of them for tuning decisions (which prompt, which
+`train.json` is the training file. We hold out a tenth of its conversations for tuning decisions (which prompt, which
 checkpoint) and train on the rest. The split is made **by report page**: several conversations are written
 from the same page, and if one were in training and its sibling in validation, the model could be graded on
 a page it had been trained on. Dev stays untouched, for the final numbers.
@@ -39,12 +39,14 @@ print(
 assert not pages(fit) & pages(val)
 ```
 
+Together that is `{python} f"{len(fit) + len(val):,}"` conversations, the whole of `train.json`.
+
 The split is deterministic (pages are drawn with seed 0), and it is saved as the artifact
 `train_val_split`, so later chapters read exactly these files.
 
 ## Asking the untuned model
 
-We take 20 validation conversations at random and ask the model for every turn. Each turn is a separate
+We take a small random sample of validation conversations and ask the model for every turn. Each turn is a separate
 request with the **gold history** (the earlier answers are the dataset's programs), so the requests are
 independent and each one measures a single turn. Decoding is greedy and the answer is judged exactly as
 generated: no cleaning, and an answer the executor rejects is wrong. That is the rule the headline
@@ -54,7 +56,7 @@ We try two prompts. **Zero-shot** is the system prompt `Answer with a program in
 the page and the question, and nothing else. **[Few-shot](901_glossary.qmd#gloss-few-shot)** puts two complete conversations, with their
 gold programs, in front of the same request, drawn from train-fit.
 
-These runs take a few minutes (they load the 4B model and generate 68 answers twice), so they are an
+These runs take a few minutes (they load the 4B model and generate every answer twice), so they are an
 artifact: built once in a subprocess, and loaded here. The same artifact holds the gold programs'
 token probabilities that we read in the next section.
 
@@ -156,7 +158,13 @@ surprisal over the answer tokens.
 ```{python}
 from IPython.display import HTML
 
+from math import exp
+from inspect import signature
+
 from convfinqa.book.viz import surprisal_html
+
+# the surprisal (nats) at which the red is darkest
+full = signature(surprisal_html).parameters["full"].default
 
 row = next(
     r for r in surprisal
@@ -171,10 +179,8 @@ HTML(surprisal_html(pieces, logp))
 ```
 
 Hover over a token for its probability. The answers are printed one after the other, each ending with
-`<|im_end|>`, the token that closes the turn. Red marks a token the model gave less than about 2%.
-
-Hover over a token for its probability. The answers are printed one after the other, each ending with
-`<|im_end|>`, the token that closes the turn. Red marks a token the model gave less than about 2%.
+`<|im_end|>`, the token that closes the turn. The red deepens with the token's surprisal and is darkest for a token the
+model gave a probability of `{python} f"{exp(-full):.1%}"` or less.
 
 The red is not where we might expect. The numbers, which the model has to find on the page, are mostly
 pale, because it copies them well. The surprise is in the **DSL's own words**: the operator that opens a
@@ -228,7 +234,7 @@ the operator and the arguments.
 ## The number fine-tuning starts from
 
 For the whole validation split we compute the mean surprisal of the gold tokens: one forward pass per
-conversation, token-weighted. This is a model run over 306 conversations, so it is built once as an
+conversation, token-weighted. This is a model run over the whole split, so it is built once as an
 artifact, in a subprocess.
 
 ```{python}
@@ -276,7 +282,7 @@ covers the answer tokens only. It carries the same information as the loss; we r
 training logs show the loss and the perplexity is easier to picture.
 
 The mean [negative log-likelihood](901_glossary.qmd#gloss-nll) is the loss of the untuned model on the validation split, with the data
-in exactly the format the training will use. The training chapter uses the same format, so its **step-0
+in exactly the format the training will use. @sec-training uses the same format, so its **step-0
 validation loss** should agree with it within a few percent: if it doesn't, the formatting or the label mask differs between
 the two, and we look there first. After training we expect the loss to fall, and the same
 heatmap to be much paler.

@@ -188,7 +188,7 @@ is the same model on the same answer. Only the average changed, because the answ
 `{python} check["n_counted"]` of `{python} f"{n_positions:,}"` positions, and the rest are easier: about
 `{python} f"{rest:.2f}"` nats per token, against `{python} f"{check['by_hand']:.2f}"` for the answer.
 The model predicts a page of financial prose, with numbers it can copy, better than it predicts a program
-in a language it was never taught. With 99% of the weight on those positions, the hard tokens that decide
+in a language it was never taught. With `{python} f"{1 - check['n_counted'] / n_positions:.0%}"` of the weight on those positions, the hard tokens that decide
 the task are diluted, and the result moves with the length of the page, not with the quality of the answer.
 It would also have the model spend its training effort on predicting the question and the page, which are
 inputs we never ask it to produce. A loss that falls when the page gets longer is not measuring what we
@@ -209,7 +209,7 @@ assert tokens_24 == check["n_counted"]\
 ```
 
 The loss we compute by hand, the one the library reports and the surprisal we plotted in @sec-probing are
-the same quantity, computed three ways. The training chapter relies on it: its step-0 validation loss is this mean
+the same quantity, computed three ways. @sec-training relies on it: its step-0 validation loss is this mean
 over the validation split.
 
 ## From the loss to a weight change
@@ -273,7 +273,7 @@ memory-hungry, and what LoRA avoids by training a few million weights instead of
 
 ## The learning-rate schedule
 
-The learning rate $\eta$ is not constant. The planned run uses a **linear warmup** followed by a **cosine
+The learning rate $\eta$ is not constant. The main run (@sec-training) uses a **linear warmup** followed by a **cosine
 decay**, both changing the rate at every optimizer step.
 
 - **[Warmup](901_glossary.qmd#gloss-warmup).** At the start the averages $m$ and $v$ are estimated from one or two batches and the first
@@ -340,8 +340,8 @@ print(f"learning rate: step 0 {library[0]:.1e}, step {warmup} {library[warmup]:.
 
 ```{python}
 #| label: fig-lr-schedule
-#| fig-cap: "The learning rate of the planned run: a linear warmup to 2e-4 over 11 steps, then a half-cosine decay to 0 at step 342. Dotted lines mark the validation checks, every 50 steps."
-#| fig-alt: "Line chart of learning rate against optimizer step, 0 to 342. The rate climbs in a straight line from 0 to 2e-4 at step 11, then falls along a smooth curve, half a cosine wave, reaching 0 at step 342. Vertical dotted lines mark steps 50, 100, 150, 200, 250 and 300."
+#| fig-cap: "The learning rate of the main run: a linear warmup to the peak rate, then a half-cosine decay to 0 at the last step. Dotted lines mark the validation checks."
+#| fig-alt: "Line chart of learning rate against optimizer step. The rate climbs in a straight line from 0 to its peak after a few steps, then falls along a smooth curve, half a cosine wave, reaching 0 at the last step. Evenly spaced vertical dotted lines mark the validation checks."
 fig, ax = plt.subplots(figsize=(7, 3.2))
 
 # Plot the learning rate schedule
@@ -420,14 +420,20 @@ for _ in range(5000):
     # weight of a token on the left / on the right
     ratios += [sum(micro) / 4 / m for m in micro]
 
-pd.Series(ratios, name="weight ratio").describe(
+ratio_stats = pd.Series(ratios, name="weight ratio").describe(
     percentiles=[0.05, 0.25, 0.5, 0.75, 0.95]
-).round(2).to_frame().T
+).round(2)
+
+# the sentences below describe this table
+assert 0.8 < ratio_stats["25%"] and ratio_stats["75%"] < 1.2
+assert ratio_stats["5%"] < 0.8 and ratio_stats["95%"] > 1.2
+
+ratio_stats.to_frame().T
 ```
 
 A ratio of 1 would be the same weight on both sides. Half of the micro-batches are within about 10 to 20%
-of it (0.89 to 1.18); one in ten is off by 30% or more (below 0.70 or above 1.44), and the extremes are 0.48
-and 2.23. The error is not huge, but it is systematic: tokens in a micro-batch with few answer tokens are
+of it (`{python} f"{ratio_stats['25%']:.2f}"` to `{python} f"{ratio_stats['75%']:.2f}"`); one in ten is further out (below `{python} f"{ratio_stats['5%']:.2f}"` or above `{python} f"{ratio_stats['95%']:.2f}"`), and the extremes are `{python} f"{ratio_stats['min']:.2f}"`
+and `{python} f"{ratio_stats['max']:.2f}"`. The error is not huge, but it is systematic: tokens in a micro-batch with few answer tokens are
 over-weighted, and the gradient is not the one we are describing.
 
 The fix is to add the losses as **sums** and divide by the token count of the *whole* accumulated batch,
@@ -440,7 +446,7 @@ count. The Trainer run at the end of this chapter does the same.
 - **Noise.** The gradient of 16 conversations is a better estimate of the gradient over the whole dataset
   than the gradient of 4, with less variance from batch to batch. A larger effective batch generally tolerates a
   larger learning rate, and means fewer steps.
-- **Steps.** With 2,731 conversations, a batch of 16 gives 171 steps per epoch and 342 in two epochs. Doubling
+- **Steps.** With `{python} f"{n_fit:,}"` conversations, a batch of 16 gives `{python} math.ceil(n_fit / effective_batch)` steps per epoch and `{python} total` in `{python} epochs` epochs. Doubling
   the batch would halve the number of updates, so the learning rate and the schedule would have to be
   chosen again.
 - **Not memory or speed.** Accumulating 4 micro-batches of 4 costs about what 16 at once would in
@@ -455,14 +461,14 @@ checkpointing** keeps only the input of each layer, and recomputes the layer's i
 backward pass reaches it: less memory, in exchange for an extra forward pass per step.
 
 Whether that exchange is worth making depends on the hardware, so we measure it. Each run below is a
-short real training loop on train-fit conversations, with the shape of the planned run: micro-batches of 4
+short real training loop on train-fit conversations, with the shape of the main run: micro-batches of 4
 conversations, 4 of them accumulated into one optimizer step (an effective batch of 16), `max_length`
 3,584. After 2 warm-up steps, 5 steps are timed, and peak GPU memory is recorded for them and for one
 worst-case micro-batch, the four longest conversations of train-fit. These are not training runs; they
 only measure.
 
 Two models are measured. The **0.5B** model with all weights trained shows the effect cheaply. The
-**4B** model with LoRA (rank 16, see @sec-lora) is the configuration of the main run in the training chapter, and the
+**4B** model with LoRA (rank 16, see @sec-lora) is the configuration of the main run (@sec-training), and the
 one whose answer we need.
 
 ```{python}
@@ -544,31 +550,47 @@ How to read the table:
   worst-case micro-batch (the four longest conversations, each over 3,000 tokens). The longest batch is the
   one that decides whether a run survives: a run that fits on average can still fail on one bad batch.
 - **Seconds per step** is the median of the 5 timed steps; each step is 4 micro-batches. **Hours for 2
-  epochs** multiplies it by the 342 optimizer steps of the planned run (2,731 conversations × 2 epochs ÷ 16).
+  epochs** multiplies it by the `{python} total` optimizer steps of the main run (`{python} f"{n_fit:,}"` conversations × 2 epochs ÷ 16).
   It is an extrapolation from a short run, and leaves out evaluation.
 - **Precision.** The weights are bf16 throughout. With full fine-tuning the gradients and AdamW state are
   bf16 too, as these runs do; with LoRA, PEFT keeps the small trainable matrices in fp32 and the frozen
   base in bf16.
-- A run that goes over the memory cap is marked as such. The cap (80 GB of the machine's 121 GB) is there
+- A run that goes over the memory cap is marked as such. The cap (`{python} f"{cap:g}"` GB of the machine's 121 GB) is there
   because this GPU shares its memory with the desktop, and a run that takes everything freezes the machine.
   Our first attempt at the 4B run without checkpointing had no cap, and did exactly that: the desktop
   session froze and the machine had to be restarted.
 
+```{python}
+small_off = costs[("0.5B, full fine-tuning", "off")]
+small_on = costs[("0.5B, full fine-tuning", "on")]
+big_off = costs[("4B, LoRA r=16", "off")]
+big_on = costs[("4B, LoRA r=16", "on")]
+
+mem_cut = 1 - small_on["typical_peak_gb"] / small_off["typical_peak_gb"]
+slower = small_on["median_step_s"] / small_off["median_step_s"] - 1
+hours_on = estimate_hours(big_on["median_step_s"], n_fit, 2, 16)
+
+# the sentences below
+assert 0.3 < mem_cut < 0.5 and 0.1 < slower < 0.3  # two fifths, a fifth
+assert big_off["median_step_s"] is None  # does not fit
+assert big_on["worst_peak_gb"] < cap / 2  # plenty of room
+```
+
 **What the numbers say.**
 
-- On the 0.5B model, checkpointing cuts the peak memory of the typical steps from 26 GB to 16 GB, and of the
-  longest batch from 47 GB to 27 GB, and makes a step about 18% slower (3.3 s to 3.9 s). That is the
+- On the 0.5B model, checkpointing cuts the peak memory of the typical steps from `{python} f"{small_off['typical_peak_gb']:.0f}"` GB to `{python} f"{small_on['typical_peak_gb']:.0f}"` GB, and of the
+  longest batch from `{python} f"{small_off['worst_peak_gb']:.0f}"` GB to `{python} f"{small_on['worst_peak_gb']:.0f}"` GB, and makes a step about `{python} f"{slower:.0%}"` slower (`{python} f"{small_off['median_step_s']:.1f}"` s to `{python} f"{small_on['median_step_s']:.1f}"` s). That is the
   trade: roughly two fifths less memory for a fifth more time.
-- On the 4B model with LoRA, **without checkpointing the run does not fit** in 80 GB at a micro-batch of 4.
-  The weights are only 7.6 GB; it is the activations of 36 layers over thousands of tokens, and the
+- On the 4B model with LoRA, **without checkpointing the run does not fit** in `{python} f"{cap:g}"` GB at a micro-batch of 4.
+  The weights are only `{python} f"{big_on['weights_gb']:.1f}"` GB; it is the activations of 36 layers over thousands of tokens, and the
   logits (the output over a 152,000-token vocabulary at every position), that fill the memory. With
-  checkpointing the peak is 21 GB on typical steps and 34 GB on the longest batch, so there is plenty of
+  checkpointing the peak is `{python} f"{big_on['typical_peak_gb']:.0f}"` GB on typical steps and `{python} f"{big_on['worst_peak_gb']:.0f}"` GB on the longest batch, so there is plenty of
   room left.
-- So the main run keeps gradient checkpointing on. At about 41 s per optimizer step it takes roughly 4
+- So the main run keeps gradient checkpointing on. At about `{python} f"{big_on['median_step_s']:.0f}"` s per optimizer step it takes roughly `{python} f"{hours_on:.0f}"`
   hours for 2 epochs, longer than the 1 to 2 hours we first guessed.
 
 What we did not measure is the 4B run without checkpointing at a smaller micro-batch, which might fit
-and be faster. That is a tuning question for the training chapter, where it can be tried with the real run.
+and be faster. That is a tuning question, and the main run (@sec-training) keeps checkpointing on without trying it.
 
 ## The memory budget
 
@@ -637,6 +659,7 @@ assert abs(
 ) < 0.02
 
 rows = []
+act = {}  # name -> activations + logits, (typical, longest batch)
 for name, (parts, measured) in scenarios.items():
     row = {
         "setting": name,
@@ -650,21 +673,45 @@ for name, (parts, measured) in scenarios.items():
         row["activations + logits, longest batch"] = round(
             measured["worst_peak_gb"] - sum(parts.values()), 1
         )
+        act[name] = (
+            row["activations + logits, typical"],
+            row["activations + logits, longest batch"],
+        )
     rows.append(row)
 pd.DataFrame(rows).set_index("setting")
 ```
 
+```{python}
+static_gb = {name: sum(parts.values()) for name, (parts, _) in scenarios.items()}
+a_small = act["0.5B, full fine-tuning, bf16"]
+a_lora = act["4B, LoRA r=16"]
+size_ratio = lora["total_params"] / small["total_params"]
+
+full_bf16 = static_gb["4B, full fine-tuning, bf16"]
+full_fp32 = static_gb["4B, full fine-tuning, fp32 weights"]
+lora_static = static_gb["4B, LoRA r=16"]
+est_bf16 = full_bf16 + a_lora[1]
+est_fp32 = full_fp32 + a_lora[1]
+
+# the sentences below
+assert 7 < size_ratio < 9  # eight times bigger
+assert abs(a_small[0] - a_lora[0]) < 2 and abs(a_small[1] - a_lora[1]) < 6
+assert est_bf16 < cap < est_fp32
+assert 0.2 < lora_static / full_bf16 < 0.3  # about a quarter
+assert 0.1 < lora_static / full_fp32 < 0.15  # about an eighth
+```
+
 How the bytes are counted: with LoRA the 4B weights stay in bf16 (2 bytes each) and only the adapters,
-33 million parameters in fp32 (4 bytes), have gradients and state. Full fine-tuning in bf16, as the 0.5B run
+`{python} f"{trainable / 1e6:.0f}"` million parameters in fp32 (4 bytes), have gradients and state. Full fine-tuning in bf16, as the 0.5B run
 above did, uses 2 bytes for each of weight, gradient, $m$ and $v$: 8 bytes per parameter. The usual
 **[mixed-precision](901_glossary.qmd#gloss-bf16)** recipe keeps fp32 weights and does the arithmetic in bf16, which doubles all of it, to 16
 bytes per parameter (and a bf16 copy of the weights during the forward pass on top).
 
-Read the last two columns of the 0.5B and 4B-LoRA rows together. The model is eight times bigger and the
-gradients and state are nothing alike, yet the activations plus logits cost about the same: a bit over
-12 GB on a typical step and 23 to 26 GB on the longest batch. They depend on the batch (4 conversations of
+Read the last two columns of the 0.5B and 4B-LoRA rows together. The model is `{python} f"{size_ratio:.0f}"` times bigger and the
+gradients and state are nothing alike, yet the activations plus logits cost about the same: about
+`{python} f"{(a_small[0] + a_lora[0]) / 2:.0f}"` GB on a typical step and `{python} f"{min(a_small[1], a_lora[1]):.0f}"` to `{python} f"{max(a_small[1], a_lora[1]):.0f}"` GB on the longest batch. They depend on the batch (4 conversations of
 up to 3,584 tokens) and on the vocabulary, which both models share, much more than on the size of the model.
-The logits alone, for the four longest conversations (about 14,000 positions × 152,000 entries), take 4 GB
+The logits alone, for the four longest conversations (about 14,000 positions × 152,000 entries), take `{python} f"{14_000 * 152_000 * 2 / GB:.0f}"` GB
 in bf16 and twice that again once cast to float32 for the loss, before their gradients are counted.
 
 ```{python}
@@ -717,20 +764,20 @@ plt.show()
 ```
 
 **Would full fine-tuning of the 4B model work on this machine?** From the numbers, in bf16 with gradient
-checkpointing, probably yes: 30 GB of weights, gradients and state, plus the 26 GB the activations took on the
-longest batch in the measurements above, about 56 GB, under our cap of 80. With the fp32 weights of the usual
-mixed-precision recipe the static part alone is 60 GB, the estimate for the longest batch about 86 GB, and
+checkpointing, probably yes: `{python} f"{full_bf16:.0f}"` GB of weights, gradients and state, plus the `{python} f"{a_lora[1]:.0f}"` GB the activations took on the
+longest batch in the measurements above, about `{python} f"{est_bf16:.0f}"` GB, under our cap of `{python} f"{cap:g}"`. With the fp32 weights of the usual
+mixed-precision recipe the static part alone is `{python} f"{full_fp32:.0f}"` GB, the estimate for the longest batch about `{python} f"{est_fp32:.0f}"` GB, and
 the machine's whole memory is shared with the desktop, so going over it risks freezing the desktop, as in
 the uncapped run described above. Even so, the lab
-trains the 4B model with LoRA: it keeps the static cost near 8 GB, about a quarter of full fine-tuning in
+trains the 4B model with LoRA: it keeps the static cost near `{python} f"{lora_static:.0f}"` GB, about a quarter of full fine-tuning in
 bf16 and an eighth of the mixed-precision recipe, which leaves room for larger micro-batches and for
 the desktop.
 
 Two cautions. The 4B full-fine-tuning bars are **estimates**, built on the assumption that its activations
 and logits cost what we measured for LoRA and for the 0.5B model, which the first two rows support but do
 not prove: full fine-tuning has to keep a few more intermediate values for its weight gradients. And the
-freeze was not caused by LoRA's weights or state, which add up to 8 GB. It is consistent with the activations
-and logits of a micro-batch of 4 without checkpointing, which on the 4B LoRA run went over 80 GB on typical
+freeze was not caused by LoRA's weights or state, which add up to `{python} f"{lora_static:.0f}"` GB. It is consistent with the activations
+and logits of a micro-batch of 4 without checkpointing, which on the 4B LoRA run went over `{python} f"{cap:g}"` GB on typical
 steps; we did not measure the uncapped run itself.
 
 ## Full fine-tuning of the 0.5B model with `SFTTrainer`
@@ -746,9 +793,9 @@ conversations for 2 epochs, which makes 40 optimizer steps. The key settings:
 - **gradient clipping** at 1.0;
 - **bf16 arithmetic over fp32 weights** (`bf16=True`), at a maximum length of 3,584 tokens.
 
-The batch, the schedule and the clipping are the ones planned for the main run of the training chapter, which
+The batch, the schedule and the clipping are the ones of the main run (@sec-training), which
 fine-tunes the 4B model with LoRA. The model, the method and the learning rate differ: LoRA trains small added
-matrices and takes a larger rate (2e-4 is planned), where training every weight usually needs a smaller one.
+matrices and takes a larger rate (2e-4 there), where training every weight usually needs a smaller one.
 The weights are kept in fp32 because, at a learning rate this small, an update to a bf16 weight is often
 smaller than the weight's rounding step and would be lost.
 
@@ -859,7 +906,7 @@ print(f"by hand:         {demo['step0_by_hand']:.6f}")
 assert abs(step0 - demo["step0_by_hand"]) < 1e-3
 ```
 
-This is the check that carries over to the training chapter: a Trainer's step-0 validation loss should equal the
+This is the check that carries over to @sec-training: a Trainer's step-0 validation loss should equal the
 loss we compute ourselves from the same data, and if it does not, the formatting, the label mask or the
 normalization is wrong somewhere.
 
@@ -942,8 +989,8 @@ chapters measure properly.
   by the size of the model; gradient checkpointing trades about a fifth more time for about two fifths less
   memory on the model we measured.
 - A library run can be **checked** against the pieces: the step count, the labels, the learning-rate
-  schedule and the step-0 loss all matched what we computed by hand. The same four checks apply to the
-  training chapter.
+  schedule and the step-0 loss all matched what we computed by hand. The same four checks apply to
+  @sec-training.
 
 ::: {.callout-tip title="Further reading"}
 - Adam [@kingma2015adam] and the decoupled weight decay of AdamW [@loshchilov2019adamw], for the update rule

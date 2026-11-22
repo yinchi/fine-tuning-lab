@@ -149,15 +149,27 @@ assert total == peft["trainable_params"]\
 print(f"saved as fp32, the adapter is about {total * 4 / 1e6:.0f} MB")
 ```
 
+```{python}
+largest = {name: min(i, o) for name, (i, o) in projections.items()}
+break_even = {
+    name: i * o / (i + o) for name, (i, o) in projections.items()
+}
+wide = max(largest.values())
+narrow = min(largest.values())
+assert sorted(set(largest.values())) == [narrow, wide]
+assert [n for n, v in largest.items() if v == narrow] == ["k_proj", "v_proj"]
+assert all(be > 10 * r for be in break_even.values())
+```
+
 At rank 16 the adapters hold `{python} f"{total / 1e6:.1f}"` million weights, `{python} f"{total / checks['base_params']:.2%}"`
 of the model, and the count equals PEFT's. Two columns of the table matter for choosing a rank.
 
 - **Largest useful rank.** The product $BA$ can never have a rank above $\min(d_\text{in}, d_\text{out})$. At
-  that rank the update can be any matrix of the layer's shape: 2,560 for most matrices and 1,024 for $k$ and $v$.
+  that rank the update can be any matrix of the layer's shape: `{python} f"{wide:,}"` for most matrices and `{python} f"{narrow:,}"` for $k$ and $v$.
   A rank beyond it adds weights and no new updates.
 - **Break-even rank.** Where $r\,(d_\text{in}+d_\text{out}) = d_\text{in}\, d_\text{out}$, the adapter has as many weights as
-  the matrix it adapts: between 731 and 2,027 here. Above that LoRA is not smaller than full fine-tuning, so
-  useful ranks sit far below it. Our $r = 16$ is 0.6% of the largest useful rank for most matrices, and 1.6% for $k$ and $v$.
+  the matrix it adapts: between `{python} f"{min(break_even.values()):,.0f}"` and `{python} f"{max(break_even.values()):,.0f}"` here. Above that LoRA is not smaller than full fine-tuning, so
+  useful ranks sit far below it. Our $r = 16$ is `{python} f"{r / wide:.1%}"` of the largest useful rank for most matrices, and `{python} f"{r / narrow:.1%}"` for $k$ and $v$.
 
 Even at the largest rank, LoRA would not be the same as full fine-tuning: the embeddings and norms stay frozen,
 and the update is learned through the two factors, which behaves differently from training $W$ directly.
@@ -228,24 +240,24 @@ trained adapter, smaller and with structure, may merge better. We have not measu
 What does keep the adapter's exact effect is not to merge it into bf16 weights: either leave it separate, a bf16
 base model with an fp32 adapter, which is how we train it and PEFT's default, or merge and keep the whole model in
 fp32 (twice the memory). Merging and then casting to bf16 stores rounded weights, which is the case we measured, so a
-merged bf16 model has to be evaluated before it is relied on. The evaluation chapter does that on the trained adapter.
+merged bf16 model has to be evaluated before it is relied on. @sec-evaluating does that on the trained adapter.
 
 ## Rank, alpha and what we leave out
 
 - **Rank** is capacity: a rank-$r$ update can change each layer's output in only $r$ directions. Too small
   and the model cannot fit the task; beyond what the task needs, more rank only adds weights. How much the task needs
-  is an empirical question, and we answer it with a rank sweep, below and above 16, planned at the end of the book.
+  is an empirical question, and we answer it with a rank sweep, below and above 16 (@sec-rank-sweep).
 - **[Alpha](901_glossary.qmd#gloss-alpha)** sets the size of the correction. Keeping $\alpha = 2r$ keeps the scale fixed at 2 whatever the rank, so
   rank is the only thing the sweep changes.
 - **[QLoRA](901_glossary.qmd#gloss-qlora)** [@dettmers2023qlora] stores the frozen base weights in 4 bits, to save memory, and trains the adapters in
-  higher precision on top. We do not need it: the 4B model's bf16 weights take 8 GB of the machine's 122 GB.
+  higher precision on top. We do not need it: the 4B model's bf16 weights take `{python} f"{2 * checks['base_params'] / 1e9:.0f}"` GB, which the machine holds with room to spare.
 
 ::: {.callout-note title="Under the hood"}
 The two views of @fig-lora-matrix compute the same function in exact arithmetic, but they are not interchangeable in practice.
 Training runs the right-hand view, because it never builds the big matrix. Merging builds $W + \tfrac{\alpha}{r}BA$
 once, which is what makes inference free of extra cost. A merge cannot be undone exactly: once the correction
 is added to bf16 weights the original $W$ cannot be recovered, so we keep the adapter file and not only the
-merged model. In fp32 the adapter of the main run is about 130 MB, against 8 GB for the model.
+merged model. In fp32 the adapter of the main run is about `{python} f"{total * 4 / 1e6:.0f}"` MB, against `{python} f"{2 * checks['base_params'] / 1e9:.0f}"` GB for the model.
 :::
 
 ::: {.callout-tip title="Further reading"}
