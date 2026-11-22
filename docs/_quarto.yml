@@ -29,6 +29,9 @@ book:
         - 304_evaluating_the.qmd
         - 305_dsl_vs.qmd
         - 306_constrained_decoding.qmd
+    - part: "Beyond"
+      chapters:
+        - 403_retrospective.qmd
   appendices:
     - 902_references.qmd
 
