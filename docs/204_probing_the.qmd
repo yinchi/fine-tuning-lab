@@ -51,7 +51,7 @@ generated: no cleaning, and an answer the executor rejects is wrong. That is the
 evaluation will use.
 
 We try two prompts. **Zero-shot** is the system prompt `Answer with a program in the ConvFinQA DSL.`,
-the page and the question, and nothing else. **Few-shot** puts two complete conversations, with their
+the page and the question, and nothing else. **[Few-shot](901_glossary.qmd#gloss-few-shot)** puts two complete conversations, with their
 gold programs, in front of the same request, drawn from train-fit.
 
 These runs take a few minutes (they load the 4B model and generate 68 answers twice), so they are an
@@ -148,7 +148,7 @@ Fine-tuning has to teach both, and the invalid rate it removes is the easy part.
 
 Generation shows what the model does. We can also ask how likely it finds **the gold answer**. One forward
 pass over the whole conversation gives, for every token, the probability the model assigned to it given
-everything before it. The negative log of that probability is the token's **surprisal**, in nats (natural log). It is
+everything before it. The negative log of that probability is the token's **[surprisal](901_glossary.qmd#gloss-surprisal)**, in nats (natural log). It is
 the surprisal of the **gold** token given the **gold** tokens before it (teacher forcing), with no
 comparison to what the model would have chosen. The cross-entropy loss fine-tuning minimizes is the mean
 surprisal over the answer tokens.
@@ -268,14 +268,14 @@ from math import exp
 print(f"perplexity: {exp(val_nll['nll']):.3f}")
 ```
 
-The **perplexity** is the exponential of this mean: the model is as uncertain, on average, as if it
+The **[perplexity](901_glossary.qmd#gloss-perplexity)** is the exponential of this mean: the model is as uncertain, on average, as if it
 were choosing uniformly among that many tokens at each gold position. A perplexity of 1 would mean every
 gold token had probability 1. It is an average of a lopsided distribution (the earlier table shows a few
 very costly tokens among many nearly free ones), it is per token, so it depends on the tokenizer, and it
 covers the answer tokens only. It carries the same information as the loss; we report both because the
 training logs show the loss and the perplexity is easier to picture.
 
-The mean negative log-likelihood is the loss of the untuned model on the validation split, with the data
+The mean [negative log-likelihood](901_glossary.qmd#gloss-nll) is the loss of the untuned model on the validation split, with the data
 in exactly the format the training will use. The training chapter uses the same format, so its **step-0
 validation loss** should agree with it within a few percent: if it doesn't, the formatting or the label mask differs between
 the two, and we look there first. After training we expect the loss to fall, and the same

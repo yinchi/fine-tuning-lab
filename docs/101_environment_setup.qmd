@@ -27,7 +27,7 @@ the data. To force a re-run of one chapter, delete its folder `docs/_freeze/<cha
 `quarto render docs/<chapter>.qmd --no-execute-daemon`.
 
 **Heavy cells.** Some computations, such as training and full evaluation, take minutes to hours.
-Results are stored as named *artifacts* in `artifacts/`, each with a `node.json` that records its
+Results are stored as named *[artifacts](901_glossary.qmd#gloss-artifact)* in `artifacts/`, each with a `node.json` that records its
 configuration and the artifacts it was built from. On later renders a chapter loads the saved result
 instead of recomputing, so editing a chapter's text stays cheap. If an upstream artifact changes,
 everything built from it counts as stale.

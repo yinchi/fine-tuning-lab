@@ -85,3 +85,45 @@ def test_every_chapter_is_in_the_book():
     config = (DOCS / "_quarto.yml").read_text()
     missing = [p.name for p in CHAPTERS if p.name not in config]
     assert not missing, f"not listed in _quarto.yml: {missing}"
+
+
+GLOSSARY = DOCS / "901_glossary.qmd"
+GLOSSARY_LINK = re.compile(r"901_glossary\.qmd#(gloss-[\w-]+)")
+ENTRY = re.compile(r"^\[([^\]]+)\]\{#(gloss-[\w-]+)\}\n:\s+(.+?)(?=\n\n|\Z)", re.M | re.S)
+
+
+def glossary_entries() -> list[tuple[str, str, str]]:
+    """The (term, id, definition) of every glossary entry, in file order."""
+    return ENTRY.findall(GLOSSARY.read_text())
+
+
+def test_glossary_entries_are_well_formed():
+    text = GLOSSARY.read_text()
+    entries = glossary_entries()
+    assert len(entries) == len(re.findall(r"\{#gloss-", text)), "an entry is not `[term]{#gloss-id}` then `:   definition`"
+    ids = [i for _, i, _ in entries]
+    assert len(ids) == len(set(ids)), "duplicate glossary id"
+    for term, _, definition in entries:
+        assert re.search(r"See\s+@sec-[\w-]+", definition), f"{term}: an entry ends with the chapter that develops the term"
+
+
+def test_glossary_is_alphabetical():
+    terms = [t.lower() for t, _, _ in glossary_entries()]
+    assert terms == sorted(terms)
+
+
+def test_every_glossary_link_resolves_and_every_entry_is_linked():
+    """A chapter links a term where the book introduces it, so an entry nothing links to is dead."""
+    defined = {i for _, i, _ in glossary_entries()}
+    linked = set()
+    problems = []
+    for chapter in CHAPTERS:
+        if chapter == GLOSSARY:
+            continue
+        for number, line in enumerate(chapter.read_text().splitlines(), 1):
+            for target in GLOSSARY_LINK.findall(line):
+                linked.add(target)
+                if target not in defined:
+                    problems.append(f"{chapter.name}:{number}: {target}")
+    assert not problems, "links to missing glossary entries:\n" + "\n".join(problems)
+    assert defined <= linked, f"glossary entries no chapter links to: {sorted(defined - linked)}"

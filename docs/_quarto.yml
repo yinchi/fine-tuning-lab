@@ -33,6 +33,7 @@ book:
       chapters:
         - 403_rank_sweep.qmd
   appendices:
+    - 901_glossary.qmd
     - 902_references.qmd
 
 number-sections: true

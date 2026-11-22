@@ -134,7 +134,7 @@ conversation of the data is 3,460 tokens (@sec-convfinqa) and `max_length` is 3,
 
 ## Train, validation and dev
 
-`train.json` has 3,037 conversations. We hold out a tenth of them as **validation** data, for the choices that
+`train.json` has 3,037 conversations. We hold out a tenth of them as **[validation](901_glossary.qmd#gloss-validation)** data, for the choices that
 the project makes (the prompt, the checkpoint, the grammar) and train on the rest. Several conversations are
 written from the same report page, so the split is made **by page**: the group key is the conversation id
 without its `Single_` or `Double_` prefix and its `-N` suffix. A page then lies entirely on one side, and the model

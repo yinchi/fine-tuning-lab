@@ -25,14 +25,14 @@ them so that the model predicts the training text better, in four moves that rep
 2. **Forward pass.** The model reads the tokens and produces **logits**: a score for every token of the
    vocabulary at every position. This is the computation from @sec-tokens, but over whole sequences at
    once instead of one next token.
-3. **Loss.** The logits are turned into probabilities, and the loss is the average of
+3. **[Loss](901_glossary.qmd#gloss-loss).** The logits are turned into probabilities, and the loss is the average of
    $-\log p$ of the correct next token over the tokens that count. It is one number: small when the
    model gave the right tokens high probability.
 4. **Backward pass.** For each weight, the **gradient** says how much the loss would change if that weight
    changed a little. It is computed by working backwards through the forward pass, the chain rule applied
    layer by layer (**backpropagation**).
 5. **Optimizer step.** Each weight moves a small step against its gradient. The size of the step is the
-   **learning rate**. We use **AdamW**, which does not step by the raw gradient: it keeps two running
+   **[learning rate](901_glossary.qmd#gloss-learning-rate)**. We use **[AdamW](901_glossary.qmd#gloss-adamw)**, which does not step by the raw gradient: it keeps two running
    averages per weight, of the gradient and of its square, and scales every step by them. Those averages
    are the *optimizer state*, and they persist from step to step.
 
@@ -89,7 +89,7 @@ validation conversation with exactly three turns and the shortest programs, so t
 on a page. The model is the 4B model we fine-tune.
 
 The by-hand computation is four lines. Position $t$ is scored on token $t+1$, so the logits drop their last
-position and the labels drop their first. The positions whose label is `-100` are thrown away. For the
+position and the [labels](901_glossary.qmd#gloss-labels) drop their first. The positions whose label is `-100` are thrown away. For the
 rest we take the log-probability of the correct token and average its negative.
 
 ```python
@@ -258,7 +258,7 @@ $$
 \theta_t = \theta_{t-1} - \eta\left(\frac{\hat m_t}{\sqrt{\hat v_t}+\varepsilon} + \lambda\,\theta_{t-1}\right).
 $$
 
-The last term is **weight decay** with strength $\lambda$, which pulls each weight a little towards zero.
+The last term is **[weight decay](901_glossary.qmd#gloss-weight-decay)** with strength $\lambda$, which pulls each weight a little towards zero.
 **AdamW** [@loshchilov2019adamw] applies it to the weight directly, as above, instead of folding it into the
 gradient before the averages, which is what plain Adam with an L2 penalty does. The defaults are
 $\beta_1=0.9$, $\beta_2=0.999$, $\varepsilon=10^{-8}$. The Trainer's `weight_decay` is 0 by default, and
@@ -276,7 +276,7 @@ memory-hungry, and what LoRA avoids by training a few million weights instead of
 The learning rate $\eta$ is not constant. The planned run uses a **linear warmup** followed by a **cosine
 decay**, both changing the rate at every optimizer step.
 
-- **Warmup.** At the start the averages $m$ and $v$ are estimated from one or two batches and the first
+- **[Warmup](901_glossary.qmd#gloss-warmup).** At the start the averages $m$ and $v$ are estimated from one or two batches and the first
   steps are the least reliable of the run, so the rate rises linearly from 0 to its peak over the first few
   steps. Warmup is a standard remedy for unstable starts, introduced for large-batch training
   [@goyal2017accurate].
@@ -375,9 +375,9 @@ version of the library a warmup below 1 is read as a fraction of all steps, and 
 
 ## Gradient accumulation and the effective batch
 
-Each optimizer step uses the gradient of **16 conversations**, the **effective batch**. But 16 conversations
+Each optimizer step uses the gradient of **16 conversations**, the **[effective batch](901_glossary.qmd#gloss-effective-batch)**. But 16 conversations
 of up to 3,584 tokens at once need more activation memory than we want to spend (the measurement below
-shows 34 GB for the longest *four*). **Gradient accumulation** gets the same step from smaller pieces:
+shows 34 GB for the longest *four*). **[Gradient accumulation](901_glossary.qmd#gloss-gradient-accumulation)** gets the same step from smaller pieces:
 
 1. run a forward and backward pass on a **micro-batch** of 4 conversations;
 2. do *not* step the optimizer: PyTorch's `backward()` **adds** to the gradients already stored;
@@ -657,7 +657,7 @@ pd.DataFrame(rows).set_index("setting")
 How the bytes are counted: with LoRA the 4B weights stay in bf16 (2 bytes each) and only the adapters,
 33 million parameters in fp32 (4 bytes), have gradients and state. Full fine-tuning in bf16, as the 0.5B run
 above did, uses 2 bytes for each of weight, gradient, $m$ and $v$: 8 bytes per parameter. The usual
-**mixed-precision** recipe keeps fp32 weights and does the arithmetic in bf16, which doubles all of it, to 16
+**[mixed-precision](901_glossary.qmd#gloss-bf16)** recipe keeps fp32 weights and does the arithmetic in bf16, which doubles all of it, to 16
 bytes per parameter (and a bf16 copy of the weights during the forward pass on top).
 
 Read the last two columns of the 0.5B and 4B-LoRA rows together. The model is eight times bigger and the
@@ -737,12 +737,12 @@ steps; we did not measure the uncapped run itself.
 
 Everything above is what the Trainer does for us. We now run it, on the small 0.5B model, and check that it
 does what the chapter says.
-The run is a **full fine-tuning** (every weight is trained) of `Qwen2.5-0.5B-Instruct` on 320 train-fit
+The run is a **[full fine-tuning](901_glossary.qmd#gloss-full-fine-tuning)** (every weight is trained) of `Qwen2.5-0.5B-Instruct` on 320 train-fit
 conversations for 2 epochs, which makes 40 optimizer steps. The key settings:
 
 - **effective batch of 16**: micro-batches of 4 conversations, accumulated 4 times;
 - **AdamW**, peak learning rate 2e-5, no weight decay;
-- a **cosine schedule** with 3% warmup;
+- a **[cosine schedule](901_glossary.qmd#gloss-cosine-schedule)** with 3% warmup;
 - **gradient clipping** at 1.0;
 - **bf16 arithmetic over fp32 weights** (`bf16=True`), at a maximum length of 3,584 tokens.
 

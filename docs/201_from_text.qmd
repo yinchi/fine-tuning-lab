@@ -5,7 +5,7 @@
 - how a language model turns text into integers called *tokens*, and what that does to ConvFinQA's numbers;
 - how to read a tokenization, using a colour-coded view of real questions, table rows and programs.
 
-A language model never sees letters or digits. It sees a sequence of integers. The **tokenizer** splits
+A language model never sees letters or digits. It sees a sequence of integers. The **[tokenizer](901_glossary.qmd#gloss-token)** splits
 text into pieces from a fixed vocabulary and replaces each piece by its position in that vocabulary.
 This chapter works with the model we fine-tune later, `Qwen/Qwen3-4B-Instruct-2507`.
 
@@ -95,7 +95,7 @@ For arithmetic this is awkward either way, but Qwen's digit-by-digit split is at
 digit is always one token, whatever its neighbours are.
 
 ::: {.callout-note title="Under the hood"}
-Qwen's tokenizer is a **byte-level BPE** tokenizer. Its vocabulary was built by starting from single
+Qwen's tokenizer is a **[byte-level BPE](901_glossary.qmd#gloss-bpe)** tokenizer. Its vocabulary was built by starting from single
 bytes and repeatedly merging the most frequent adjacent pairs in a large text corpus. Before any
 merging applies, a **pre-tokenizer** first splits the text with a regular expression. Part of Qwen's
 expression is `\p{N}`, which matches a single digit, so a digit can never merge with its neighbours.
@@ -195,7 +195,7 @@ By the end it encodes a prediction for the token at position *i* + 1.
 ### Logits
 
 The last step turns each position's vector into one score per vocabulary entry. These scores are the
-**logits**. A matrix with 151,936 rows, the language-model head, does the multiplication.
+**[logits](901_glossary.qmd#gloss-logits)**. A matrix with 151,936 rows, the language-model head, does the multiplication.
 
 ```{python}
 with torch.no_grad():
@@ -234,7 +234,7 @@ print("scores for the next token:", tuple(last.shape))
 
 ### Softmax and the prediction
 
-Logits are arbitrary real numbers. **Softmax** turns them into probabilities: it exponentiates each
+Logits are arbitrary real numbers. **[Softmax](901_glossary.qmd#gloss-softmax)** turns them into probabilities: it exponentiates each
 score and divides by the total, so every value is positive and they sum to 1.
 
 ```{python}
@@ -335,7 +335,7 @@ plot_next_token(tok, last, temperatures=(0.3, 1.0, 2.0), k=10);
   argmax.
 - A high *T* flattens it: the tail of unlikely tokens gains probability.
 
-The **entropy** in the panel titles summarises the spread: it is 0 when one token has all the probability,
+The **[entropy](901_glossary.qmd#gloss-entropy)** in the panel titles summarises the spread: it is 0 when one token has all the probability,
 and grows as the distribution flattens. The same numbers as a table:
 
 ```{python}
@@ -353,9 +353,9 @@ model is not any better informed; the distribution is just less sure of itself.
 To write more than one token, the model repeats the trace: it picks a token, appends it to the input,
 and predicts again. How it picks decides everything about the output.
 
-- **Greedy decoding** always takes the most likely token. Nothing is random, so the same input gives the
+- **[Greedy decoding](901_glossary.qmd#gloss-greedy)** always takes the most likely token. Nothing is random, so the same input gives the
   same output.
-- **Sampling** draws the next token at random from the (temperature-adjusted) distribution, so the
+- **[Sampling](901_glossary.qmd#gloss-sampling)** draws the next token at random from the (temperature-adjusted) distribution, so the
   output varies from run to run. A random-number **seed** makes a sampled run repeatable.
 
 Before we try both, one pitfall. The model ships with default generation settings:
@@ -408,7 +408,7 @@ reason.
 
 ## Editing the logits
 
-A **logits processor** is a function that edits the logits after the model produces them and before
+A **[logits processor](901_glossary.qmd#gloss-logits-processor)** is a function that edits the logits after the model produces them and before
 the softmax. The simplest edit is a **mask**: adding $-\infty$ to a token's logit makes its probability
 exactly 0, and the probabilities of the remaining tokens renormalise to sum to 1.
 
@@ -459,4 +459,4 @@ here because the right answer was already the model's favourite digit sequence, 
 guaranteed in general. This mask is also far too crude. It can never end the answer, because the
 end-of-turn token is not allowed, and it cannot write an operator or a parenthesis. A useful
 constraint changes the allowed set at every step depending on what has been written so far. That is a
-**grammar**, the subject of the constrained-decoding chapter.
+**[grammar](901_glossary.qmd#gloss-grammar)**, the subject of the [constrained-decoding](901_glossary.qmd#gloss-constrained-decoding) chapter.

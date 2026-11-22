@@ -8,7 +8,7 @@
 - what is written down before the results of the sweep are seen.
 
 The book fine-tuned one model, with one adapter, and a few choices were made without testing the alternatives. This
-chapter runs one experiment on one of them: a **rank sweep**, the same fine-tuning run at five values of the LoRA
+chapter runs one experiment on one of them: a **[rank sweep](901_glossary.qmd#gloss-rank-sweep)**, the same fine-tuning run at five values of the LoRA
 rank (@sec-lora), compared on the same validation turns. Afterwards it goes through the other things one could try,
 and says for each what the earlier chapters already show.
 
@@ -392,7 +392,7 @@ pd.DataFrame({
 ```
 
 The adapters use more directions as they get more, but not in proportion. From rank 4 to rank 64 the rank goes up
-`{python} f"{64 // 4}"`-fold and the effective number of directions `{python} f"{growth:.1f}"`-fold, from
+`{python} f"{64 // 4}"`-fold and the [effective number of directions](901_glossary.qmd#gloss-effective-directions) `{python} f"{growth:.1f}"`-fold, from
 `{python} f"{spec[4]['effective']:.1f}"` to `{python} f"{spec[64]['effective']:.1f}"`. At rank 64 the directions after the
 sixteenth hold `{python} f"{spec[64]['beyond16']:.0%}"` of the squared norm of an update, so the adapter does use the room it is
 given, and most of its update is still in a few directions. The update also grows relative to the weights, from

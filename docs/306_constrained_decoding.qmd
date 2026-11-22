@@ -17,7 +17,7 @@ and with Python.
 The DSL grammar is that of @sec-dsl in the EBNF of the `xgrammar` library. The Python grammar describes the forms that
 `to_python` writes (@sec-python-format): assignments to `v<k>`, then `ans = …`, with numbers, names, the operators
 `+ - * / ** >` and parentheses. It is narrower than the safe evaluator, so a model that follows it cannot leave the
-evaluator's subset. Each has a **bounded** variant that limits a number to the digits the gold programs use: a grammar
+evaluator's subset. Each has a **[bounded](901_glossary.qmd#gloss-bounded-grammar)** variant that limits a number to the digits the gold programs use: a grammar
 guarantees syntax and not termination, and with an unbounded number rule a model can keep writing digits up to the
 generation limit.
 

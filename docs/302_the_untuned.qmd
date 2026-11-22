@@ -15,7 +15,7 @@ conversations written into the prompt [@brown2020gpt3].
 ## What we measure
 
 For every turn of a conversation, the model reads a prompt and writes a program. Our executor runs the program, and
-the result is compared with the gold answer: this is **execution accuracy**, and an output that does not run counts as
+the result is compared with the gold answer: this is **[execution accuracy](901_glossary.qmd#gloss-execution-accuracy)**, and an output that does not run counts as
 wrong. The prompt for turn $k$ ends with question $k$, and what comes before it depends on how the earlier answers
 are supplied (@sec-formatting):
 
@@ -35,7 +35,7 @@ and numbers is the other part, and it is the one we expect fine-tuning to have t
 
 ## How the experiment is organised
 
-- **Prompts.** A prompt holds the system message, then the **example set** (complete training conversations, written as
+- **Prompts.** A prompt holds the system message, then the **[example set](901_glossary.qmd#gloss-example-set)** (complete training conversations, written as
   earlier turns of the chat), then the target conversation up to the current question. The system message is a
   single line, or the same line plus a compact description of the DSL and the rule that an answer is a program and
   nothing else, or that plus a rule against nested calls.
@@ -44,7 +44,7 @@ and numbers is the other part, and it is the one we expect fine-tuning to have t
   data we evaluate on. When the prompt has examples, the reported baseline is run once for each of three sets, and we report each result
   and their spread.
 - **Choosing the prompt.** The variants we try (how many examples, with or without the description, and none at all) are
-  listed in advance (one more was added after the first results, and is flagged), and the choice between them is made on the **validation** data. The development data are touched
+  listed in advance (one more was added after the first results, and is flagged), and the choice between them is made on the **validation** data. The [development data](901_glossary.qmd#gloss-dev) are touched
   only for the numbers the book reports, once, with the prompt already chosen.
 - **Scoring.** Generation and scoring are separate steps, so the measures can be refined without generating again.
   This chapter uses execution accuracy, and counts how the invalid outputs fail; the other measures are introduced
@@ -58,7 +58,7 @@ and numbers is the other part, and it is the one we expect fine-tuning to have t
 
 ![The baseline's prompt (left) and its runs (right). The system message and the examples are the same in every prompt of a run, and the target conversation changes with every turn. Each run uses one example set; the baseline is one run per set.](figures/baseline_prompt.svg){#fig-baseline-prompt fig-alt="Left: a row of boxes. A grey system message box, two blue example conversation boxes, a yellow box for the target conversation up to question k, and a dashed green box where the model writes answer k. A bracket marks the first three as fixed for the whole run and the yellow box as changing with every turn. Right: three blue boxes for sets 1, 2 and 3, each with an arrow to a box for a pass over every turn of the split, and an arrow to its own accuracy."}
 
-The **system message** has three forms. The plain one is the line the models are trained with, `Answer with a program in the
+The **[system message](901_glossary.qmd#gloss-system-message)** has three forms. The plain one is the line the models are trained with, `Answer with a program in the
 ConvFinQA DSL.` The second adds a description of the language and the rule that the answer is the program and nothing
 else. Its text is fixed now, and is not tuned on the validation data:
 
@@ -113,7 +113,7 @@ on the validation data by a rule that was written down before the first six were
 seventh:
 
 1. find the variant with the highest execution accuracy;
-2. keep every variant that it does not clearly beat, that is, whose paired bootstrap interval for the best variant's
+2. keep every variant that it does not clearly beat, that is, whose [paired bootstrap](901_glossary.qmd#gloss-paired-bootstrap) interval for the best variant's
    lead includes zero (the best variant itself is always kept);
 3. among those, take the one with the fewest examples, and then the plain system message before the description.
 

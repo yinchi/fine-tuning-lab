@@ -1,0 +1,262 @@
+# Glossary
+
+Terms are in alphabetical order. Each chapter links a term here the first time it uses it, and each entry ends with the
+chapter where the term is developed.
+
+[AdamW]{#gloss-adamw}
+:   The optimizer of the book's training runs: Adam, with weight decay applied to the weights directly and not through
+    the gradient. The runs use no weight decay. See @sec-fine-tuning.
+
+[adapter]{#gloss-adapter}
+:   The small set of trained matrices that LoRA adds to a frozen model. It is saved on its own, and the base model is
+    not changed. See @sec-lora.
+
+[alpha]{#gloss-alpha}
+:   The scale of a LoRA update: the correction is multiplied by $\alpha / r$. The sweep sets $\alpha = 2r$, so the
+    multiplier is 2 at every rank. See @sec-lora.
+
+[artifact]{#gloss-artifact}
+:   A named result saved in `artifacts/`, made by a builder function that a chapter declares. It is rebuilt only when
+    it, one of its inputs or the code it uses has changed. See @sec-environment.
+
+[attention]{#gloss-attention}
+:   The layer in which each position takes a weighted mix of the values of the positions it can see, with weights from
+    the match between its query and their keys. See @sec-anatomy.
+
+[base model]{#gloss-base-model}
+:   A model that has only been pretrained to predict the next token of a large body of text, and not post-trained to
+    follow instructions. See @sec-base-instruct.
+
+[bfloat16 and mixed precision]{#gloss-bf16}
+:   bfloat16 (bf16) is a 16-bit number format with the range of 32-bit floats and fewer digits of precision.
+    Mixed-precision training does the arithmetic in bf16 over weights that are kept in 32-bit precision. See @sec-fine-tuning.
+
+[bounded grammar]{#gloss-bounded-grammar}
+:   A grammar that also limits each number to the digits that the gold programs use, where the plain grammar allows
+    any number. See @sec-constrained-bounds.
+
+[byte-level BPE]{#gloss-bpe}
+:   The way Qwen's tokenizer splits text: byte-pair encoding over bytes. It starts from single bytes and merges the
+    pairs that occur most often, so any text can be encoded. See @sec-tokens.
+
+[causal mask]{#gloss-causal-mask}
+:   The mask that stops a position from attending to the ones after it. It lets one pass over a sequence train the
+    prediction at every position, with each prediction seeing only what comes before it. See @sec-anatomy.
+
+[chat template]{#gloss-chat-template}
+:   A small program shipped with the tokenizer that wraps each message of a conversation in the model's own role
+    markers and joins them into one string. See @sec-base-instruct.
+
+[constrained decoding]{#gloss-constrained-decoding}
+:   Decoding in which a grammar removes, at each step, the tokens that cannot continue a valid output. It guarantees
+    the form of the output, not that the output ends or is right. See @sec-constrained-decoding.
+
+[cosine schedule]{#gloss-cosine-schedule}
+:   The learning rate of the training runs: a short linear warmup to the peak value, then a decay along a cosine curve
+    towards zero. See @sec-fine-tuning.
+
+[decoder-only]{#gloss-decoder-only}
+:   A transformer made only of decoder blocks, in which every position attends to the earlier ones. Qwen3 is one. See @sec-anatomy.
+
+[development split (dev)]{#gloss-dev}
+:   ConvFinQA's own development split, used here as the test set. It is touched only for the final reported numbers,
+    after the configuration is frozen. See @sec-formatting.
+
+[DSL]{#gloss-dsl}
+:   The domain-specific language of ConvFinQA's programs: a list of steps such as `divide(#0, 181001)`, each with one
+    of six operations, where `#k` is the result of an earlier step. See @sec-dsl.
+
+[effective batch]{#gloss-effective-batch}
+:   The number of conversations whose gradients are combined for one optimizer step. When they do not fit in memory at
+    once, gradient accumulation reaches it with several smaller micro-batches. See @sec-fine-tuning.
+
+[effective number of directions]{#gloss-effective-directions}
+:   For a LoRA update, $1 / \sum p^2$, where $p$ is the share of its squared norm held by each direction. It equals
+    the rank if the directions share the norm evenly, and 1 if one direction holds all of it. See @sec-rank-loss.
+
+[entropy]{#gloss-entropy}
+:   A measure of how spread out a probability distribution over the next token is: zero when one token has all the
+    probability, and largest when every token is equally likely. See @sec-tokens.
+
+[example set]{#gloss-example-set}
+:   A fixed group of complete training conversations written into a prompt as examples. See @sec-baseline.
+
+[execution accuracy]{#gloss-execution-accuracy}
+:   The share of turns where the answer of the model's program equals the gold answer after rounding to five decimal
+    places. An output that is not a valid program, or does not execute, counts as wrong. See @sec-dsl and @sec-evaluating.
+
+[exposure bias]{#gloss-exposure-bias}
+:   The mismatch left by teacher forcing: the model is trained on gold earlier turns, but when it is used it sees its
+    own earlier outputs, which can be wrong. See @sec-base-instruct.
+
+[few-shot and zero-shot]{#gloss-few-shot}
+:   A prompt is few-shot when it contains worked examples, and zero-shot when it has none. See @sec-probing.
+
+[full fine-tuning]{#gloss-full-fine-tuning}
+:   Training every weight of the model, where LoRA trains a small adapter. See @sec-fine-tuning.
+
+[gold history and predicted history]{#gloss-gold-history}
+:   The two ways to fill the earlier turns of a prompt when a conversation is scored. With gold history they are the
+    dataset's own programs; with predicted history they are the model's own outputs, mistakes included, so errors can
+    compound. Predicted history is the headline setting. See @sec-baseline.
+
+[gradient accumulation and clipping]{#gloss-gradient-accumulation}
+:   Accumulation adds up the gradients of several micro-batches before one optimizer step. Clipping rescales a gradient
+    whose norm is above a limit. See @sec-fine-tuning.
+
+[grammar]{#gloss-grammar}
+:   A formal description of the outputs that are allowed. Here it is a context-free grammar written in EBNF, for the
+    DSL or for Python. See @sec-constrained-decoding.
+
+[greedy decoding]{#gloss-greedy}
+:   Choosing the highest-scoring token at every step. It is deterministic, and every evaluation of the book uses it
+    unless it says otherwise. See @sec-tokens.
+
+[grouped-query attention]{#gloss-gqa}
+:   Attention in which several query heads share one key and value head, which makes the KV cache smaller. See @sec-anatomy.
+
+[instruct model]{#gloss-instruct-model}
+:   A base model that has been post-trained to follow instructions and to answer in a chat format. See @sec-base-instruct.
+
+[invalid output]{#gloss-invalid-output}
+:   An output that is not a valid program or does not execute. It counts as wrong, and the evaluation reports its share
+    next to the accuracy, by cause. See @sec-evaluating.
+
+[KV cache]{#gloss-kv-cache}
+:   The keys and values of every token already processed, kept so that generating the next token does not recompute
+    them. See @sec-anatomy.
+
+[labels]{#gloss-labels}
+:   The tokens that the loss is computed on. In this book they are the answer tokens and their end marker; every other
+    token of a conversation is masked out. See @sec-formatting.
+
+[learning rate]{#gloss-learning-rate}
+:   The size of the step that the optimizer takes along the gradient. See @sec-fine-tuning.
+
+[literal check]{#gloss-literal-check}
+:   A check on the numbers a program is written with: whether they match those of the gold program, as text and as
+    values, and whether each comes from the page. See @sec-evaluating.
+
+[logits]{#gloss-logits}
+:   The scores that the model gives to every token of its vocabulary at a position, before they are turned into
+    probabilities. See @sec-tokens.
+
+[logits processor]{#gloss-logits-processor}
+:   A function that edits the logits after the model produces them and before a token is chosen. Constrained decoding
+    is one. See @sec-tokens.
+
+[LoRA]{#gloss-lora}
+:   Low-rank adaptation: the weights of the model are frozen, and each adapted matrix gets an update that is the
+    product of two thin matrices, so only those are trained. See @sec-lora.
+
+[loss]{#gloss-loss}
+:   The number that training makes smaller: the negative log probability that the model gives to the gold tokens,
+    averaged over the label tokens. See @sec-fine-tuning.
+
+[main run]{#gloss-main-run}
+:   The LoRA fine-tuning of Qwen3-4B on the DSL whose adapter the later chapters use. See @sec-training.
+
+[merging an adapter]{#gloss-merging}
+:   Adding the adapter's update into the base weights, so the model runs without the adapter. It is the same function
+    in 32-bit precision and not exactly in bf16. See @sec-lora.
+
+[negative log-likelihood]{#gloss-nll}
+:   The loss of a sequence: the sum, or mean, of the surprisals of its tokens. See @sec-probing.
+
+[number-selection turn]{#gloss-number-selection}
+:   A turn whose program is only a number copied from the page, with no operation. All other turns are lists of steps.
+    See @sec-dsl.
+
+[paired bootstrap]{#gloss-paired-bootstrap}
+:   An interval for the difference between two systems scored on the same turns. It resamples whole conversations,
+    since the turns of one conversation are not independent, and computes both accuracies on each resample. An interval
+    that excludes zero is a clear difference. See @sec-baseline-rule.
+
+[perplexity]{#gloss-perplexity}
+:   The exponential of the mean surprisal: the model is as uncertain, on average, as if it were choosing among that
+    many equally likely tokens. See @sec-probing.
+
+[post-training]{#gloss-post-training}
+:   The training that turns a pretrained model into an instruct model, such as supervised fine-tuning, distillation and
+    reinforcement learning. See @sec-base-instruct.
+
+[pretraining]{#gloss-pretraining}
+:   The first stage of training, in which the model learns to predict the next token on a large body of text. See @sec-base-instruct.
+
+[program accuracy]{#gloss-program-accuracy}
+:   The share of turns where the model's program is the gold program by the rule of the official ConvFinQA script: the
+    programs are compared as expressions, so the operands of `add` and `multiply` may come in either order, and the
+    arguments are compared as exact text. It is stricter than execution accuracy. See @sec-evaluating.
+
+[QLoRA]{#gloss-qlora}
+:   LoRA on a base model whose weights are stored in a low-precision, quantized format, to save memory. See @sec-lora.
+
+[rank]{#gloss-rank}
+:   The number of directions between the two thin matrices of a LoRA update, and so the largest rank the update can
+    have. See @sec-lora.
+
+[rank sweep]{#gloss-rank-sweep}
+:   The same fine-tuning run at several values of the LoRA rank, compared on the same turns. See @sec-rank-sweep.
+
+[residual connection]{#gloss-residual}
+:   The addition of a layer's input to its output, so the layer learns a change to its input and not a replacement.
+    See @sec-anatomy.
+
+[rotary position embedding]{#gloss-rope}
+:   The way Qwen3 encodes position: queries and keys are rotated by an angle that depends on the position, so an
+    attention score depends on the distance between two tokens. See @sec-anatomy.
+
+[sampling and temperature]{#gloss-sampling}
+:   Sampling draws the next token from the probabilities. The temperature divides the logits first: a low value
+    sharpens the distribution towards greedy decoding, and a high one flattens it. See @sec-tokens.
+
+[scale check]{#gloss-scale-check}
+:   A check on whether an answer is the gold answer times, or divided by, a power of ten, which is a different mistake
+    from a wrong number. See @sec-evaluating.
+
+[self-consistency]{#gloss-self-consistency}
+:   Sampling several programs at a temperature, dropping those that do not run, and taking the answer that most of them
+    agree on. See @sec-evaluating.
+
+[singular values]{#gloss-singular-values}
+:   The strengths of the independent directions of a matrix. For a LoRA update they show how its size is spread over
+    its directions. See @sec-training.
+
+[smoke run]{#gloss-smoke-run}
+:   A short run of the 0.5B model with the same recipe, to test the training code before the main run. See @sec-training.
+
+[softmax]{#gloss-softmax}
+:   The function that turns logits into probabilities that are positive and sum to one. See @sec-tokens.
+
+[supervised fine-tuning (SFT)]{#gloss-sft}
+:   Training a model on example outputs with a next-token loss. See @sec-base-instruct.
+
+[surprisal]{#gloss-surprisal}
+:   The negative log of the probability the model gave to a token, in nats. See @sec-probing.
+
+[system message]{#gloss-system-message}
+:   The first message of a prompt, which tells the model what its task and its output format are. See @sec-baseline.
+
+[teacher forcing]{#gloss-teacher-forcing}
+:   Training with the gold earlier tokens or turns in the input, whatever the model would have produced. See @sec-base-instruct.
+
+[token and tokenizer]{#gloss-token}
+:   A token is a piece of text, usually a word or part of one, that the model reads and writes as one unit. The
+    tokenizer turns text into token ids and back. See @sec-tokens.
+
+[train-fit]{#gloss-train-fit}
+:   The part of the training data that a run trains on: the training split without the validation conversations. See @sec-training.
+
+[Type I and Type II conversations]{#gloss-conversation-types}
+:   Type I conversations break one FinQA question into a chain of turns. Type II conversations join two questions about
+    the same page. See @sec-convfinqa.
+
+[validation split]{#gloss-validation}
+:   A tenth of the training conversations, grouped by page, held out for the choices of the book. The tuning is done
+    on it, and the development split is kept for the final numbers. See @sec-formatting.
+
+[warmup]{#gloss-warmup}
+:   The first steps of a run, in which the learning rate rises linearly from zero to its peak. See @sec-fine-tuning.
+
+[weight decay]{#gloss-weight-decay}
+:   A term that pulls each weight a little towards zero at every step. See @sec-fine-tuning.

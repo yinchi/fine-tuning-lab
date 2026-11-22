@@ -20,7 +20,7 @@ The transformer was introduced for machine translation [@vaswani2017attention] a
   position sees only the positions before it. Each decoder layer also has a **cross-attention** block
   that reads the encoder's output, which is how the decoder consults the source.
 
-Qwen3-4B, like most current chat and code models, is **decoder-only**: one stack with causal
+Qwen3-4B, like most current chat and code models, is **[decoder-only](901_glossary.qmd#gloss-decoder-only)**: one stack with causal
 self-attention, and no encoder and no cross-attention. The prompt and the answer form a single sequence,
 and the model's one job is to predict the next token, as in the trace of @sec-tokens.
 
@@ -44,7 +44,7 @@ context, and a small recurrent decoder writes the program [@chen2022convfinqa].
    same recipe applies to any text.
 2. **One model, steered by the prompt.** Because the answer continues the prompt, a task can be
    described in the prompt instead of being built into the architecture [@brown2020gpt3].
-3. **Growing prefixes can be reused.** Causal attention means a position's vector never depends on later
+3. **Growing prefixes can be reused.** Causal [attention](901_glossary.qmd#gloss-attention) means a position's vector never depends on later
    tokens (we check this on the real model below). When a conversation grows by one turn, the earlier
    tokens do not need to be recomputed, and a training sequence containing a whole conversation covers
    every prefix at once. The loss and its gradient on a whole conversation equal the sums over its
@@ -70,7 +70,7 @@ and introduced a normalization of queries and keys for stable training [@yang202
 | | Original transformer | Qwen3-4B |
 |---|---|---|
 | Normalization | LayerNorm **after** each block | RMSNorm [@zhang2019rmsnorm] **before** each block |
-| Position information | sinusoidal vectors added to the **input** | rotary embeddings (RoPE) applied **inside** attention [@su2021roformer] |
+| Position information | sinusoidal vectors added to the **input** | [rotary](901_glossary.qmd#gloss-rope) embeddings (RoPE) applied **inside** attention [@su2021roformer] |
 | Attention heads | every head has its own keys and values | grouped-query attention: 32 query heads share 8 key and value heads [@ainslie2023gqa] |
 | Feed-forward block | two linear layers with a ReLU | SwiGLU, three linear layers with a gate [@shazeer2020glu] |
 | Extra | | RMSNorm on every query and key vector |
@@ -361,13 +361,13 @@ Write $n_Q$ for the number of query heads, $n_{KV}$ for the number of key/value 
 3. **Normalize each query and key vector** with RMSNorm over its $d$ numbers.
 4. **Rotate queries and keys by their position.** This is rotary position embedding (RoPE), described
    below.
-5. **Share key/value heads.** Each key/value head serves $n_Q / n_{KV}$ consecutive query heads
+5. **[Share key/value heads](901_glossary.qmd#gloss-gqa).** Each key/value head serves $n_Q / n_{KV}$ consecutive query heads
    (grouped-query attention), so $K$ and $V$ are repeated up to $n_Q$ heads. Now $Q$, $K$ and $V$ all have shape
    `(batch_size, n_Q, sequence_length, d)`.
 6. **Score every pair of positions.** $S = QK^\top / \sqrt{d}$ has shape
    `(batch_size, n_Q, sequence_length, sequence_length)`: entry $(i, j)$ for a given sample and
    query head is how strongly position $i$ attends to position $j$.
-7. **Mask the future.** Set $S_{\ldots,ij} = -\infty$ for $j > i$, so that a position cannot see later ones.
+7. **[Mask the future](901_glossary.qmd#gloss-causal-mask).** Set $S_{\ldots,ij} = -\infty$ for $j > i$, so that a position cannot see later ones.
 8. **Softmax over $j$.** Each row becomes weights that sum to 1, and the masked entries become exactly 0.
 9. **Mix the values and project back.** Multiply by $V$ to get `(batch_size, n_Q, sequence_length, d)`,
    concatenate the heads into `(batch_size, sequence_length, n_Q d)`, and apply the output projection
@@ -663,7 +663,7 @@ show_shapes("gate_proj", "up_proj", "down_proj", "mlp")
 
 ### Residual connections and one whole layer
 
-Neither block replaces its input. Each one adds its result to it, which is the **residual connection**
+Neither block replaces its input. Each one adds its result to it, which is the **[residual connection](901_glossary.qmd#gloss-residual)**
 drawn as the loops in @fig-decoder. With $x$ the layer's input:
 
 $$
@@ -813,7 +813,7 @@ The feed-forward blocks hold about three quarters of the weights of each layer, 
 matrix about a tenth of the whole model.
 
 **Memory.** In bf16, every parameter takes 2 bytes. During generation, the model also keeps the keys
-and values of every token it has seen, so earlier tokens need not be recomputed (the **KV cache**).
+and values of every token it has seen, so earlier tokens need not be recomputed (the **[KV cache](901_glossary.qmd#gloss-kv-cache)**).
 Per token, that is one key and one value vector per key/value head, in every layer:
 
 ```{python}

@@ -9,7 +9,7 @@
 ConvFinQA [@chen2022convfinqa] turns FinQA questions about earnings-report pages into multi-turn
 conversations. Each page has text before a table, the table, and text after it. A conversation asks a
 chain of questions about that page, and each turn has a small **program** in a domain-specific
-language (DSL) that computes the answer.
+language ([DSL](901_glossary.qmd#gloss-dsl)) that computes the answer.
 
 ## Getting the data
 
@@ -79,7 +79,7 @@ print(sorted(conv_I["annotation"].keys()))
 
 ## A Type I conversation
 
-Type I conversations decompose **one** FinQA question into a chain of turns. First the page the model
+[Type I conversations](901_glossary.qmd#gloss-conversation-types) decompose **one** FinQA question into a chain of turns. First the page the model
 sees: the text before the table (shortened here), the table as markdown, and the text after.
 
 ```{python}
@@ -317,7 +317,7 @@ three steps:
    system prompt, then the page and the first question as the first user message, then the gold
    program as the assistant's reply, and so on for every turn. The experiments part extends this
    module for training.
-2. **Messages to one string.** The model's own **chat template**, which ships with its tokenizer. It
+2. **Messages to one string.** The model's own **[chat template](901_glossary.qmd#gloss-chat-template)**, which ships with its tokenizer. It
    wraps each message in the special markers that the model was trained with.
 3. **String to token ids.** The tokenizer itself.
 

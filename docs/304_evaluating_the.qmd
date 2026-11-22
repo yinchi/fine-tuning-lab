@@ -37,7 +37,7 @@ a turn that follows a wrong answer is still scored.
 
 Decoding is greedy, with **one attempt** per turn, and an output that is not a valid program, or that does not
 execute, **counts as wrong**. The denominator is every turn. This is what the official ConvFinQA evaluation does, and
-what the published numbers we compare with assume. In predicted history, an invalid output stays in the history as it
+what the published numbers we compare with assume. In predicted history, an [invalid output](901_glossary.qmd#gloss-invalid-output) stays in the history as it
 was generated. The share of invalid outputs is reported next to the accuracy, by cause, because it says where the
 errors are: not being able to write the language, or writing it wrongly.
 
@@ -273,7 +273,7 @@ numbers it is written with, and the error analysis below uses both.
 
 ### Program accuracy
 
-Execution accuracy asks whether the program gives the right number. **Program accuracy** asks whether it is the right
+Execution accuracy asks whether the program gives the right number. **[Program accuracy](901_glossary.qmd#gloss-program-accuracy)** asks whether it is the right
 program, by the rule of the official ConvFinQA script. The two programs are compared as expressions, so the operands of
 an `add` or a `multiply` may come in either order, and a calculation may be split over the steps in another way. The
 arguments are compared as exact text: the numbers must be copied off the page as they are, so `2.70` is not `2.7`, and
@@ -440,11 +440,11 @@ right answer with another program (`{python} loses["base"]`).
 
 ### Where the numbers come from
 
-Program accuracy compares whole programs. The **literal check** looks only at the numbers a program is written with,
+Program accuracy compares whole programs. The **[literal check](901_glossary.qmd#gloss-literal-check)** looks only at the numbers a program is written with,
 and so it works for any output format. For each turn it asks three things: are the numbers the same as the gold
 program's *as text*, are they the same *as values* (`2.70` is `2.7`, `17%` is `0.17`, `const_100` is `100`), and is
 every number that is not a named constant *from the page*, as text. The gap between the first two is formatting;
-the third says whether the numbers were copied, not made up. The **scale check** is separate: it asks whether the answer
+the third says whether the numbers were copied, not made up. The **[scale check](901_glossary.qmd#gloss-scale-check)** is separate: it asks whether the answer
 is the gold answer times a power of ten.
 
 ```{python}
@@ -1219,7 +1219,7 @@ isolates. For this adapter the answers of this chapter hold for a merged model, 
 ### Does extra compute at inference help?
 
 Everything above is one greedy attempt per turn. The cheapest way to spend more generations on a turn is
-*self-consistency* (@wang2023selfconsistency): sample several programs at a temperature, drop those that do not
+*[self-consistency](901_glossary.qmd#gloss-self-consistency)* (@wang2023selfconsistency): sample several programs at a temperature, drop those that do not
 run, and take the answer most of them agree on; the history takes the first program with that answer. The
 temperature is only there to make the samples differ, since greedy decoding would give the same program every
 time. The number of samples and the temperature are in `configs/extra_compute.json`. The question is whether five

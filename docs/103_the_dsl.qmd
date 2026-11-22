@@ -25,7 +25,7 @@ index     = digit { digit }       # the result of an earlier step
 constant  = "const_" ( digits | "m1" )   # a fixed list of 18, see the chapter on what ConvFinQA looks like
 ```
 
-A program with no parentheses is a **number-selection** turn: its value is just that number. Every other
+A program with no parentheses is a **[number-selection](901_glossary.qmd#gloss-number-selection)** turn: its value is just that number. Every other
 program is a list of steps. Step *k* may refer to the result of any earlier step as `#j` with `j < k`.
 The last step's result is the answer.
 

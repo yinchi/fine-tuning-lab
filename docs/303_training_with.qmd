@@ -14,7 +14,7 @@ run goes that it does what we think it does.
 
 ## The data
 
-The run trains on **train-fit**, and the **validation** split is what it is checked against.
+The run trains on **[train-fit](901_glossary.qmd#gloss-train-fit)**, and the **validation** split is what it is checked against.
 
 ```{python}
 #HEAVY
@@ -159,11 +159,11 @@ assert {k for k in cfg if cfg[k] != smoke[k]} \
 assert cfg["weight_decay"] == 0
 ```
 
-The **smoke run** trains `{python} smoke["model"]` for `{python} smoke["max_steps"]` steps with the same recipe. It
+The **[smoke run](901_glossary.qmd#gloss-smoke-run)** trains `{python} smoke["model"]` for `{python} smoke["max_steps"]` steps with the same recipe. It
 takes minutes, and is there to check the whole chain (the data, the training, the choice of the best checkpoint, the
 numbers recorded) before the main run spends hours. Nothing is concluded from its accuracy, and the book does not build
 it by default: `python -m convfinqa.artifacts build check_lora_smoke_0` runs it. It changes only the
-model, the number of steps and how often the validation loss is measured. The **main run** trains
+model, the number of steps and how often the validation loss is measured. The **[main run](901_glossary.qmd#gloss-main-run)** trains
 `{python} cfg["model"]` for the full `{python} steps` steps.
 
 Both runs measure the loss on the validation conversations before the first step and then every
@@ -448,7 +448,7 @@ A matrix of rank 16 is a sum of 16 **rank-1 matrices**. A rank-1 matrix is a col
 it reads the input along one direction (the row $v^\top$), scales it by $\sigma$, and writes the result along one
 direction of the output (the column $u$). This is the usual form $U \Sigma V^\top$ of the singular value decomposition
 written out column by column: $\Delta W = \sum_i \sigma_i u_i v_i^\top$, with $\sigma_1 \ge \sigma_2 \ge \dots$ the
-**singular values** and the $u_i$ (and the $v_i$) perpendicular to each other. The squared size of the matrix (the
+**[singular values](901_glossary.qmd#gloss-singular-values)** and the $u_i$ (and the $v_i$) perpendicular to each other. The squared size of the matrix (the
 squared Frobenius norm) is the sum of the squared singular values, which is why the figure shows squared norms: each
 singular value takes its share.
 
