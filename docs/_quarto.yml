@@ -31,7 +31,7 @@ book:
         - 306_constrained_decoding.qmd
     - part: "Beyond"
       chapters:
-        - 403_retrospective.qmd
+        - 403_rank_sweep.qmd
   appendices:
     - 902_references.qmd
 
