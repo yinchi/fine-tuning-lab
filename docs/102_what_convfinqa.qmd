@@ -183,7 +183,7 @@ at what makes an argument a literal or a constant, and how the paper's model dec
 
 ### Constants
 
-The constants are not read from the page. The authors' code defines a fixed list of 18, and every
+The constants are not read from the page. The authors' code defines a fixed list of constants, and every
 constant in the train and dev programs is in it:
 
 ```{python}
@@ -203,6 +203,8 @@ pd.Series(
     name="uses (train + dev)"
 ).to_frame().T
 ```
+
+The list has `{python} len(steps.CONSTANTS)` constants.
 
 They are mostly scale factors and counts: `const_100` turns a ratio into a percentage,
 `const_1000` and `const_1000000` convert units, and small integers such as `const_3` count years for an

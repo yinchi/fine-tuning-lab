@@ -122,7 +122,7 @@ Three different tools report a "CUDA version", and they mean different things.
 - `torch.version.cuda` is the CUDA runtime **bundled in the PyTorch wheel**.
 - `nvcc --version` is the **compiler** installed on the system, used only if we compile CUDA extensions.
 
-Drivers are compatible across minor versions, so these need not match. Here they all say 13.2.
+Drivers are compatible across minor versions, so these need not match. Here they agree, as the output below shows.
 
 ```{python}
 import subprocess
@@ -151,7 +151,17 @@ print("GPU / driver :", smi)
 print("nvidia-smi   : CUDA", smi_cuda)
 print("torch.cuda   :", torch.version.cuda)
 print("nvcc         :", nvcc.strip())
+
+import re
+
+nvcc_cuda = re.search(r"release (\d+\.\d+)", " ".join(
+    subprocess.run(["nvcc", "--version"], capture_output=True, text=True)
+    .stdout.splitlines()
+)).group(1)
+assert smi_cuda == torch.version.cuda == nvcc_cuda  # the sentence below
 ```
+
+All three say CUDA `{python} nvcc_cuda`.
 
 ## Does bf16 work?
 

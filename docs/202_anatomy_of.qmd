@@ -89,7 +89,7 @@ writes. The book is built once by its author, and the executed results are store
 :::
 
 We load the model and the example from @sec-tokens: the first turn of the AAPL conversation, as
-a prompt of 1,125 tokens.
+a prompt whose length is printed below.
 
 ```{python}
 import pandas as pd
@@ -608,7 +608,7 @@ print(
 assert (before[:cut] - after[:cut]).abs().max().item() < 1e-2
 ```
 
-The first 925 positions are untouched, even after 36 layers, and only the replaced ones change. This is
+The first `{python} f"{cut:,}"` positions are untouched, even after 36 layers, and only the replaced ones change. This is
 why earlier tokens never need to be recomputed when a conversation grows, and why a whole conversation
 can be trained in one pass.
 

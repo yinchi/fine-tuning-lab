@@ -160,7 +160,7 @@ print(
 ### Embeddings
 
 Each id selects one row of a big table, the **embedding matrix**, which has one row per vocabulary entry.
-The row is a vector of 2,560 numbers that the model learned for that token.
+The row is a vector of `{python} f"{model.config.hidden_size:,}"` numbers that the model learned for that token.
 
 ```{python}
 with torch.no_grad():
@@ -195,7 +195,7 @@ By the end it encodes a prediction for the token at position *i* + 1.
 ### Logits
 
 The last step turns each position's vector into one score per vocabulary entry. These scores are the
-**[logits](901_glossary.qmd#gloss-logits)**. A matrix with 151,936 rows, the language-model head, does the multiplication.
+**[logits](901_glossary.qmd#gloss-logits)**. A matrix with `{python} f"{model.config.vocab_size:,}"` rows, one per vocabulary entry, the language-model head, does the multiplication.
 
 ```{python}
 with torch.no_grad():
@@ -295,7 +295,7 @@ pd.DataFrame(
 ```
 
 ::: {.callout-note title="Under the hood"}
-The vocabulary has 151,669 tokens but the matrices have 151,936 rows. The extra rows are padding that
+The vocabulary has `{python} f"{len(tok):,}"` tokens but the matrices have `{python} f"{model.config.vocab_size:,}"` rows. The extra rows are padding that
 makes the sizes friendlier to the GPU. They correspond to no token:
 
 ```{python}
@@ -344,8 +344,19 @@ pd.DataFrame(
 ).T.round(3)
 ```
 
-At *T* = 0.3 the top token holds almost all the probability. At *T* = 2 the ten tokens shown hold only
-about 80% of it, and the gold token `5` has more than doubled its probability, from 0.024 to 0.055. The
+```{python}
+stats = {t: next_token_stats(last, t, 10) for t in (0.3, 1.0, 2.0)}
+gold_id = tok(gold, add_special_tokens=False).input_ids[0]
+p_gold = {t: torch.softmax(last.float() / t, dim=-1)[gold_id].item() for t in (1.0, 2.0)}
+
+# the paragraph below
+assert stats[0.3]["top1"] > 0.9
+assert stats[2.0]["top10_mass"] < 0.9
+assert p_gold[2.0] > 2 * p_gold[1.0]
+```
+
+At *T* = 0.3 the top token holds `{python} f"{stats[0.3]['top1']:.0%}"` of the probability. At *T* = 2 the ten tokens shown hold only
+`{python} f"{stats[2.0]['top10_mass']:.0%}"` of it, and the gold token `{python} tok.decode([gold_id])` has more than doubled its probability, from `{python} f"{p_gold[1.0]:.3f}"` to `{python} f"{p_gold[2.0]:.3f}"`. The
 model is not any better informed; the distribution is just less sure of itself.
 
 ## Choosing a token: greedy and sampling
@@ -398,11 +409,30 @@ again for the same seed. The untuned model's greedy answer is not our DSL, but i
 number. It is also the reason this matters later: **greedy evaluation is deterministic, so the evaluation
 chapter has no generation seed to report**. Only the training seed varies between runs.
 
+```{python}
+# the same prompt alone and padded inside a batch with a longer one
+tok.padding_side = "left"
+batch = tok(
+    [prompt, prompt + "\nAnswer:"], add_special_tokens=False,
+    padding=True, return_tensors="pt"
+).to("cuda")
+positions = (batch.attention_mask.cumsum(-1) - 1).clamp(min=0)
+with torch.no_grad():
+    alone = model(ids).logits[0, -1].float()
+    together = model(**batch, position_ids=positions).logits[0, -1].float()
+batch_diff = (alone - together).abs().max().item()
+same_top = alone.argmax() == together.argmax()
+print(f"largest change in the logits: {batch_diff:.2f} "
+      f"(logits range from {alone.min().item():.0f} to {alone.max().item():.0f}); "
+      f"same top token: {bool(same_top)}")
+assert batch_diff > 0 and same_top
+```
+
 ::: {.callout-note title="Deterministic, but only for the same setup"}
 Greedy decoding is deterministic given the same input, model weights, software and hardware. Running
-the same prompt inside a different batch can change the logits by a few percent in bf16: in a test with
-two prompts, by up to about 0.9 on logits ranging from -20 to 27, with the same top token. That is
-enough to flip a near-tie. We evaluate with a fixed batch size and a fixed order of examples for this
+the same prompt inside a different batch can change the logits in bf16, as the check above shows: by up to
+`{python} f"{batch_diff:.2f}"` on logits ranging from `{python} f"{alone.min().item():.0f}"` to `{python} f"{alone.max().item():.0f}"`, with the same top token. That can
+flip a near-tie. We evaluate with a fixed batch size and a fixed order of examples for this
 reason.
 :::
 

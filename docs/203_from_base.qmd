@@ -241,7 +241,7 @@ and the format is what we will teach.
 
 The base model's odd behaviour with the chat template has a visible cause in its embeddings. We compare
 the embedding vectors of the two chat markers and of the end-of-text token in the two models, with
-2,000 randomly chosen ordinary tokens as a reference. For each token we print the vector's length
+a random sample of ordinary tokens as a reference. For each token we print the vector's length
 (norm), the cosine similarity of its vector in the two models, and how much it changed from the base to
 the instruct model, relative to its length.
 
@@ -262,27 +262,49 @@ def describe(label, ids):
         ((b - i).norm(dim=-1) / b.norm(dim=-1)).median().item()
     )
 
+measured = {
+    "ordinary": describe(f"{len(ordinary):,} ordinary tokens (median)", ordinary),
+    **{
+        name: describe(name, torch.tensor([i]))
+        for name, i in special.items()
+    },
+}
 table = pd.DataFrame(
-    [describe("2,000 ordinary tokens (median)", ordinary)]
-    + [describe(name, torch.tensor([i])) for name, i in special.items()],
+    list(measured.values()),
     columns=[
         "token", "length in base", "length in instruct",
         "cosine, base vs instruct", "relative change"
     ],
 ).set_index("token").round(3)
+cos_markers = {
+    "base": cosine(base[151644], base[151645], dim=0).item(),
+    "instruct": cosine(instruct[151644], instruct[151645], dim=0).item(),
+}
 print("cosine similarity of the <|im_start|> and <|im_end|> embeddings:",
-      f"base {cosine(base[151644], base[151645], dim=0).item():.4f},",
-      f"instruct {cosine(instruct[151644], instruct[151645], dim=0).item():.4f}")
+      f"base {cos_markers['base']:.4f},",
+      f"instruct {cos_markers['instruct']:.4f}")
 
 table
 ```
 
+```{python}
+_, ordinary_len, _, ordinary_cos, ordinary_rel = measured["ordinary"]
+_, marker_len, _, _, start_rel = measured["<|im_start|>"]
+_, _, _, _, end_rel = measured["<|im_end|>"]
+
+# the paragraph below
+assert cos_markers["base"] > 0.9999 and cos_markers["instruct"] < 0.9
+assert marker_len < ordinary_len / 2  # short
+assert all(0.7 < r < 1.3 for r in (start_rel, end_rel))  # their own length
+assert ordinary_rel < 0.3 and ordinary_cos > 0.95
+```
+
 In the base model, `<|im_start|>` and `<|im_end|>` have exactly the same embedding (cosine similarity
-1.0000), and a short one (length 0.36, against about 1.2 for ordinary tokens), so the base model cannot
-tell the two markers apart. In the instruct model they differ (0.567), and during post-training they
-moved by about their own length (relative change 0.94 and 1.15), while ordinary tokens moved by about
-0.19. The ordinary tokens are otherwise very similar between the two models (median cosine similarity
-0.98), so the two models are closely related. Identical, short vectors are what we would expect from
+`{python} f"{cos_markers['base']:.4f}"`), and a short one (length `{python} f"{marker_len:.2f}"`, against about `{python} f"{ordinary_len:.1f}"` for ordinary tokens), so the base model cannot
+tell the two markers apart. In the instruct model they differ (`{python} f"{cos_markers['instruct']:.3f}"`), and during post-training they
+moved by about their own length (relative change `{python} f"{start_rel:.2f}"` and `{python} f"{end_rel:.2f}"`), while ordinary tokens moved by about
+`{python} f"{ordinary_rel:.2f}"`. The ordinary tokens are otherwise very similar between the two models (median cosine similarity
+`{python} f"{ordinary_cos:.2f}"`), so the two models are closely related. Identical, short vectors are what we would expect from
 rows that the base model never trained, though the report does not say so, and this is our inference.
 It fits what we saw: given the template, the base model has no meaning for the markers, and writes
 ordinary tokens where they should be.
