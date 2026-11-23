@@ -1,0 +1,412 @@
+# The final results {#sec-final}
+
+**You will learn:**
+
+- what was fixed before the development split was touched, and why it matters that nothing was changed afterwards;
+- how the fine-tuned model compares with the untuned one on conversations that no choice of the book was made on;
+- how much of the difference a good prompt makes up, and how much is left for fine-tuning;
+- whether the validation numbers of the earlier chapters were optimistic;
+- where the result sits among published numbers, and why that comparison is loose;
+- which comparisons of the book are validation results only.
+
+Every chapter so far reported the **validation** split, the one the book's choices were made on. This chapter is the
+only one that uses the **development** split. Its conversations were set aside at the start (@sec-convfinqa), and its
+gold programs were used only to test code that has no model in it. A model's outputs on them were not scored, and not read, until
+the decisions below were written down.
+
+## What was fixed first
+
+Before any output was scored on the development split, the decisions of the book were written into the project's plan
+(`PLAN.md`), with the commit they were made at, and a file was created whose existence is what lets the development evaluations run (the
+builders refuse the split until it exists, and a test fails if any chapter before this one asks for it). From then on
+the rule was that nothing changes because of a development number, except a bug, and a disappointing result is
+reported and not fixed. The decisions were:
+
+- **The model and its training.** The adapter of @sec-training: rank 16, trained for two epochs on the train-fit
+  conversations, with the checkpoint of the lowest validation loss, and seed 0. The rank sweep of @sec-rank-sweep
+  is a validation experiment and chose nothing.
+- **The untuned model's prompt.** The variant that the rule of @sec-baseline-rule chose on validation, `e3p` (a
+  plain system message and three examples, example set 0), and `e0p`, the prompt the fine-tuned model is trained with.
+- **The output format.** The DSL of @sec-dsl, with greedy decoding, no grammar, and one attempt per turn; an invalid
+  output counts as wrong (@sec-evaluating).
+- **The measures.** Execution accuracy in both histories, with the predicted history as the headline; program
+  accuracy next to it; a paired bootstrap that resamples whole conversations.
+
+Six generation runs were then made, each once: the fine-tuned model, the untuned model with `e3p` and the untuned model
+with `e0p`, each with the predicted history and with the gold history. The scores below are computed from them.
+
+## The rule for more seeds
+
+The fine-tuned model was trained once. Greedy decoding is deterministic, so the only noise that a second run would
+add is the training's: the initialisation, the order of the data, the dropout. The book fixed in advance when that
+noise would be measured: if the paired interval of the fine-tuned model against either untuned system includes
+zero, in either history, two more training seeds are trained and scored on the same split, and the results are reported as a
+mean and a spread. The rule is checked below, after the table.
+
+## Results on the development split
+
+```{python}
+#HEAVY
+import matplotlib.pyplot as plt
+import pandas as pd
+
+from convfinqa.artifacts import get
+from convfinqa.stats import bootstrap_accuracy, paired_difference
+
+RUNS_DEV = {
+    ("untuned, e0p", "predicted"): "scores_untuned_dev_e0p_0_pred",
+    ("untuned, e0p", "gold"): "scores_untuned_dev_e0p_0_gold",
+    ("untuned, e3p", "predicted"): "scores_untuned_dev_e3p_0_pred",
+    ("untuned, e3p", "gold"): "scores_untuned_dev_e3p_0_gold",
+    ("fine-tuned", "predicted"): "scores_tuned_dev_main_0_pred",
+    ("fine-tuned", "gold"): "scores_tuned_dev_main_0_gold",
+}
+SCORES = {
+    ("untuned, e0p", "predicted"): get("scores_untuned_dev_e0p_0_pred"),
+    ("untuned, e0p", "gold"): get("scores_untuned_dev_e0p_0_gold"),
+    ("untuned, e3p", "predicted"): get("scores_untuned_dev_e3p_0_pred"),
+    ("untuned, e3p", "gold"): get("scores_untuned_dev_e3p_0_gold"),
+    ("fine-tuned", "predicted"): get("scores_tuned_dev_main_0_pred"),
+    ("fine-tuned", "gold"): get("scores_tuned_dev_main_0_gold"),
+}
+dev = {k: list(h.jsonl("scores.jsonl")) for k, h in SCORES.items()}
+dev_summary = {k: h.json("summary.json") for k, h in SCORES.items()}
+program = {
+    k: [{**s, "correct": s["program_correct"]} for s in v]
+    for k, v in dev.items()
+}
+ci = {k: bootstrap_accuracy(v) for k, v in dev.items()}
+ci_program = {k: bootstrap_accuracy(v) for k, v in program.items()}
+
+n_turns = {len(v) for v in dev.values()}
+n_conversations = len({s["id"] for s in dev[("fine-tuned", "predicted")]})
+# all six runs cover the same turns, every turn of the split
+assert len(n_turns) == 1
+
+pd.DataFrame(
+    {
+        "history": [h for _, h in dev],
+        "execution accuracy": [
+            f"{ci[k]['accuracy']:.1%}" for k in dev
+        ],
+        "95% interval": [
+            f"[{ci[k]['low']:.1%}, {ci[k]['high']:.1%}]" for k in dev
+        ],
+        "program accuracy": [
+            f"{ci_program[k]['accuracy']:.1%}" for k in dev
+        ],
+        "invalid outputs": [
+            f"{dev_summary[k]['invalid_rate']:.1%}" for k in dev
+        ],
+    },
+    index=pd.Index([s for s, _ in dev], name="system"),
+)
+```
+
+The split holds `{python} n_conversations` conversations and `{python} n_turns.pop()` turns. In each row the interval
+comes from resampling whole conversations 10,000 times (@sec-evaluating); it covers the choice of
+conversations, and not the training seed, which is the matter of the rule above.
+
+```{python}
+#HEAVY
+contrasts = {}
+for history in ("predicted", "gold"):
+    for other in ("untuned, e3p", "untuned, e0p"):
+        contrasts[(other, history)] = paired_difference(
+            dev[("fine-tuned", history)], dev[(other, history)]
+        )
+
+# the fine-tuned model is ahead of both untuned systems, in both
+# histories, by more than the resampling noise: the seed rule does not fire
+assert all(c["low"] > 0 for c in contrasts.values())
+# and the gold history is ahead of the predicted one
+gap_hist = paired_difference(
+    dev[("fine-tuned", "gold")], dev[("fine-tuned", "predicted")]
+)
+assert gap_hist["low"] > 0
+
+pd.DataFrame(
+    {
+        "difference": [
+            f"{100 * c['difference']:+.1f}" for c in contrasts.values()
+        ],
+        "95% interval": [
+            f"[{100 * c['low']:+.1f}, {100 * c['high']:+.1f}]"
+            for c in contrasts.values()
+        ],
+    },
+    index=pd.MultiIndex.from_tuples(
+        [(f"fine-tuned minus {o}", h) for (o, h) in contrasts],
+        names=["comparison", "history"],
+    ),
+).rename_axis(columns="points of execution accuracy")
+```
+
+With the predicted history, the headline mode, the fine-tuned model answers
+`{python} f"{ci[('fine-tuned', 'predicted')]['accuracy']:.1%}"` of the turns correctly. The untuned model with the
+best prompt answers `{python} f"{ci[('untuned, e3p', 'predicted')]['accuracy']:.1%}"`, and with the prompt the
+fine-tuned model is trained with `{python} f"{ci[('untuned, e0p', 'predicted')]['accuracy']:.1%}"`. The paired
+interval of the fine-tuned model against the first is
+[`{python} f"{100 * contrasts[('untuned, e3p', 'predicted')]['low']:+.1f}"`,
+`{python} f"{100 * contrasts[('untuned, e3p', 'predicted')]['high']:+.1f}"`] points, and against the second
+[`{python} f"{100 * contrasts[('untuned, e0p', 'predicted')]['low']:+.1f}"`,
+`{python} f"{100 * contrasts[('untuned, e0p', 'predicted')]['high']:+.1f}"`]. The other two intervals, with the gold
+history, are in the table. **All four are far from zero, so the rule for more seeds did not fire, and the
+fine-tuned model of the book is the one seed.** The gold history lifts the fine-tuned model to
+`{python} f"{ci[('fine-tuned', 'gold')]['accuracy']:.1%}"`, `{python} f"{100 * gap_hist['difference']:+.1f}"` points
+over its predicted-history score (paired interval [`{python} f"{100 * gap_hist['low']:+.1f}"`,
+`{python} f"{100 * gap_hist['high']:+.1f}"`]): what the model loses to its own earlier mistakes, as on validation.
+
+Program accuracy is lower than execution accuracy for every system, since it asks for the gold program and not only for
+its answer (@sec-evaluating). The failures are of different kinds before and after fine-tuning:
+
+```{python}
+#HEAVY
+from convfinqa.final_results import outcome_counts
+
+outcomes = pd.DataFrame({
+    f"{s}, {h}": outcome_counts(dev_summary[(s, h)])
+    for (s, h) in dev
+})
+outcomes_pred = {s: outcome_counts(dev_summary[(s, "predicted")]) for s, _ in dev}
+tuned = outcomes_pred["fine-tuned"]
+wrong_tuned = sum(tuned.values()) - tuned["correct"]
+
+# the untuned model loses most turns to the format of its answer; what is
+# left after fine-tuning is mostly valid programs that are wrong
+assert outcomes_pred["untuned, e0p"]["invalid output"] \
+    > outcomes_pred["untuned, e0p"]["correct"]
+assert tuned["invalid output"] <= 0.05 * wrong_tuned
+assert tuned["wrong numbers"] == max(
+    tuned[k] for k in (
+        "wrong operations", "wrong numbers", "wrong answer, right shape"
+    )
+)
+outcomes
+```
+
+With the prompt it is trained on, the untuned model writes a program that runs in
+`{python} sum(outcomes_pred["untuned, e0p"][k] for k in ("correct", "wrong operations", "wrong numbers", "wrong answer, right shape"))`
+of its `{python} sum(outcomes_pred["untuned, e0p"].values())` turns, so most of its mistakes are the format of the
+answer. After fine-tuning, `{python} tuned["invalid output"]` of the `{python} wrong_tuned` wrong turns are not a
+program, and the largest group is valid programs with other numbers (`{python} tuned["wrong numbers"]`). As on
+validation, what fine-tuning leaves behind is a reading and reasoning failure, not a writing failure. The book does not
+label these dev errors one by one: the error analysis of @sec-evaluating-errors was done on validation, so that no
+development failure was read before the freeze.
+
+## How much of the gap does a prompt close?
+
+The untuned model with `e0p` and the fine-tuned model see the same input, so the distance between them is what
+fine-tuning adds. The untuned model with `e3p` has the best prompt that validation found. How much of that distance has
+the prompt already covered?
+
+```{python}
+#HEAVY
+from convfinqa.final_results import share_of_gap_closed
+
+closed = {
+    h: share_of_gap_closed(
+        dev[("untuned, e0p", h)], dev[("untuned, e3p", h)], dev[("fine-tuned", h)]
+    )
+    for h in ("predicted", "gold")
+}
+# the prompt closes a large part of the distance, but not all of it:
+# the interval stays between 1/2 and 1 in both histories
+assert all(0.5 < c["low"] and c["high"] < 1 for c in closed.values())
+
+pd.DataFrame(
+    {
+        "gap, fine-tuned minus e0p": [
+            f"{100 * c['gap']:.1f} points" for c in closed.values()
+        ],
+        "covered by the e3p prompt": [
+            f"{c['share']:.0%}" for c in closed.values()
+        ],
+        "95% interval": [
+            f"[{c['low']:.0%}, {c['high']:.0%}]" for c in closed.values()
+        ],
+    },
+    index=pd.Index(list(closed), name="history"),
+)
+```
+
+With the predicted history the prompt covers `{python} f"{closed['predicted']['share']:.0%}"` of the distance, and with
+the gold history `{python} f"{closed['gold']['share']:.0%}"`. Most of what fine-tuning adds can be had from a good prompt
+with three examples, and the rest, the part that the prompt cannot reach, is
+`{python} f"{100 * (contrasts[('untuned, e3p', 'predicted')]['difference']):.1f}"` points with the predicted history. Two
+things limit how far to read this. The prompt was developed on validation over several variants, while the
+fine-tuning configuration was fixed in advance, which favours the prompt. And the prompt is limited to describing the
+language: it does not teach the annotation conventions that the fine-tuning data show (@sec-baseline), which a longer prompt
+could. The two routes also cost different amounts at inference: the examples make the prompt longer than the fine-tuned
+model's (@sec-evaluating measures it on validation).
+
+## Next to published results
+
+The published numbers come from different set-ups, so this is a loose comparison. FinQANet [@chen2022convfinqa] is
+given facts retrieved from the page, and its gold-facts variant and the few-shot GPT-3 of the same paper are given the
+facts that the annotators marked; ours reads the whole page. Our predicted history is the closest to how a
+published system would be used, and the gold history is an upper bound. Fin-R1 uses its own protocol (below). Nothing here is a leaderboard.
+
+```{python}
+#| label: fig-published
+#| fig-cap: "Execution accuracy on ConvFinQA, published results (grey diamonds, with what each paper says about its evaluation set) and three systems of this book on the development split (circles and a square, with the 95% interval). The set-ups differ: the published results are not run on the same input."
+#| fig-alt: "Dot chart of execution accuracy, one row per system, sorted from lowest to highest. Published results are grey diamonds, this book's systems are coloured with horizontal intervals. The fine-tuned model with predicted history sits between the published systems."
+#HEAVY
+from convfinqa.final_results import PUBLISHED
+
+ours = [
+    (
+        "this book, fine-tuned, predicted history",
+        ("fine-tuned", "predicted"), "#b85450", "o"
+    ),
+    (
+        "this book, fine-tuned, gold history (upper bound)",
+        ("fine-tuned", "gold"), "#3b6ea5", "o"
+    ),
+    (
+        "this book, untuned, e3p, predicted history",
+        ("untuned, e3p", "predicted"), "#b85450", "s"
+    ),
+]
+rows = [
+    (f"{p['label']} ({p['split']})", p["accuracy"], None, None, "#6b6b6b", "D")
+    for p in PUBLISHED
+] + [
+    (
+        label, 100 * ci[k]["accuracy"], 100 * ci[k]["low"],
+        100 * ci[k]["high"], colour, marker
+    )
+    for label, k, colour, marker in ours
+]
+rows.sort(key=lambda r: r[1])
+ours_rank = {
+    name: i for i, (name, *_) in enumerate(rows) if name.startswith("this book")
+}
+fine_tuned_rank = ours_rank["this book, fine-tuned, predicted history"]
+published_above = sum(
+    1 for name, value, *_ in rows
+    if not name.startswith("this book") and value > rows[fine_tuned_rank][1]
+)
+published_below = sum(
+    1 for name, value, *_ in rows
+    if not name.startswith("this book") and value < rows[fine_tuned_rank][1]
+)
+
+# the fine-tuned model sits inside the published range, not at an end of it
+assert published_above > 0 and published_below > 0
+
+fig, ax = plt.subplots(figsize=(7.5, 4.6))
+for i, (name, value, low, high, colour, marker) in enumerate(rows):
+    if low is not None:
+        ax.hlines(i, low, high, color=colour, linewidth=2, zorder=2)
+    ax.plot(
+        value, i, marker, color=colour, markersize=7, zorder=3,
+        markerfacecolor=(
+            "white" if name.startswith("this book, untuned")
+            else colour
+        ),
+    )
+    ax.text(
+        value + (2.5 if low is None else (high - value) + 1.5), i, f"{value:.1f}",
+        va="center", fontsize=8, color="#444444"
+    )
+ax.set_yticks(range(len(rows)), [r[0] for r in rows], fontsize=8)
+for tick, (name, *_) in zip(ax.get_yticklabels(), rows):
+    if name.startswith("this book"):
+        tick.set_fontweight("bold")
+ax.set_xlim(0, 100)
+ax.set_xlabel("execution accuracy (%)")
+ax.grid(axis="x", color="#dddddd", linewidth=0.6)
+ax.set_axisbelow(True)
+for side in ("top", "right", "left"):
+    ax.spines[side].set_visible(False)
+ax.tick_params(axis="y", length=0)
+fig.tight_layout()
+plt.show()
+```
+
+On development, with the predicted history, the fine-tuned model is ahead of `{python} published_below` of the
+`{python} len(PUBLISHED)` published rows and behind `{python} published_above`; the gold-history point is an upper
+bound and is not comparable with them. The bold rows are ours. Two things keep the comparison loose: the inputs
+differ (above), and some rows do not say which split they use (FinQANet) or use a sample of 200 questions (the two human
+rows). @fig-published is a map of where the number sits and not a ranking: a difference of a couple of points between
+rows is not a finding.
+
+The ConvFinQA paper [@chen2022convfinqa] gives the crowd, GPT-3, FinQANet and human rows (GPT-3 from its Table 5, the
+others from its Table 3), @li2023gpt the GPT-4 row, and @khatuya2025finder the PoT-GPT-4, ENCORE and FINDER rows.
+Fin-R1 [@liu2025finr1] also reports a ConvFinQA figure, but its answers are judged by a language model on a random
+sample whose split it does not state, so it measures something else and is left out.
+
+## Were the validation numbers optimistic?
+
+The choices of the book were made on validation: the prompt, the checkpoint, the grammar, the format. If a choice had
+fitted the validation conversations in a way that does not carry over, the development numbers would be lower. The
+check is the same three systems, both histories, on the two splits. The splits hold different conversations, so each
+accuracy is resampled on its own, and the interval is for the difference of the two.
+
+```{python}
+#HEAVY
+from convfinqa.final_results import split_difference
+
+VAL_SCORES = {
+    ("untuned, e0p", "predicted"): get("scores_untuned_val_e0p_0_pred"),
+    ("untuned, e0p", "gold"): get("scores_untuned_val_e0p_0_gold"),
+    ("untuned, e3p", "predicted"): get("scores_untuned_val_e3p_0_pred"),
+    ("untuned, e3p", "gold"): get("scores_untuned_val_e3p_0_gold"),
+    ("fine-tuned", "predicted"): get("scores_tuned_val_main_0_pred"),
+    ("fine-tuned", "gold"): get("scores_tuned_val_main_0_gold"),
+}
+val = {k: list(h.jsonl("scores.jsonl")) for k, h in VAL_SCORES.items()}
+ci_val = {k: bootstrap_accuracy(v) for k, v in val.items()}
+moved = {k: split_difference(dev[k], val[k]) for k in dev}
+significant = [k for k, m in moved.items() if m["excludes_zero"]]
+
+# nothing that validation chose is significantly worse on dev: the two
+# systems that went through the book's choices (the fine-tuned model and the
+# prompt picked on validation) stay within the noise
+assert not any(s in ("fine-tuned", "untuned, e3p") for s, _ in significant)
+# and the fine-tuned model scores lower on dev than on val in both histories,
+# as selection on val would make it, though not by more than the noise
+assert all(
+    moved[("fine-tuned", h)]["difference"] < 0 for h in ("predicted", "gold")
+)
+
+pd.DataFrame(
+    {
+        "validation": [f"{ci_val[k]['accuracy']:.1%}" for k in dev],
+        "development": [f"{ci[k]['accuracy']:.1%}" for k in dev],
+        "difference": [f"{100 * moved[k]['difference']:+.1f}" for k in dev],
+        "95% interval": [
+            f"[{100 * moved[k]['low']:+.1f}, {100 * moved[k]['high']:+.1f}]"
+            for k in dev
+        ],
+    },
+    index=pd.MultiIndex.from_tuples(list(dev), names=["system", "history"]),
+).rename_axis(columns="execution accuracy, points for the last two")
+```
+
+The fine-tuned model is `{python} f"{-100 * moved[('fine-tuned', 'predicted')]['difference']:.1f}"` points lower on
+development than on validation with the predicted history and
+`{python} f"{-100 * moved[('fine-tuned', 'gold')]['difference']:.1f}"` with the gold history, and the untuned model with
+`e3p` differs by `{python} f"{100 * moved[('untuned, e3p', 'predicted')]['difference']:+.1f}"` and
+`{python} f"{100 * moved[('untuned, e3p', 'gold')]['difference']:+.1f}"`. None of these four intervals excludes zero, so the
+data cannot tell a small optimism of selection from the difference between two samples of conversations; they show that
+the validation numbers were not far off. `{python} len(significant)` of the six differences has an interval that does
+exclude zero: `{python} ", ".join(f"{s} with the {h} history" for s, h in significant) or "none"`. That is the
+untuned model with the prompt of the fine-tuned model, which no choice of the book depended on, and it is the floor of
+the comparison, so a few points of difference does not change what the chapter concludes.
+
+## What this chapter does not report
+
+Only the comparison above is run on the development split. The other comparisons of the book are results on validation,
+reported where they are made, and the book does not claim them for the development split: the untuned prompt
+variants, the `e3p` prompt on the fine-tuned model and the extra-compute rows (@sec-evaluating); the DSL against Python,
+untuned and fine-tuned (@sec-python-format); the grammar rows (@sec-constrained-decoding); the merged adapter; and the
+rank sweep (@sec-rank-sweep). The reason is the same for all: a result on the development split is a result that is
+reported, once, and the more comparisons are run on it, the more of its value as a check is spent.
+
+The result is also limited in three ways. It is one training seed, so the interval of a number is for the choice of
+conversations and does not include the noise of training; the rule for more seeds did not call for them, but a
+second seed is what would measure it. The prompt of the untuned model
+had one example set. And the numbers are on one benchmark, with one model, so the contrast with published work
+is of a set-up and not of a method.
