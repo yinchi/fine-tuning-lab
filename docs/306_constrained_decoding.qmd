@@ -868,7 +868,7 @@ related work are worth comparing.
   tokens of the DSL, and tokens for the results of earlier steps. At inference time it also applies masks from the
   grammar of the DSL at every decoding step, to keep the program well formed [@chen2021finqa]. Its output space is
   narrower than that of the syntax grammar of this chapter, which lets any number be written. A grammar that restricts the numbers to those
-  of the page in the same way comes later, with the final results.
+of the page in the same way is not run in this book (@sec-other-things).
 
 ::: {.callout-tip title="Further reading"}
 - @dong2024xgrammar describe `xgrammar`, the library used here.
@@ -891,4 +891,4 @@ related work are worth comparing.
 - The grammar helps with the plain and the description prompt alike, and, with no examples, takes the model from the
   floor to `{python} pct(acc(e0["grammar on, predicted history"]))`.
 - The bounded number rule removes the runaway digits and does not change accuracy.
-- The comparison is repeated on the dev data in the final results, a later chapter.
+- These are validation results. The final results do not repeat the grammar comparison on the development data.

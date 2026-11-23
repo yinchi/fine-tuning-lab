@@ -144,8 +144,9 @@ def test_baseline_prompt_diagram_shows_the_prompt_and_the_runs():
     out = baseline_prompt.build()
     xml.dom.minidom.parseString(out)
     for word in ["system", "example", "conversation A", "conversation B", "target conversation", "writes Ak",
-                 "set 1", "set 2", "set 3", "mean ± spread"]:
+                 "set 1", "one run", "interval"]:
         assert word in out
+    assert "set 2" not in out
 
 
 def test_history_rounds_diagram_shows_both_modes():

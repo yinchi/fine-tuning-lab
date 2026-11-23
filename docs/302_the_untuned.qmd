@@ -41,8 +41,8 @@ and numbers is the other part, and it is the one we expect fine-tuning to have t
   nothing else, or that plus a rule against nested calls.
 - **Example sets.** Which examples are used changes the result, and an untuned model has no training seed to vary, so
   the examples play that part. An example set is fixed by its seed alone, so the same seed gives the same examples whichever
-  data we evaluate on. When the prompt has examples, the reported baseline is run once for each of three sets, and we report each result
-  and their spread.
+  data we evaluate on. Three sets are prepared, and the reported baseline uses the first (seed 0): one run, with the uncertainty of
+  its accuracy taken from the paired bootstrap, which covers the choice of conversations and not the choice of examples.
 - **Choosing the prompt.** The variants we try (how many examples, with or without the description, and none at all) are
   listed in advance (one more was added after the first results, and is flagged), and the choice between them is made on the **validation** data. The [development data](901_glossary.qmd#gloss-dev) are touched
   only for the numbers the book reports, once, with the prompt already chosen.
@@ -56,7 +56,7 @@ and numbers is the other part, and it is the one we expect fine-tuning to have t
 
 @fig-baseline-prompt shows one prompt, and the three runs that the example sets make.
 
-![The baseline's prompt (left) and its runs (right). The system message and the examples are the same in every prompt of a run, and the target conversation changes with every turn. Each run uses one example set; the baseline is one run per set.](figures/baseline_prompt.svg){#fig-baseline-prompt fig-alt="Left: a row of boxes. A grey system message box, two blue example conversation boxes, a yellow box for the target conversation up to question k, and a dashed green box where the model writes answer k. A bracket marks the first three as fixed for the whole run and the yellow box as changing with every turn. Right: three blue boxes for sets 1, 2 and 3, each with an arrow to a box for a pass over every turn of the split, and an arrow to its own accuracy."}
+![The baseline's prompt (left) and its runs (right). The system message and the examples are the same in every prompt of a run, and the target conversation changes with every turn. Each run uses one example set; the reported baseline is one run.](figures/baseline_prompt.svg){#fig-baseline-prompt fig-alt="Left: a row of boxes. A grey system message box, two blue example conversation boxes, a yellow box for the target conversation up to question k, and a dashed green box where the model writes answer k. A bracket marks the first three as fixed for the whole run and the yellow box as changing with every turn. Right: one blue box for set 1, with an arrow to a box for a pass over every turn of the split, and an arrow to its accuracy."}
 
 The **[system message](901_glossary.qmd#gloss-system-message)** has three forms. The plain one is the line the models are trained with, `Answer with a program in the
 ConvFinQA DSL.` The second adds a description of the language and the rule that the answer is the program and nothing
@@ -94,8 +94,8 @@ twice). The sets are saved, as lists of conversation ids, so that a run can be c
 ### The variants, and the choice {#sec-baseline-rule}
 
 Seven prompts were compared on the validation data. Those with examples use the first example set (seed 0), taking
-its first two or three examples as indicated; those with no examples have no set. Each prompt is a single run: the
-three sets are kept for the reported runs on the development data, after the prompt is chosen.
+its first two or three examples as indicated; those with no examples have no set. Each prompt is a single run. Sets 1 and 2 were prepared for the reported runs on the development data and are not
+used: the freeze limits those runs to set 0.
 
 | | one-line system message | with the description | description and the flat rule |
 |---|---|---|---|
@@ -122,8 +122,8 @@ accuracies themselves (the table below shows how wide those are).
 
 ### The runs that are reported
 
-The chosen variant is then run on the development data, once, after the decisions of the project are frozen. With
-examples, that is one run per set (three) and per history mode (two); without examples, one run per history mode. Both
+The chosen variant is then run on the development data, once, after the decisions of the project are frozen: with the
+first example set, in each of the two history modes. Both
 modes are scored on the same predictions of the same prompts, which differ only in how the earlier answers are filled in.
 
 One more prompt is run on the development data whatever the choice: `e0p`, the one-line message with no examples. It

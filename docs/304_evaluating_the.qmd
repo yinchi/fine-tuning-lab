@@ -14,8 +14,10 @@ saved is the one that learned. This chapter is the evaluation itself: every turn
 would have in use, scored the way the untuned baseline of @sec-baseline was scored, so that the two can be compared.
 
 Everything here is measured on the **validation** split, which is where the book makes its choices. The development
-split is used once, at the end, for the final numbers, with the code of this chapter and nothing else: the
-evaluations are artifacts named by the split, and the final chapter asks for the same ones with `dev`.
+split is used once, at the end, for the final numbers of the fine-tuned model and of the untuned baselines it is compared with
+(the two histories, with the code of this chapter and nothing else): the evaluations are artifacts named by the split, and the final
+chapter asks for the same ones with `dev`. The other comparisons of this chapter (the examples on the tuned model, the extra compute, the merged adapter) are
+validation results only.
 
 ## Two histories
 
@@ -1468,5 +1470,5 @@ examples from every call to the training run, which is paid once.
   `{python} f"{cost_rows['pred']['prompt']:,.0f}"` prompt tokens and writing
   `{python} f"{cost_rows['pred']['generated']:.1f}"`, the fewest of every system compared here.
 
-These are validation numbers, used to choose between options. The development split gives the final ones, once, in
+These are validation numbers, used to choose between options. The development split gives the final numbers of the headline comparison, once, in
 the last part of the book.

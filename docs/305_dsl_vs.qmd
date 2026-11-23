@@ -814,8 +814,9 @@ The training runs agree. The validation loss starts at `{python} f"{metrics_dsl[
 on different token sequences, so they say that both runs converge, not that one format is easier.
 
 By the rule of the plan, then, the fine-tuned Python rows are not run on the development data, and the book keeps the
-DSL for the rest of the work. The untuned Python rows are still run on the development data, so that the untuned
-comparison of this chapter is reported there too.
+DSL for the rest of the work. The untuned Python rows are not run on the development data either: the final results keep
+the one comparison that decides the book, the untuned DSL models against the fine-tuned one, and this chapter's
+comparison stays a validation result.
 
 ## Numbers from the page, and the scale {#sec-python-numbers}
 

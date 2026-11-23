@@ -1,4 +1,4 @@
-"""The baseline's prompt, and the three runs that use three example sets."""
+"""The baseline's prompt, and the run that uses one example set."""
 
 from __future__ import annotations
 
@@ -41,9 +41,9 @@ def build() -> str:
         "an answer is a program and nothing else. With no examples the prompt has no blue part.",
     ], size=10.5, colour=GREY, align="start", line_height=14)
 
-    # Right: three runs.
-    svg.text((620, 26), "The baseline: one run per example set", size=13, bold=True, align="start")
-    for i, name in enumerate(("set 1", "set 2", "set 3")):
+    # Right: one run.
+    svg.text((620, 26), "The baseline: one run", size=13, bold=True, align="start")
+    for i, name in enumerate(("set 1",)):
         ry = 56 + i * 52
         svg.box(Box(620, ry, 70, 36), *EXAMPLE, radius=6)
         svg.text((655, ry + 22), name, size=11.5, bold=True)
@@ -52,8 +52,8 @@ def build() -> str:
         svg.text((775, ry + 15), "pass over every", size=10)
         svg.text((775, ry + 28), "turn of the split", size=10)
         svg.route((830, ry + 18), "r12")
-        svg.text((848, ry + 22), f"accuracy {i + 1}", size=10.5, align="start")
-    svg.text((620, 228), "Report each result, and their mean ± spread.", size=11, bold=True, align="start")
+        svg.text((848, ry + 22), "accuracy", size=10.5, align="start")
+    svg.text((620, 126), "Report the result with its interval.", size=11, bold=True, align="start")
 
     svg.text((20, 258), "A set is fixed by its seed, so the same seed gives the same examples whichever split is evaluated.", size=10.5, colour=GREY, align="start")
     svg.text((20, 274), "Blue: train-fit conversations (never val or dev). Yellow: the conversation being evaluated.", size=10.5, colour=GREY, align="start")
