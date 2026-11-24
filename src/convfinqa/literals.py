@@ -29,6 +29,10 @@ def literals(output: str) -> list[str]:
 
     `#k` references are not literals. A number inside a word (`x1`) is not a literal.
 
+    A comma followed by exactly three digits is a thousands separator, as on the page (`206,588`). The
+    DSL separates arguments with `, ` (comma and space), which is not read that way; an output that writes
+    `add(5,100)` without the space is read as the one number `5100`. No stored output has that form.
+
     Args:
         output: The model's text for one turn.
 

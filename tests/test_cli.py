@@ -158,3 +158,27 @@ def test_the_subprocess_gets_no_modules_when_the_parent_has_none(project):
 
     cmd = sb.child_command("x", artifacts_dir=project.artifacts, root=project.root, chapters_dir=None, modules=[], force=False)
     assert "--import=" in cmd and "--import" not in cmd
+
+
+def test_refresh_drops_the_freeze_of_a_chapter_that_has_no_record(project, capsys):
+    """A clone has the committed freeze but not `artifacts/`: its saved results are not known to match."""
+    project.run("build", "--all")
+    freeze = project.root / "docs" / "_freeze" / "301_a"
+    freeze.mkdir(parents=True)
+    capsys.readouterr()
+    assert project.run("refresh") == 0
+    assert "chapters marked for re-execution: 301_a" in capsys.readouterr().out
+    assert not freeze.exists()
+
+
+def test_refresh_changes_nothing_when_the_chapters_do_not_load(project, capsys):
+    """A chapter mid-edit must not make every chapter lose its saved results."""
+    freeze = project.root / "docs" / "_freeze" / "301_a"
+    freeze.mkdir(parents=True)
+    records = project.artifacts / "_chapters"
+    records.mkdir(parents=True)
+    (records / "301_a.json").write_text(json.dumps({"artifacts": {"one": "h"}, "stale": []}))
+    (project.root / "docs" / "302_b.qmd").write_text(CHAPTER)  # defines "one" a second time
+    assert project.run("refresh") == 1
+    assert "error:" in capsys.readouterr().err
+    assert freeze.exists() and (records / "301_a.json").exists()

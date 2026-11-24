@@ -28,3 +28,18 @@ def test_no_chapter_before_the_final_one_asks_for_a_dev_artifact():
         for cell in CELL.findall(path.read_text()):
             offenders += [f"{path.name}: {m.group(0)}" for m in DEV_GET.finditer(cell)]
     assert not offenders, offenders
+
+
+# any string with `_dev_` in it, as the dev artifacts' names have: it catches a name that is built, or kept in a
+# variable, before it reaches `get` (the pattern above sees only a literal inside the call)
+DEV_NAME = re.compile(r"""["'][^"'\n]*_dev_[^"'\n]*["']""")
+
+
+def test_no_chapter_before_the_final_one_writes_a_dev_artifact_name_anywhere():
+    assert DEV_NAME.search('name = f"scores_tuned_dev_{run}_0_pred"')
+    assert not DEV_NAME.search('open("dev_turn.json") or "dev.jsonl" or "device_map"')
+    offenders = []
+    for path in chapters_before_final():
+        for cell in CELL.findall(path.read_text()):
+            offenders += [f"{path.name}: {m.group(0)}" for m in DEV_NAME.finditer(cell)]
+    assert not offenders, offenders

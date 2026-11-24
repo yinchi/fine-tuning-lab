@@ -18,7 +18,7 @@ import json
 import os
 import shutil
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from pathlib import Path
 
 from .errors import ArtifactError
@@ -167,4 +167,27 @@ class ChapterRecords:
                 path.unlink()
                 self._records.pop(path.stem, None)
                 removed.append(path.stem)
+        return removed
+
+    def drop_unrecorded(self, freeze_dir: Path, chapters: Iterable[str]) -> list[str]:
+        """Delete the freeze folder of every chapter in `chapters` that has one and no record.
+
+        A chapter that asks for artifacts but has no record has not run in this checkout: its saved
+        results come from somewhere else, such as a clone, where `artifacts/` (and with it the records)
+        does not exist but the committed `docs/_freeze/` does. Nothing says that those results match the
+        artifacts built here, so the chapter runs again.
+
+        Args:
+            freeze_dir: Where Quarto keeps the saved results, one folder per chapter.
+            chapters: The stems of the chapter files that ask for artifacts.
+
+        Returns:
+            The chapters whose freeze folder was removed, in the order given.
+        """
+        removed = []
+        for chapter in chapters:
+            folder = freeze_dir / chapter
+            if folder.exists() and not (self.directory / f"{chapter}.json").exists():
+                shutil.rmtree(folder, ignore_errors=True)
+                removed.append(chapter)
         return removed

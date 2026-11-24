@@ -1,31 +1,36 @@
-"""Bootstrap intervals for accuracies, resampling whole conversations.
+"""Bootstrap intervals for accuracies, resampling whole report pages.
 
-The turns of one conversation are not independent (they share a page and earlier answers), so the unit that is
-resampled is the conversation. A comparison of two systems is *paired*: both are scored on the same resample.
+The turns of one conversation are not independent (they share a page and earlier answers), and neither are the
+conversations written from the same page (several single and double conversations share one table), so the
+unit that is resampled is the page (`data.splits.page_group`), with all the conversations written from it. A
+comparison of two systems is *paired*: both are scored on the same resample.
 """
 
 from __future__ import annotations
 
 import numpy as np
 
+from .data.splits import page_group
 
-def _by_conversation(scores: list[dict]) -> tuple[list[str], np.ndarray, np.ndarray, dict]:
-    """Per conversation (sorted by id): the number of turns and of correct turns, and the turn keys."""
+
+def _by_page(scores: list[dict]) -> tuple[list[str], np.ndarray, np.ndarray, dict]:
+    """Per page (sorted by page): the number of turns and of correct turns, and the turn keys."""
     per = {}
     for s in scores:
-        n, k = per.get(s["id"], (0, 0))
-        per[s["id"]] = (n + 1, k + bool(s["correct"]))
+        page = page_group(s["id"])
+        n, k = per.get(page, (0, 0))
+        per[page] = (n + 1, k + bool(s["correct"]))
     ids = sorted(per)
     return ids, np.array([per[i][0] for i in ids]), np.array([per[i][1] for i in ids]), {(s["id"], s["turn"]) for s in scores}
 
 
-def _resample(n_conv: int, n_boot: int, seed: int) -> np.ndarray:
-    """Indices of the conversations in each resample: shape (n_boot, n_conv)."""
-    return np.random.default_rng(seed).integers(0, n_conv, size=(n_boot, n_conv))
+def _resample(n_pages: int, n_boot: int, seed: int) -> np.ndarray:
+    """Indices of the pages in each resample: shape (n_boot, n_pages)."""
+    return np.random.default_rng(seed).integers(0, n_pages, size=(n_boot, n_pages))
 
 
 def bootstrap_accuracy(scores: list[dict], n_boot: int = 10_000, seed: int = 0, level: float = 0.95) -> dict:
-    """Accuracy with a percentile interval from resampling conversations.
+    """Accuracy with a percentile interval from resampling pages.
 
     Args:
         scores: From `evaluate.score_rows` (each has `id`, `turn`, `correct`).
@@ -36,7 +41,7 @@ def bootstrap_accuracy(scores: list[dict], n_boot: int = 10_000, seed: int = 0, 
     Returns:
         `accuracy`, `low`, `high`.
     """
-    _, n, k, _ = _by_conversation(scores)
+    _, n, k, _ = _by_page(scores)
     idx = _resample(len(n), n_boot, seed)
     acc = k[idx].sum(1) / n[idx].sum(1)
     tail = (1 - level) / 2 * 100
@@ -64,8 +69,8 @@ def paired_difference(
     Raises:
         ValueError: If the two score lists do not cover the same turns.
     """
-    ids_a, n_a, k_a, keys_a = _by_conversation(scores_a)
-    ids_b, n_b, k_b, keys_b = _by_conversation(scores_b)
+    ids_a, n_a, k_a, keys_a = _by_page(scores_a)
+    ids_b, n_b, k_b, keys_b = _by_page(scores_b)
     if keys_a != keys_b:
         raise ValueError("the two systems were not scored on the same turns")
     idx = _resample(len(ids_a), n_boot, seed)
@@ -77,16 +82,3 @@ def paired_difference(
         "difference": float((k_a.sum() - k_b.sum()) / n_a.sum()), "low": low, "high": high, "p": p,
         "excludes_zero": low > 0 or high < 0,
     }
-
-
-def turn_level_interval(scores: list[dict], n_boot: int = 10_000, seed: int = 0, level: float = 0.95) -> dict:
-    """The interval of an accuracy if turns were resampled one by one (ignoring conversations).
-
-    Only for comparison with `bootstrap_accuracy`: when outcomes within a conversation are correlated this
-    interval is too narrow.
-    """
-    correct = np.array([bool(s["correct"]) for s in scores])
-    idx = np.random.default_rng(seed).integers(0, len(correct), size=(n_boot, len(correct)))
-    acc = correct[idx].mean(1)
-    tail = (1 - level) / 2 * 100
-    return {"accuracy": float(correct.mean()), "low": float(np.percentile(acc, tail)), "high": float(np.percentile(acc, 100 - tail))}

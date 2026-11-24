@@ -136,8 +136,8 @@ The fine-tuned model uses the adapter that @sec-training kept (the checkpoint wi
 one-line system message and no examples, denoted `e0p` in @sec-baseline. This is compared against the untuned model
 using both `e0p` and `e3p`, which adds three examples to the system prompt: the former shows what fine-tuning
 changed, while the latter shows what is left for fine-tuning to add after the prompt has done its best. All the
-systems are scored on the same validation turns, so differences between them are measured *paired*, by resampling whole conversations (@sec-baseline, "Under the hood: why
-pair, and why resample conversations").
+systems are scored on the same validation turns, so differences between them are measured *paired*, by resampling whole report pages (@sec-baseline, "Under the hood: why
+pair, and why resample pages").
 
 ```{python}
 #HEAVY
@@ -653,24 +653,15 @@ cause, and then by how close the model was to the right token at the point where
 ```{python}
 #HEAVY
 from convfinqa.evaluate import RUNS
-
-def by_outcome(summary_):
-    counts = summary_["by_kind"]
-    return {
-        "correct": counts["correct"],
-        "invalid output": sum(v for k, v in counts.items() if k not in RUNS),
-        "wrong operations": counts.get("wrong_operations", 0),
-        "wrong numbers": counts.get("wrong_numbers", 0),
-        "wrong answer, right shape": counts.get("wrong_answer", 0),
-    }
+from convfinqa.final_results import outcome_counts
 
 outcomes = pd.DataFrame({
-    "untuned, e0p": by_outcome(summary["zero"]),
-    "untuned, e3p": by_outcome(summary["base"]),
-    "fine-tuned, predicted": by_outcome(summary["pred"]),
-    "fine-tuned, gold": by_outcome(summary["gold"]),
+    "untuned, e0p": outcome_counts(summary["zero"]),
+    "untuned, e3p": outcome_counts(summary["base"]),
+    "fine-tuned, predicted": outcome_counts(summary["pred"]),
+    "fine-tuned, gold": outcome_counts(summary["gold"]),
 })
-invalid = {key: by_outcome(summary[key])["invalid output"] for key in summary}
+invalid = {key: outcome_counts(summary[key])["invalid output"] for key in summary}
 wrong = {
     key: summary[key]["n"] - summary[key]["by_kind"]["correct"]
     for key in summary

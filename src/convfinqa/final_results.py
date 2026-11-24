@@ -2,7 +2,7 @@
 
 Kept apart from `stats` because the chapters of the earlier parts import that module, and from `evaluate` because the
 heavy artifacts import that one: changing either would make results stale. Both functions resample whole
-conversations, as `stats` does.
+pages, as `stats` does.
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from __future__ import annotations
 import numpy as np
 
 from .evaluate import RUNS
-from .stats import _by_conversation, _resample
+from .stats import _by_page, _resample
 
 
 PUBLISHED = (
@@ -89,7 +89,7 @@ def share_of_gap_closed(
     Raises:
         ValueError: If the score lists do not cover the same turns, or the ceiling is not above the floor.
     """
-    parts = [_by_conversation(s) for s in (low_scores, mid_scores, high_scores)]
+    parts = [_by_page(s) for s in (low_scores, mid_scores, high_scores)]
     if not parts[0][3] == parts[1][3] == parts[2][3]:
         raise ValueError("the systems were not scored on the same turns")
     (_, n, k_low, _), (_, _, k_mid, _), (_, _, k_high, _) = parts
@@ -116,7 +116,7 @@ def split_difference(
 ) -> dict:
     """Accuracy on one split minus accuracy on another, for the same system, with an interval.
 
-    The two splits hold different conversations, so the comparison is *unpaired*: each is resampled on its own.
+    The two splits hold different pages, so the comparison is *unpaired*: each is resampled on its own.
 
     Args:
         scores_a: Scores on the first split.
@@ -128,8 +128,8 @@ def split_difference(
     Returns:
         `difference`, `low`, `high`, and `excludes_zero` (the interval does not contain 0).
     """
-    _, n_a, k_a, _ = _by_conversation(scores_a)
-    _, n_b, k_b, _ = _by_conversation(scores_b)
+    _, n_a, k_a, _ = _by_page(scores_a)
+    _, n_b, k_b, _ = _by_page(scores_b)
     ia = _resample(len(n_a), n_boot, seed)
     ib = _resample(len(n_b), n_boot, seed + 1)
     diff = k_a[ia].sum(1) / n_a[ia].sum(1) - k_b[ib].sum(1) / n_b[ib].sum(1)

@@ -20,7 +20,8 @@ def test_python_minor_is_major_dot_minor():
 
 def test_provenance_has_the_recorded_fields(tmp_path):
     record = pv.provenance(tmp_path)  # not a git repository
-    assert set(record) == {"git_commit", "git_dirty", "library_versions", "python"}
+    assert set(record) == {"git_commit", "git_dirty", "library_versions", "python", "inputs"}
+    assert record["inputs"]["dataset_commit"] is None and set(record["inputs"]["models"]) == set(pv.MODELS)
     assert record["git_commit"] is None and record["git_dirty"] is None
     assert record["python"] == pv.python_minor()
 
@@ -112,3 +113,16 @@ def test_a_git_that_hangs_fails_or_is_missing_gives_unknown(tmp_path, monkeypatc
     monkeypatch.setattr(pv.subprocess, "run", fake_run)
     assert pv.git(tmp_path, "rev-parse", "HEAD") is None
     assert pv.git_dirty(tmp_path) is None
+
+
+def test_model_revisions_come_from_the_cache_and_a_changed_one_is_noted(tmp_path, monkeypatch):
+    ref = tmp_path / "models--Qwen--Qwen3-4B-Instruct-2507" / "refs" / "main"
+    ref.parent.mkdir(parents=True)
+    ref.write_text("abc123\n")
+    monkeypatch.setenv("HF_HUB_CACHE", str(tmp_path))
+    assert pv.model_revisions()["Qwen/Qwen3-4B-Instruct-2507"] == "abc123"
+    assert pv.model_revisions()["Qwen/Qwen2.5-0.5B-Instruct"] is None  # not cached
+    node = pv.provenance(tmp_path)
+    assert pv.drift_notes(node) == []
+    ref.write_text("def456\n")
+    assert any("Qwen3-4B-Instruct-2507 was revision abc123 when built, now def456" in n for n in pv.drift_notes(node))

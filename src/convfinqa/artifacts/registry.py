@@ -219,7 +219,15 @@ class Registry:
                 fd = os.open(self.store.log_path(name), os.O_WRONLY | os.O_CREAT | os.O_APPEND)
                 os.dup2(fd, 1)
                 os.dup2(fd, 2)
+            code_before = spec.code_hash()
             config, dynamic, started = self._call_builder(name, spec, params, out, dep_handles)
+            if spec.code_hash() != code_before:
+                # The hash recorded below is read from the files now; a result built from the old code
+                # would be recorded as fresh for the new code.
+                raise BuildError(
+                    f"the code of {name!r} (the builder or a `convfinqa` module it imports) changed while it "
+                    "was building; the result is not recorded, so build it again"
+                )
             self.store.commit(name, {
                 "name": name,
                 "version": spec.version,

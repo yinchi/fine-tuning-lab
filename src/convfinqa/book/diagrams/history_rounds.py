@@ -5,7 +5,6 @@ from __future__ import annotations
 from .svg import Box, Svg
 
 TURN = ("#fff2cc", "#d6b656")
-DONE = ("#eeeeee", "#bbbbbb")
 GREY = "#555555"
 LENGTHS = [4, 2, 3, 1]  # turns of four example conversations
 

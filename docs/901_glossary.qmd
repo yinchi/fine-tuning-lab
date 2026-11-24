@@ -168,8 +168,8 @@ chapter where the term is developed.
     See @sec-dsl.
 
 [paired bootstrap]{#gloss-paired-bootstrap}
-:   An interval for the difference between two systems scored on the same turns. It resamples whole conversations,
-    since the turns of one conversation are not independent, and computes both accuracies on each resample. An interval
+:   An interval for the difference between two systems scored on the same turns. It resamples whole report pages
+    (with every conversation written from them), since the turns of one conversation, and the conversations of one page, are not independent, and computes both accuracies on each resample. An interval
     that excludes zero is a clear difference. See @sec-baseline-rule.
 
 [perplexity]{#gloss-perplexity}

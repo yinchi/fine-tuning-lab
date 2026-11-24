@@ -98,7 +98,7 @@ def turn_level_paired(scores_a: list[dict], scores_b: list[dict], z: float = 1.9
 
     This is the test `scipy.stats.ttest_rel` makes on the per-turn differences. It allows the two systems' results on a
     turn to be correlated, but treats different turns as independent, which turns of one conversation are not. It
-    is here to show how much that assumption matters, not to be used: `stats.paired_difference` resamples conversations.
+    is here to show how much that assumption matters, not to be used: `stats.paired_difference` resamples pages.
 
     Args:
         scores_a: Scores of the first system.

@@ -18,6 +18,12 @@ installed as dependencies of the others. Libraries that only report (tensorboard
 matplotlib) are left out. A change warns; it does not make an artifact stale.
 """
 
+MODELS = ("Qwen/Qwen3-4B-Instruct-2507", "Qwen/Qwen3-4B-Base", "Qwen/Qwen2.5-0.5B-Instruct")
+"""The Hugging Face models of the book, whose downloaded revision is recorded (the one the local cache holds)."""
+
+DATASET_CLONE = Path("data") / "raw" / "ConvFinQA"
+"""Where the ConvFinQA repository is cloned, relative to the project root."""
+
 GIT_TIMEOUT_SECONDS = 10
 """How long to wait for a git command before giving up and recording the answer as unknown."""
 
@@ -64,17 +70,47 @@ def git_dirty(root: Path) -> bool | None:
     return None if status is None else bool(status)
 
 
-def provenance(root: Path) -> dict:
-    """Where this build is running: the keys `git_commit`, `git_dirty`, `library_versions`, `python`.
+def model_revisions() -> dict[str, str | None]:
+    """The revision (commit hash) of each model of the book that the local Hugging Face cache holds.
 
-    Recorded in `node.json` so a result can be traced to the code and environment that produced it.
-    It never affects freshness. `git_commit` and `git_dirty` are `None` when git cannot say.
+    The cache keeps the revision of the last download of a model under `refs/main`; the value is `None` for a
+    model that is not cached.
+    """
+    import os
+
+    cache = Path(os.environ.get("HF_HUB_CACHE") or Path(os.environ.get("HF_HOME", Path.home() / ".cache" / "huggingface")) / "hub")
+    revisions: dict[str, str | None] = {}
+    for model in MODELS:
+        ref = cache / f"models--{model.replace('/', '--')}" / "refs" / "main"
+        try:
+            revisions[model] = ref.read_text().strip()
+        except OSError:
+            revisions[model] = None
+    return revisions
+
+
+def input_revisions(root: Path) -> dict:
+    """The data and the models a build read: the dataset's git commit and the models' revisions.
+
+    Neither is pinned (the dataset is a shallow clone of the default branch, the models are downloaded as they
+    are), so they are recorded, to show what a reported run used. `dataset_commit` is `None` when the clone is
+    missing.
+    """
+    return {"dataset_commit": git(root / DATASET_CLONE, "rev-parse", "HEAD"), "models": model_revisions()}
+
+
+def provenance(root: Path) -> dict:
+    """Where this build is running: `git_commit`, `git_dirty`, `library_versions`, `python`, `inputs`.
+
+    Recorded in `node.json` so a result can be traced to the code, the environment and the inputs that produced
+    it. It never affects freshness. `git_commit` and `git_dirty` are `None` when git cannot say.
     """
     return {
         "git_commit": git(root, "rev-parse", "HEAD"),
         "git_dirty": git_dirty(root),
         "library_versions": library_versions(),
         "python": python_minor(),
+        "inputs": input_revisions(root),
     }
 
 
@@ -92,4 +128,9 @@ def drift_notes(node: dict) -> list[str]:
             notes.append(f"{lib} was {then} when built, now {now}")
     if node.get("python") != python_minor():
         notes.append(f"built with Python {node.get('python')}")
+    built_models = (node.get("inputs") or {}).get("models")
+    if built_models is not None:  # an artifact built before the inputs were recorded says nothing
+        for model, revision in model_revisions().items():
+            if built_models.get(model) != revision:
+                notes.append(f"{model} was revision {built_models.get(model)} when built, now {revision}")
     return notes

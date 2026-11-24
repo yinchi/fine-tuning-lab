@@ -184,3 +184,14 @@ def test_concurrent_writers_do_not_break_each_other(tmp_path):
     assert not errors
     assert "artifacts" in json.loads(path.read_text())
     assert [p.name for p in path.parent.iterdir()] == ["201_x.json"]  # no leftover temp files
+
+
+def test_a_freeze_with_no_record_is_dropped_and_one_with_a_record_is_kept(records, tmp_path):
+    freeze = tmp_path / "_freeze"
+    for chapter in ("201_x", "202_y", "203_z"):
+        (freeze / chapter).mkdir(parents=True)
+    records.note_use(handle("a"), document="202_y.qmd")  # only 202_y has run in this checkout
+    # 203_z asks for no artifact, so nothing says that its freeze depends on this checkout
+    removed = records.drop_unrecorded(freeze, ["201_x", "202_y", "204_none"])
+    assert removed == ["201_x"]
+    assert not (freeze / "201_x").exists() and (freeze / "202_y").exists() and (freeze / "203_z").exists()

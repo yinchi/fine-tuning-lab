@@ -30,7 +30,7 @@ reported and not fixed. The decisions were:
 - **The output format.** The DSL of @sec-dsl, with greedy decoding, no grammar, and one attempt per turn; an invalid
   output counts as wrong (@sec-evaluating).
 - **The measures.** Execution accuracy in both histories, with the predicted history as the headline; program
-  accuracy next to it; a paired bootstrap that resamples whole conversations.
+  accuracy next to it; a paired bootstrap that resamples whole report pages.
 
 Six generation runs were then made, each once: the fine-tuned model, the untuned model with `e3p` and the untuned model
 with `e0p`, each with the predicted history and with the gold history. The scores below are computed from them.
@@ -51,6 +51,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 from convfinqa.artifacts import get
+from convfinqa.data.splits import page_group
 from convfinqa.stats import bootstrap_accuracy, paired_difference
 
 RUNS_DEV = {
@@ -79,7 +80,9 @@ ci = {k: bootstrap_accuracy(v) for k, v in dev.items()}
 ci_program = {k: bootstrap_accuracy(v) for k, v in program.items()}
 
 n_turns = {len(v) for v in dev.values()}
-n_conversations = len({s["id"] for s in dev[("fine-tuned", "predicted")]})
+dev_ids = {s["id"] for s in dev[("fine-tuned", "predicted")]}
+n_conversations = len(dev_ids)
+n_pages = len({page_group(i) for i in dev_ids})
 # all six runs cover the same turns, every turn of the split
 assert len(n_turns) == 1
 
@@ -103,9 +106,10 @@ pd.DataFrame(
 )
 ```
 
-The split holds `{python} n_conversations` conversations and `{python} n_turns.pop()` turns. In each row the interval
-comes from resampling whole conversations 10,000 times (@sec-evaluating); it covers the choice of
-conversations, and not the training seed, which is the matter of the rule above.
+The split holds `{python} n_conversations` conversations, written from `{python} n_pages` report pages, and
+`{python} n_turns.pop()` turns. In each row the interval
+comes from resampling whole report pages 10,000 times (@sec-evaluating); it covers the choice of
+pages, and not the training seed, which is the matter of the rule above.
 
 ```{python}
 #HEAVY
@@ -341,7 +345,7 @@ sample whose split it does not state, so it measures something else and is left 
 
 The choices of the book were made on validation: the prompt, the checkpoint, the grammar, the format. If a choice had
 fitted the validation conversations in a way that does not carry over, the development numbers would be lower. The
-check is the same three systems, both histories, on the two splits. The splits hold different conversations, so each
+check is the same three systems, both histories, on the two splits. The splits hold different pages, so each
 accuracy is resampled on its own, and the interval is for the difference of the two.
 
 ```{python}
@@ -360,6 +364,8 @@ val = {k: list(h.jsonl("scores.jsonl")) for k, h in VAL_SCORES.items()}
 ci_val = {k: bootstrap_accuracy(v) for k, v in val.items()}
 moved = {k: split_difference(dev[k], val[k]) for k in dev}
 significant = [k for k, m in moved.items() if m["excludes_zero"]]
+# the sentence below names the exception: the untuned model with the training prompt, which does not move with the training
+assert significant
 
 # nothing that validation chose is significantly worse on dev: the two
 # systems that went through the book's choices (the fine-tuned model and the
@@ -390,7 +396,7 @@ development than on validation with the predicted history and
 `{python} f"{-100 * moved[('fine-tuned', 'gold')]['difference']:.1f}"` with the gold history, and the untuned model with
 `e3p` differs by `{python} f"{100 * moved[('untuned, e3p', 'predicted')]['difference']:+.1f}"` and
 `{python} f"{100 * moved[('untuned, e3p', 'gold')]['difference']:+.1f}"`. None of these four intervals excludes zero, so the
-data cannot tell a small optimism of selection from the difference between two samples of conversations; they show that
+data cannot tell a small optimism of selection from the difference between two samples of pages; they show that
 the validation numbers were not far off. `{python} len(significant)` of the six differences has an interval that does
 exclude zero: `{python} ", ".join(f"{s} with the {h} history" for s, h in significant) or "none"`. That is the
 untuned model with the prompt of the fine-tuned model, which no choice of the book depended on, and it is the floor of
@@ -406,7 +412,7 @@ rank sweep (@sec-rank-sweep). The reason is the same for all: a result on the de
 reported, once, and the more comparisons are run on it, the more of its value as a check is spent.
 
 The result is also limited in three ways. It is one training seed, so the interval of a number is for the choice of
-conversations and does not include the noise of training; the rule for more seeds did not call for them, but a
+pages and does not include the noise of training; the rule for more seeds did not call for them, but a
 second seed is what would measure it. The prompt of the untuned model
 had one example set. And the numbers are on one benchmark, with one model, so the contrast with published work
 is of a set-up and not of a method.

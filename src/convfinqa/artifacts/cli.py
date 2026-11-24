@@ -21,6 +21,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from .chapters import scan_chapters
 from .errors import ArtifactError
 from .registry import ARTIFACTS, DEFAULT_MODULES, ROOT, Registry
 
@@ -157,7 +158,16 @@ def main(argv: list[str] | None = None) -> int:
                 return 1
         elif args.cmd == "refresh":
             # Quarto keeps a chapter's saved results in docs/_freeze/<chapter>/
-            removed = reg.records.refresh(args.root / "docs" / "_freeze", reg.status)
+            freeze = args.root / "docs" / "_freeze"
+            # A catalog that does not load (a chapter mid-edit) must stop here: `status` would raise for
+            # every name, and every chapter would count as outdated and lose its saved results.
+            reg.catalog.validate(reg.catalog.targets())
+            removed = reg.records.refresh(freeze, reg.status)
+            if chapters:
+                scan = scan_chapters(chapters)
+                asking = sorted({Path(where.rsplit(":", 1)[0]).stem for _, where in scan.gets}
+                                | {b.chapter for b in scan.builders})
+                removed += reg.records.drop_unrecorded(freeze, asking)
             if removed:
                 print(f"[artifacts] chapters marked for re-execution: {', '.join(removed)}")
     except ArtifactError as e:

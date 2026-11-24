@@ -42,7 +42,7 @@ and numbers is the other part, and it is the one we expect fine-tuning to have t
 - **Example sets.** Which examples are used changes the result, and an untuned model has no training seed to vary, so
   the examples play that part. An example set is fixed by its seed alone, so the same seed gives the same examples whichever
   data we evaluate on. Three sets are prepared, and the reported baseline uses the first (seed 0): one run, with the uncertainty of
-  its accuracy taken from the paired bootstrap, which covers the choice of conversations and not the choice of examples.
+  its accuracy taken from the paired bootstrap, which covers the choice of report pages and not the choice of examples.
 - **Choosing the prompt.** The variants we try (how many examples, with or without the description, and none at all) are
   listed in advance (one more was added after the first results, and is flagged), and the choice between them is made on the **validation** data. The [development data](901_glossary.qmd#gloss-dev) are touched
   only for the numbers the book reports, once, with the prompt already chosen.
@@ -320,8 +320,8 @@ pd.DataFrame([
 ## Choosing the prompt
 
 The seven prompts, on the validation data, with the predicted history. Each accuracy comes with a 95% confidence
-interval, found by resampling whole conversations (not single turns, because the turns of one conversation are not
-independent). The scores are read from the prediction files.
+interval, found by resampling whole report pages, with every conversation written from them (not single turns: the turns of one
+conversation, and the conversations written from one page, are not independent). The scores are read from the prediction files.
 
 ```{python}
 #HEAVY
@@ -429,7 +429,7 @@ The paired intervals are narrower than the intervals of the accuracies in the ta
 `{python} f"{min(half):.1f}"` to `{python} f"{max(half):.1f}"` points for the prompts with examples. That is why a lead of
 a few points can be clear here when the two accuracy intervals overlap.
 
-::: {.callout-note title="Under the hood: why pair, and why resample conversations"}
+::: {.callout-note title="Under the hood: why pair, and why resample pages"}
 Two prompts scored on the same turns tend to get the same turns right: the easy ones, both; the hard ones, neither. The
 variance of a difference is $\mathrm{Var}(A) + \mathrm{Var}(B) - 2\,\mathrm{Cov}(A, B)$, so this shared
 difficulty (a positive covariance) cancels in the *paired* difference. It is narrower than the intervals of the two
@@ -437,28 +437,29 @@ accuracies once the correlation exceeds one half (for equally noisy estimates), 
 independent estimates for any positive correlation.
 
 The usual paired test, a paired $t$-test (`scipy.stats.ttest_rel`), takes this into account, but it treats every
-*turn* as an independent item. Turns of one conversation share a page, the same examples and each other's answers, so
-they are not independent, and the test's interval is too narrow. The bootstrap here resamples whole
-conversations, which keeps both kinds of correlation. For the two closest prompts of the table above:
+*turn* as an independent item. Turns of one conversation share a page, the same examples and each other's answers, and
+several conversations are written from one page and share its table, so the turns are not independent, and the test's
+interval is too narrow. The bootstrap here resamples whole pages, with all the conversations written from them, which keeps
+all of these correlations. For the two closest prompts of the table above:
 
 ```{python}
 #HEAVY
 from convfinqa.baseline_report import turn_level_paired
 
 per_turn = turn_level_paired(scores["e3p"], scores["e3d"])
-per_conversation = diff("e3p", "e3d")
-half_conv = (per_conversation["high"] - per_conversation["low"]) / 2
+per_page = diff("e3p", "e3d")
+half_page = (per_page["high"] - per_page["low"]) / 2
 
-# ignoring the conversations makes the interval too narrow, and here
+# ignoring the pages makes the interval too narrow, and here
 # changes what it says about zero
-assert per_turn["half_width"] < half_conv
-assert per_turn["excludes_zero"] and not per_conversation["excludes_zero"]
+assert per_turn["half_width"] < half_page
+assert per_turn["excludes_zero"] and not per_page["excludes_zero"]
 ```
 
 Treating turns as independent gives an interval of ±`{python} f"{100 * per_turn['half_width']:.1f}"` points for the
 lead of `e3p` over `e3d` (`{python} pts(per_turn["low"])` to `{python} pts(per_turn["high"])`), which excludes zero. Resampling
-conversations gives ±`{python} f"{100 * half_conv:.1f}"` (`{python} pts(per_conversation["low"])` to
-`{python} pts(per_conversation["high"])`), which does not. The selection rule uses the second.
+pages gives ±`{python} f"{100 * half_page:.1f}"` (`{python} pts(per_page["low"])` to
+`{python} pts(per_page["high"])`), which does not. The selection rule uses the second.
 :::
 
 ### What the variants show

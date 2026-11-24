@@ -3,7 +3,7 @@
 import numpy as np
 import pytest
 
-from convfinqa.stats import bootstrap_accuracy, paired_difference, turn_level_interval
+from convfinqa.stats import _by_page, bootstrap_accuracy, paired_difference
 
 N_CONV, TURNS = 300, 4
 
@@ -46,13 +46,6 @@ def test_a_planted_five_point_difference_is_detected():
     assert d["difference"] == pytest.approx(0.05, abs=0.02)
 
 
-def test_the_conversation_bootstrap_is_wider_than_the_turn_bootstrap_when_outcomes_are_correlated():
-    a = system(correlated_p(), seed=5)
-    by_conversation, by_turn = bootstrap_accuracy(a), turn_level_interval(a)
-    assert by_conversation["accuracy"] == pytest.approx(by_turn["accuracy"])
-    assert (by_conversation["high"] - by_conversation["low"]) > 1.5 * (by_turn["high"] - by_turn["low"])
-
-
 def test_the_interval_contains_the_accuracy_and_the_resampling_is_reproducible():
     a = system(np.full(N_CONV, 0.7), seed=6)
     r = bootstrap_accuracy(a, seed=9)
@@ -65,3 +58,32 @@ def test_systems_must_cover_the_same_turns():
     a = system(np.full(N_CONV, 0.5), seed=7)
     with pytest.raises(ValueError, match="same turns"):
         paired_difference(a, a[:-1])
+
+
+def test_conversations_written_from_one_page_are_one_cluster():
+    scores = [
+        {"id": i, "turn": 0, "correct": True}
+        for i in (
+            "Single_AB/2001/page_1.pdf-1", "Single_AB/2001/page_1.pdf-2", "Double_AB/2001/page_1.pdf",
+            "Single_CD/2002/page_7.pdf-3",
+        )
+    ]
+    pages, n_turns, n_correct, _ = _by_page(scores)
+    assert pages == ["AB/2001/page_1.pdf", "CD/2002/page_7.pdf"]
+    assert list(n_turns) == [3, 1] and list(n_correct) == [3, 1]
+
+
+def test_the_interval_is_wider_when_conversations_of_a_page_share_their_outcome():
+    """Three conversations per page, all right or all wrong together: resampling pages sees only 100 clusters."""
+    rng = np.random.default_rng(0)
+    page_ok = rng.random(100) < 0.5
+    together = [
+        {"id": f"Single_P{p}/2000/page_{p}.pdf-{j}", "turn": 0, "correct": bool(page_ok[p])}
+        for p in range(100) for j in range(3)
+    ]
+    separate = [  # the same 300 outcomes, each on a page of its own
+        {"id": f"Single_Q{k}/2000/page_{k}.pdf-0", "turn": 0, "correct": s["correct"]}
+        for k, s in enumerate(together)
+    ]
+    w = lambda r: r["high"] - r["low"]
+    assert w(bootstrap_accuracy(together)) > 1.4 * w(bootstrap_accuracy(separate))

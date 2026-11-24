@@ -543,6 +543,18 @@ def test_code_hash_changes_when_a_helper_module_changes(monkeypatch):
     assert hashing.code_hash(mods) != before
 
 
+def test_a_build_whose_code_changes_meanwhile_is_not_recorded(toy, monkeypatch):
+    """The hash is read from the files at commit: a result built from the old code must not become fresh."""
+    reg = toy.registry()
+    spec, _ = reg.catalog.resolve("base_3")
+    digests = iter(["old code", "new code", "new code"])  # an imported module is edited during the build
+    monkeypatch.setattr(type(spec), "code_hash", lambda self, dynamic=(): next(digests))
+    with pytest.raises(A.BuildError, match="changed while it was building"):
+        reg.get("base_3")
+    monkeypatch.undo()
+    assert reg.status("base_3").kind == "missing"
+
+
 # --- chapter records and refresh ----------------------------------------------------------------
 
 
