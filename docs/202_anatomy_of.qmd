@@ -83,8 +83,8 @@ checks each row against the real model.
 ## Setting up
 
 ::: {.callout-note title="Requirements"}
-This chapter runs the 4B model on a GPU and reads `artifacts/processed/lengths.json`, which @sec-convfinqa
-writes. The book is built once by its author, and the executed results are stored in
+This chapter runs the 4B model on a GPU and reads the artifact `conversation_lengths`, which @sec-convfinqa
+builds. The book is built once by its author, and the executed results are stored in
 `docs/_freeze/`, so a reader of the rendered book needs neither.
 :::
 
@@ -817,17 +817,14 @@ and values of every token it has seen, so earlier tokens need not be recomputed 
 Per token, that is one key and one value vector per key/value head, in every layer:
 
 ```{python}
-import json
-from pathlib import Path
+from convfinqa.artifacts import get
 
 weight_bytes = total * 2
 kv_per_token = 2 * n_layers * cfg.num_key_value_heads\
     * cfg.head_dim * 2  # keys and values, bf16
 
-# Retrieve the maximum sequence length from the JSON file
-longest = json.loads(
-    Path("../artifacts/processed/lengths.json").read_text()
-)["max_length"]
+# the maximum sequence length, from the lengths artifact
+longest = get("conversation_lengths").json("lengths.json")["max_length"]
 
 print(
     "weights in bf16:           "

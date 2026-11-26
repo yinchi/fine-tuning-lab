@@ -94,7 +94,7 @@ steps = steps_per_epoch * cfg["epochs"]
 warmup = math.ceil(cfg["warmup_ratio"] * steps)
 
 # the longest conversation, from the lengths chapter
-lengths = json.loads(Path("../artifacts/processed/lengths.json").read_text())
+lengths = get("conversation_lengths").json("lengths.json")
 assert lengths["longest"] <= cfg["max_length"]
 
 pd.DataFrame([

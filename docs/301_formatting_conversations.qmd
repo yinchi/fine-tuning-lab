@@ -132,10 +132,7 @@ times as many tokens for the same answers. The price is the one named there too,
 training every earlier answer in the context is the gold one.
 
 ```{python}
-import json
-from pathlib import Path
-
-lengths = json.loads(Path("../artifacts/processed/lengths.json").read_text())
+lengths = get("conversation_lengths").json("lengths.json")
 assert lengths["longest"] <= lengths["max_length"]
 ```
 

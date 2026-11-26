@@ -349,18 +349,40 @@ this tokenizer and to our formatting. A different base model would give slightly
 check them again before reusing the value.
 :::
 
-Now we count tokens for every conversation (step 3). `add_special_tokens=False` is needed because the
-template has already written the special tokens into the string.
+Now we count tokens for every conversation of `train` and `dev` (step 3). The count is made by
+`convfinqa.lengths`, with `add_special_tokens=False` because the template has already written the special
+tokens into the string. It is the artifact `conversation_lengths`, so that the chapters that need the longest
+conversation read it from there, and a rebuild from a clean checkout makes it again.
 
 ```{python}
-def n_tokens(conv):
-    text = tok.apply_chat_template(conversation_messages(conv), tokenize=False)
-    return len(tok(text, add_special_tokens=False)["input_ids"])
+import pandas as pd
 
-lengths = pd.DataFrame([
-    dict(split=s, tokens=n_tokens(c)) for s in ["train", "dev"]
-    for c in splits[s]
-])
+from convfinqa.artifacts import artifact, get
+
+
+@artifact("conversation_lengths")
+def build_conversation_lengths(out, deps):
+    import json
+
+    from transformers import AutoTokenizer
+
+    from convfinqa import data
+    from convfinqa.lengths import conversation_lengths, max_length_for
+
+    tok = AutoTokenizer.from_pretrained("Qwen/Qwen3-4B-Instruct-2507")
+    rows = conversation_lengths(
+        tok, {name: data.load_split(name) for name in ["train", "dev"]}
+    )
+    longest = max(r["tokens"] for r in rows)
+    (out / "lengths.jsonl").write_text(
+        "".join(json.dumps(r) + "\n" for r in rows)
+    )
+    (out / "lengths.json").write_text(json.dumps(
+        {"longest": longest, "max_length": max_length_for(longest)}
+    ))
+
+
+lengths = pd.DataFrame(get("conversation_lengths").jsonl("lengths.jsonl"))
 lengths.groupby("split").tokens.describe(percentiles=[0.5, 0.9, 0.99, 0.999])\
     .round(0)
 ```
@@ -376,18 +398,14 @@ plt.tight_layout()
 
 We pick `max_length` as the longest conversation rounded up to a multiple of 256, so that no training
 conversation is truncated. Truncating would cut off assistant tokens, which are exactly what the loss
-is computed on. The value is saved to a file for later chapters, since stages pass data through files.
+is computed on. The value is saved in the same artifact for later chapters, since stages pass data through files.
 
 ```{python}
-longest = int(lengths.tokens.max())
-max_length = -(-longest // 256) * 256
-out = Path("../artifacts/processed")
-out.mkdir(parents=True, exist_ok=True)
-
-(out / "lengths.json").write_text(
-    json.dumps({"longest": longest, "max_length": max_length})
+chosen = get("conversation_lengths").json("lengths.json")
+print(
+    f"longest conversation: {chosen['longest']} tokens"
+    f" -> max_length = {chosen['max_length']}"
 )
-print(f"longest conversation: {longest} tokens -> max_length = {max_length}")
 ```
 
 ::: {.callout-note title="Under the hood"}
