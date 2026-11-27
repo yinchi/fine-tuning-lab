@@ -1,0 +1,1864 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>6&nbsp; From base model to instruct model – Fine-tuning lab: LLMs on ConvFinQA</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./204_probing_the.html" rel="next">
+<link href="./202_anatomy_of.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-825aa897e66f6637425967c223a89f82.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./201_from_text.html">Foundations</a></li><li class="breadcrumb-item"><a href="./203_from_base.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Fine-tuning lab: LLMs on ConvFinQA</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Setup &amp; data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./101_environment_setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Environment setup</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./102_what_convfinqa.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./103_the_dsl.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">The DSL and its executor</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./201_from_text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">From text to tokens to next-token probabilities</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./202_anatomy_of.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Anatomy of Qwen3-4B</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./203_from_base.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./204_probing_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./205_how_fine_tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">How fine-tuning works</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./206_lora_in.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Experiments</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./301_formatting_conversations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Formatting conversations for training</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./302_the_untuned.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The untuned baseline</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./303_training_with.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Training with LoRA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./304_evaluating_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Evaluating the fine-tuned model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./305_dsl_vs.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">DSL or Python?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./306_constrained_decoding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Constrained decoding</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Beyond</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./402_the_final.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./403_rank_sweep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">How much rank does the task need?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./404_summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Summary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./901_glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./902_references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">References</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#what-base-and-instruct-mean" id="toc-what-base-and-instruct-mean" class="nav-link active" data-scroll-target="#what-base-and-instruct-mean"><span class="header-section-number">6.1</span> What “base” and “instruct” mean</a></li>
+  <li><a href="#what-post-training-looks-like" id="toc-what-post-training-looks-like" class="nav-link" data-scroll-target="#what-post-training-looks-like"><span class="header-section-number">6.2</span> What post-training looks like</a></li>
+  <li><a href="#base-and-instruct-side-by-side" id="toc-base-and-instruct-side-by-side" class="nav-link" data-scroll-target="#base-and-instruct-side-by-side"><span class="header-section-number">6.3</span> Base and instruct, side by side</a></li>
+  <li><a href="#what-post-training-did-to-the-chat-markers" id="toc-what-post-training-did-to-the-chat-markers" class="nav-link" data-scroll-target="#what-post-training-did-to-the-chat-markers"><span class="header-section-number">6.4</span> What post-training did to the chat markers</a></li>
+  <li><a href="#chat-templates" id="toc-chat-templates" class="nav-link" data-scroll-target="#chat-templates"><span class="header-section-number">6.5</span> Chat templates</a></li>
+  <li><a href="#teacher-forcing-and-exposure-bias" id="toc-teacher-forcing-and-exposure-bias" class="nav-link" data-scroll-target="#teacher-forcing-and-exposure-bias"><span class="header-section-number">6.6</span> Teacher forcing and exposure bias</a></li>
+  <li><a href="#where-our-fine-tuning-fits" id="toc-where-our-fine-tuning-fits" class="nav-link" data-scroll-target="#where-our-fine-tuning-fits"><span class="header-section-number">6.7</span> Where our fine-tuning fits</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./201_from_text.html">Foundations</a></li><li class="breadcrumb-item"><a href="./203_from_base.html"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></a></li></ol></nav>
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><span id="sec-base-instruct" class="quarto-section-identifier"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></span></h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><strong>You will learn:</strong></p>
+<ul>
+<li>what separates a base model from an instruct model, and where our fine-tuning fits;</li>
+<li>what a chat template is, and how a conversation becomes the string a model reads;</li>
+<li>how a multi-turn conversation is turned into a training example, and what teacher forcing means.</li>
+</ul>
+<p>Qwen publishes most of its models twice: a <strong>base</strong> model and an <strong>instruct</strong> model. We fine-tune the instruct one. This chapter explains the difference, shows it on the real models, and prepares the way for the chapters on formatting conversations and training, later in the book.</p>
+<section id="what-base-and-instruct-mean" class="level2" data-number="6.1">
+<h2 data-number="6.1" class="anchored" data-anchor-id="what-base-and-instruct-mean"><span class="header-section-number">6.1</span> What “base” and “instruct” mean</h2>
+<p>A <strong><a href="./901_glossary.html#gloss-base-model">base model</a></strong> is the result of <strong><a href="./901_glossary.html#gloss-pretraining">pretraining</a></strong>: it has been trained to predict the next token on a very large body of text. For Qwen3 that is about 36 trillion tokens in 119 languages and dialects, trained in three stages (a general stage, a reasoning-focused stage with more science, coding and reasoning data, and a long-context stage). Some of the text is synthetic, in textbook, question and answer, and instruction formats, generated by earlier Qwen models <span class="citation" data-cites="yang2025qwen3">(<a href="902_references.html#ref-yang2025qwen3" role="doc-biblioref"><span class="nocase">Yang et al.</span> 2025</a>)</span>. A base model continues whatever text it is given. It was not trained to answer.</p>
+<p>An <strong><a href="./901_glossary.html#gloss-instruct-model">instruct model</a></strong> is a base model that has been <strong><a href="./901_glossary.html#gloss-post-training">post-trained</a></strong> to follow instructions and to converse in a chat format. For the Qwen3 family, the report describes a multi-stage pipeline for the large models, with fine-tuning on reasoning data, reinforcement learning, and the merging of a “thinking” and a “non-thinking” mode. The small models, including the 4B, were instead trained by <strong>strong-to-weak distillation</strong>: they learn from the outputs and the logits of larger Qwen3 models <span class="citation" data-cites="yang2025qwen3">(<a href="902_references.html#ref-yang2025qwen3" role="doc-biblioref"><span class="nocase">Yang et al.</span> 2025</a>)</span>. We do not need these methods in this lab, but a short tour of them, in the next section, shows what post-training looks like.</p>
+<p>The report calls the pretrained model <code>Qwen3-4B-Base</code> and the post-trained one <code>Qwen3-4B</code>, which can either think before answering or not <span class="citation" data-cites="yang2025qwen3">(<a href="902_references.html#ref-yang2025qwen3" role="doc-biblioref"><span class="nocase">Yang et al.</span> 2025</a>)</span>. Our model, <code>Qwen3-4B-Instruct-2507</code>, is a later release: its model card describes it as an updated <em>non-thinking</em> version of Qwen3-4B, which does not write a reasoning section before its answer. The technical report was published before this update, and we did not find a published description of how the update was trained, so we say nothing about that.</p>
+<p>Two things the name does <strong>not</strong> tell us. The model was not trained for ConvFinQA or for our program language, which is the gap this lab closes. And we do not know what financial text its training data contained, because the data mixture is not published in detail.</p>
+<div id="fig-pipeline" class="quarto-float quarto-figure quarto-figure-center anchored" alt="Three boxes joined by arrows. The first, pretraining, is next-token prediction on very large text corpora and produces a base model. The second, post-training, teaches following instructions and answering in a chat format and produces the instruct model. The third, our fine-tuning, uses LoRA on ConvFinQA to write DSL programs and produces our model.">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="figures/pipeline.svg" class="img-fluid figure-img" alt="Three boxes joined by arrows. The first, pretraining, is next-token prediction on very large text corpora and produces a base model. The second, post-training, teaches following instructions and answering in a chat format and produces the instruct model. The third, our fine-tuning, uses LoRA on ConvFinQA to write DSL programs and produces our model.">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-pipeline-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;6.1: The three stages in this lab’s story. The first two were done by Qwen. We add the third, a small fine-tuning step, on top of the instruct model.
+</figcaption>
+</figure>
+</div>
+</section>
+<section id="what-post-training-looks-like" class="level2" data-number="6.2">
+<h2 data-number="6.2" class="anchored" data-anchor-id="what-post-training-looks-like"><span class="header-section-number">6.2</span> What post-training looks like</h2>
+<p><a href="#fig-posttraining" class="quarto-xref">Figure&nbsp;<span>6.2</span></a> redraws the report’s overview of how the Qwen3 models were post-trained <span class="citation" data-cites="yang2025qwen3">(<a href="902_references.html#ref-yang2025qwen3" role="doc-biblioref"><span class="nocase">Yang et al.</span> 2025</a>)</span>. Everything starts from a base model and follows one of two routes, one for the large flagship models and one for the lightweight ones, which include the 4B. The two routes are linked: the finished flagship models serve as the teachers in the lightweight route.</p>
+<div id="fig-posttraining" class="quarto-float quarto-figure quarto-figure-center anchored" alt="Flow chart. Base models split into two routes. On the left, the flagship route has four stages in order: long chain-of-thought cold start, reasoning reinforcement learning, thinking mode fusion and general reinforcement learning, ending in the flagship models Qwen3-235B-A22B and Qwen3-32B. An arrow from the flagship models leads into the distillation stage of the right-hand route, labelled teachers. On the right, the lightweight route is a single stage, strong-to-weak distillation, ending in the lightweight models Qwen3-30B-A3B and the 14B, 8B, 4B, 1.7B and 0.6B models. Stages are coloured by kind: supervised fine-tuning, reinforcement learning, or distillation.">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-posttraining-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="figures/posttraining.svg" class="img-fluid figure-img" alt="Flow chart. Base models split into two routes. On the left, the flagship route has four stages in order: long chain-of-thought cold start, reasoning reinforcement learning, thinking mode fusion and general reinforcement learning, ending in the flagship models Qwen3-235B-A22B and Qwen3-32B. An arrow from the flagship models leads into the distillation stage of the right-hand route, labelled teachers. On the right, the lightweight route is a single stage, strong-to-weak distillation, ending in the lightweight models Qwen3-30B-A3B and the 14B, 8B, 4B, 1.7B and 0.6B models. Stages are coloured by kind: supervised fine-tuning, reinforcement learning, or distillation.">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-posttraining-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;6.2: Post-training of the Qwen3 models, redrawn after Figure 1 of the Qwen3 report. The flagship models go through four stages; the lightweight models are trained by distillation, with the flagship models as teachers.
+</figcaption>
+</figure>
+</div>
+<p><strong>The flagship route, in four stages</strong></p>
+<ol type="1">
+<li><strong>Long chain-of-thought cold start</strong> (supervised fine-tuning). The model is fine-tuned on a curated set of math, code, logical-reasoning and science problems that have verified answers, with long step-by-step solutions. The aim is to teach basic reasoning patterns with few examples and few steps, so as not to limit the next stage.</li>
+<li><strong>Reasoning RL</strong> (reinforcement learning). The model is trained further on a few thousand problems whose answers can be checked automatically (the report uses 3,995 of them), rewarded when the answer is right, to improve its reasoning.</li>
+<li><strong>Thinking mode fusion</strong> (supervised fine-tuning). The model is fine-tuned on a mix of examples with and without a reasoning section, using a chat template that adds a <code>/think</code> or <code>/no_think</code> flag, so that one model can do both. We meet this template in the next section.</li>
+<li><strong>General RL</strong> (reinforcement learning). Reinforcement learning with rewards for over 20 kinds of task, among them following instructions, following formats, matching human preferences, using tools and answering from retrieved documents.</li>
+</ol>
+<p><strong>The lightweight route: strong-to-weak distillation.</strong> Instead of repeating the four stages for each small model, the small model learns from a larger one. First it is fine-tuned on the larger models’ answers (<em>off-policy</em>, because the answers were not written by the student). Then the student writes its own answers, and is trained so that its output probabilities match those of a Qwen3-32B or Qwen3-235B-A22B teacher on the same text (<em>on-policy</em>). In the report’s preliminary experiments this took about a tenth of the GPU hours of the four-stage method.</p>
+<p>Two kinds of training appear in this list: <strong><a href="./901_glossary.html#gloss-sft">supervised fine-tuning</a></strong>, where the model is shown examples and trained to reproduce them, and <strong>reinforcement learning</strong>, where it is rewarded for good answers. In this lab we do only the first. Supervised fine-tuning on ConvFinQA turns is what we describe in detail in the chapters to come, and the other methods are beyond our scope.</p>
+</section>
+<section id="base-and-instruct-side-by-side" class="level2" data-number="6.3">
+<h2 data-number="6.3" class="anchored" data-anchor-id="base-and-instruct-side-by-side"><span class="header-section-number">6.3</span> Base and instruct, side by side</h2>
+<p>The previous two chapters already used the instruct model: its tokenizer, the architecture we took apart, and the code-fenced answer to the AAPL question all came from <code>Qwen3-4B-Instruct-2507</code>. Now we load the base model next to it and give both the same prompts. Two things are worth checking first. The two tokenizers use the same vocabulary, so the same text becomes the same token ids, and they differ in the token that ends a text:</p>
+<div id="32deedab" class="cell" data-execution_count="1">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> gc</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> torch</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> AutoModelForCausalLM, AutoTokenizer</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa <span class="im">import</span> data</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.dsl <span class="im">import</span> executor</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.formatting <span class="im">import</span> SYSTEM_PROMPT, conversation_messages</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>names <span class="op">=</span> {<span class="st">"base"</span>: <span class="st">"Qwen/Qwen3-4B-Base"</span>, <span class="st">"instruct"</span>: <span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span>}</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>toks <span class="op">=</span> {kind: AutoTokenizer.from_pretrained(name) <span class="cf">for</span> kind, name <span class="kw">in</span> names.items()}</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>sample <span class="op">=</span> <span class="st">"Hello 206588 world"</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> toks[<span class="st">"base"</span>](sample)[<span class="st">"input_ids"</span>] <span class="op">==</span> toks[<span class="st">"instruct"</span>](sample)[<span class="st">"input_ids"</span>]</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"vocabulary sizes:      "</span>, {kind: <span class="bu">len</span>(t) <span class="cf">for</span> kind, t <span class="kw">in</span> toks.items()})</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"end-of-sequence token: "</span>, {kind: t.eos_token <span class="cf">for</span> kind, t <span class="kw">in</span> toks.items()})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>vocabulary sizes:       {'base': 151669, 'instruct': 151669}
+end-of-sequence token:  {'base': '&lt;|endoftext|&gt;', 'instruct': '&lt;|im_end|&gt;'}</code></pre>
+</div>
+</div>
+<p>We use four prompts. Three have nothing to do with finance: a direct question, the start of a sentence, and a question-and-answer pattern. The fourth is the first turn of the ConvFinQA conversation from <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a> and <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a>. Each prompt is given to each model in two forms: as <strong>plain text</strong>, and wrapped in the model’s <strong>chat template</strong>, which we look at in the next section. Decoding is greedy, and at most 60 new tokens are generated.</p>
+<div id="d722bec3" class="cell" data-execution_count="2">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>conv <span class="op">=</span> {c[<span class="st">"id"</span>]: c <span class="cf">for</span> c <span class="kw">in</span> data.load_split(<span class="st">"train"</span>)}[</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Single_AAPL/2002/page_23.pdf-1"</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>page <span class="op">=</span> data.context_text(conv)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>question <span class="op">=</span> conv[<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>][<span class="dv">0</span>]</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> user(text):</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> [{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: text}]</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>prompts <span class="op">=</span> {</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"a question"</span>: (</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>        <span class="st">"What is the capital of France?"</span>,</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>        user(<span class="st">"What is the capital of France?"</span>)</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"a sentence to complete"</span>: (</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>        <span class="st">"The capital of France is"</span>,</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>        user(<span class="st">"The capital of France is"</span>)</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    <span class="st">"a question-answer pattern"</span>: (</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Q: What is 17 + 25?</span><span class="ch">\n</span><span class="st">A:"</span>,</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>        user(<span class="st">"Q: What is 17 + 25?</span><span class="ch">\n</span><span class="st">A:"</span>)</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ConvFinQA, turn 1"</span>: (</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"</span><span class="sc">{</span>SYSTEM_PROMPT<span class="sc">}</span><span class="ch">\n\n</span><span class="sc">{</span>page<span class="sc">}</span><span class="ch">\n\n</span><span class="ss">Question: </span><span class="sc">{</span>question<span class="sc">}</span><span class="ch">\n</span><span class="ss">Answer:"</span>,</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>        conversation_messages(conv)[:<span class="dv">2</span>],</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run(kind):</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Generate for every prompt with one model, and keep its embedding</span></span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a><span class="co">    matrix. Frees the GPU afterwards.</span></span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>    tok <span class="op">=</span> toks[kind]</span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> AutoModelForCausalLM.from_pretrained(</span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>        names[kind], dtype<span class="op">=</span>torch.bfloat16</span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>    ).to(<span class="st">"cuda"</span>).<span class="bu">eval</span>()</span>
+<span id="cb3-37"><a href="#cb3-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-38"><a href="#cb3-38" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> generate(text):</span>
+<span id="cb3-39"><a href="#cb3-39" aria-hidden="true" tabindex="-1"></a>        ids <span class="op">=</span> tok(</span>
+<span id="cb3-40"><a href="#cb3-40" aria-hidden="true" tabindex="-1"></a>            text,</span>
+<span id="cb3-41"><a href="#cb3-41" aria-hidden="true" tabindex="-1"></a>            return_tensors<span class="op">=</span><span class="st">"pt"</span>,</span>
+<span id="cb3-42"><a href="#cb3-42" aria-hidden="true" tabindex="-1"></a>            add_special_tokens<span class="op">=</span><span class="va">False</span></span>
+<span id="cb3-43"><a href="#cb3-43" aria-hidden="true" tabindex="-1"></a>        )[<span class="st">"input_ids"</span>].to(<span class="st">"cuda"</span>)</span>
+<span id="cb3-44"><a href="#cb3-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-45"><a href="#cb3-45" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> torch.no_grad():</span>
+<span id="cb3-46"><a href="#cb3-46" aria-hidden="true" tabindex="-1"></a>            out <span class="op">=</span> model.generate(</span>
+<span id="cb3-47"><a href="#cb3-47" aria-hidden="true" tabindex="-1"></a>                ids,</span>
+<span id="cb3-48"><a href="#cb3-48" aria-hidden="true" tabindex="-1"></a>                max_new_tokens<span class="op">=</span><span class="dv">60</span>,</span>
+<span id="cb3-49"><a href="#cb3-49" aria-hidden="true" tabindex="-1"></a>                do_sample<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb3-50"><a href="#cb3-50" aria-hidden="true" tabindex="-1"></a>                temperature<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb3-51"><a href="#cb3-51" aria-hidden="true" tabindex="-1"></a>                top_p<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb3-52"><a href="#cb3-52" aria-hidden="true" tabindex="-1"></a>                top_k<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb3-53"><a href="#cb3-53" aria-hidden="true" tabindex="-1"></a>                pad_token_id<span class="op">=</span>tok.pad_token_id,</span>
+<span id="cb3-54"><a href="#cb3-54" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb3-55"><a href="#cb3-55" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> tok.decode(out[<span class="dv">0</span>, ids.shape[<span class="dv">1</span>]:])</span>
+<span id="cb3-56"><a href="#cb3-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-57"><a href="#cb3-57" aria-hidden="true" tabindex="-1"></a>    results <span class="op">=</span> {}</span>
+<span id="cb3-58"><a href="#cb3-58" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> label, (plain, messages) <span class="kw">in</span> prompts.items():</span>
+<span id="cb3-59"><a href="#cb3-59" aria-hidden="true" tabindex="-1"></a>        chat <span class="op">=</span> tok.apply_chat_template(</span>
+<span id="cb3-60"><a href="#cb3-60" aria-hidden="true" tabindex="-1"></a>            messages, tokenize<span class="op">=</span><span class="va">False</span>, add_generation_prompt<span class="op">=</span><span class="va">True</span></span>
+<span id="cb3-61"><a href="#cb3-61" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb3-62"><a href="#cb3-62" aria-hidden="true" tabindex="-1"></a>        results[label] <span class="op">=</span> {</span>
+<span id="cb3-63"><a href="#cb3-63" aria-hidden="true" tabindex="-1"></a>            <span class="st">"plain text"</span>: generate(plain),</span>
+<span id="cb3-64"><a href="#cb3-64" aria-hidden="true" tabindex="-1"></a>            <span class="st">"chat template"</span>: generate(chat)</span>
+<span id="cb3-65"><a href="#cb3-65" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb3-66"><a href="#cb3-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-67"><a href="#cb3-67" aria-hidden="true" tabindex="-1"></a>    embeddings <span class="op">=</span> model.model.embed_tokens.weight.detach().<span class="bu">float</span>().cpu()</span>
+<span id="cb3-68"><a href="#cb3-68" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-69"><a href="#cb3-69" aria-hidden="true" tabindex="-1"></a>    <span class="kw">del</span> model</span>
+<span id="cb3-70"><a href="#cb3-70" aria-hidden="true" tabindex="-1"></a>    gc.collect()</span>
+<span id="cb3-71"><a href="#cb3-71" aria-hidden="true" tabindex="-1"></a>    torch.cuda.empty_cache()</span>
+<span id="cb3-72"><a href="#cb3-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-73"><a href="#cb3-73" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> results, embeddings</span>
+<span id="cb3-74"><a href="#cb3-74" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-75"><a href="#cb3-75" aria-hidden="true" tabindex="-1"></a>outputs, embeddings <span class="op">=</span> {}, {}</span>
+<span id="cb3-76"><a href="#cb3-76" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> kind <span class="kw">in</span> names:</span>
+<span id="cb3-77"><a href="#cb3-77" aria-hidden="true" tabindex="-1"></a>    outputs[kind], embeddings[kind] <span class="op">=</span> run(kind)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>The outputs, cut to their first 90 characters (<code>&lt;|endoftext|&gt;</code> and <code>&lt;|im_end|&gt;</code> are the tokens that end a text; a text that ends with neither was cut off at 60 tokens):</p>
+<div id="867cbecb" class="cell" data-execution_count="3">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>shorten <span class="op">=</span> <span class="kw">lambda</span> s, n<span class="op">=</span><span class="dv">90</span>: <span class="bu">repr</span>(s)[:n] <span class="op">+</span> (<span class="st">"…"</span> <span class="cf">if</span> <span class="bu">len</span>(<span class="bu">repr</span>(s)) <span class="op">&gt;</span> n <span class="cf">else</span> <span class="st">""</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> label <span class="kw">in</span> prompts:</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"== </span><span class="sc">{</span>label<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> kind <span class="kw">in</span> names:</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> how <span class="kw">in</span> (<span class="st">"plain text"</span>, <span class="st">"chat template"</span>):</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>            <span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span>kind<span class="sc">:8s}</span><span class="ss"> </span><span class="sc">{</span>how<span class="sc">:13s}</span><span class="ss"> </span><span class="sc">{</span>shorten(outputs[kind][label][how])<span class="sc">}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>== a question
+  base     plain text    ' The capital of France is Paris.&lt;|endoftext|&gt;'
+  base     chat template 'What is the capital of France?ож\nожassistant\nWhat is the capital of France?оу\nоуassist…
+  instruct plain text    ' The capital of France is Paris. It is a major cultural, economic, and political center i…
+  instruct chat template 'The capital of France is Paris.&lt;|im_end|&gt;'
+== a sentence to complete
+  base     plain text    ' Paris. This is a true or false question.\nA. True\nB. False\nAnswer:\nA\n\nThe capital o…
+  base     chat template 'The capital of France is 📺\nassistant\nThe capital of France is 📺\nassistant\nThe capital…
+  instruct plain text    ' Paris. The capital of Germany is Berlin. The capital of Italy is Rome. The capital of Sp…
+  instruct chat template 'The capital of France is Paris.&lt;|im_end|&gt;'
+== a question-answer pattern
+  base     plain text    ' 42\nQ: What is 17 + 25 + 2?\nA: 44\nQ: What is 17 + 25 + 2 + 5?\nA: 49\nQ: What is 17 + …
+  base     chat template 'Q: What is 17 + 25?\nA:ож\nожassistant\nQ: What is 17 + 25?\nA:ож\nожassistant\nQ: What i…
+  instruct plain text    ' 17 + 25 = 42.  \n**Answer: 42**.  \n\nA: 17 + 25 = 42.  \n**Answer: 42**.  \n\nA: 17 + 2…
+  instruct chat template '17 + 25 = 42\n\nA: 42&lt;|im_end|&gt;'
+== ConvFinQA, turn 1
+  base     plain text    ' The total of net sales in 2001 was $5363.&lt;|endoftext|&gt;'
+  base     chat template 'The total of net sales in 2001 was $5363.&lt;|endoftext|&gt;'
+  instruct plain text    ' The total of net sales in 2001 was $5363.\n\n```dsl\nprogram ConvFinQA {\n  // Given dat…
+  instruct chat template '```convfinqa\nSELECT 5363\n```&lt;|im_end|&gt;'</code></pre>
+</div>
+</div>
+<p>What we see, on these four prompts:</p>
+<ul>
+<li><strong>Base model, plain text.</strong> It answered the direct question and the plain-text ConvFinQA question, ending each with its end-of-text token. On the other two prompts it kept going: it finished the sentence and then wrote a true/false quiz question, and it answered the sum and then invented more questions in the same pattern. So the base model is a text continuer that also answers some prompts. This fits the report’s remark that its pretraining data includes synthetic question-answering and instruction text <span class="citation" data-cites="yang2025qwen3">(<a href="902_references.html#ref-yang2025qwen3" role="doc-biblioref"><span class="nocase">Yang et al.</span> 2025</a>)</span>, but we cannot tell from four prompts how much that explains.</li>
+<li><strong>Base model, chat template.</strong> On the three short prompts it repeated the prompt and produced ordinary tokens (<code>ож</code>, an emoji) where the chat markers belong, and then looped. On the long ConvFinQA prompt it answered normally. We tried too few prompts to know how often each happens.</li>
+<li><strong>Instruct model, plain text.</strong> It answers but does not end its answer: it keeps writing in the same vein (more capitals, the sum again, and on the ConvFinQA prompt an invented program).</li>
+<li><strong>Instruct model, chat template.</strong> Clean answers, each ending with <code>&lt;|im_end|&gt;</code>.</li>
+</ul>
+<p><strong>On the ConvFinQA prompt</strong>, every output contains the right number, 5363. But the task is to write a program in our DSL, so we hand each output to the executor from the DSL chapter:</p>
+<div id="5351c105" class="cell" data-execution_count="4">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>strip <span class="op">=</span> <span class="kw">lambda</span> s: s.replace(<span class="st">"&lt;|endoftext|&gt;"</span>, <span class="st">""</span>).replace(<span class="st">"&lt;|im_end|&gt;"</span>, <span class="st">""</span>).strip()</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> kind <span class="kw">in</span> names:</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> how <span class="kw">in</span> (<span class="st">"plain text"</span>, <span class="st">"chat template"</span>):</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> outputs[kind][<span class="st">"ConvFinQA, turn 1"</span>][how]</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>        value, error <span class="op">=</span> executor.try_execute(strip(out))</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        rows.append((kind, how, <span class="st">"5363"</span> <span class="kw">in</span> out, value, error))</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    rows,</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    columns<span class="op">=</span>[<span class="st">"model"</span>, <span class="st">"prompt format"</span>, <span class="st">"contains 5363"</span>, <span class="st">"executed value"</span>, <span class="st">"error"</span>]</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="4">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">model</th>
+<th data-quarto-table-cell-role="th">prompt format</th>
+<th data-quarto-table-cell-role="th">contains 5363</th>
+<th data-quarto-table-cell-role="th">executed value</th>
+<th data-quarto-table-cell-role="th">error</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">0</th>
+<td>base</td>
+<td>plain text</td>
+<td>True</td>
+<td>None</td>
+<td>bad_number</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">1</th>
+<td>base</td>
+<td>chat template</td>
+<td>True</td>
+<td>None</td>
+<td>bad_number</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">2</th>
+<td>instruct</td>
+<td>plain text</td>
+<td>True</td>
+<td>None</td>
+<td>bad_number</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">3</th>
+<td>instruct</td>
+<td>chat template</td>
+<td>True</td>
+<td>None</td>
+<td>bad_number</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>None of the four outputs is a program the executor can run. The knowledge is there, but not the format, and the format is what we will teach.</p>
+</section>
+<section id="what-post-training-did-to-the-chat-markers" class="level2" data-number="6.4">
+<h2 data-number="6.4" class="anchored" data-anchor-id="what-post-training-did-to-the-chat-markers"><span class="header-section-number">6.4</span> What post-training did to the chat markers</h2>
+<p>The base model’s odd behaviour with the chat template has a visible cause in its embeddings. We compare the embedding vectors of the two chat markers and of the end-of-text token in the two models, with a random sample of ordinary tokens as a reference. For each token we print the vector’s length (norm), the cosine similarity of its vector in the two models, and how much it changed from the base to the instruct model, relative to its length.</p>
+<div id="427db063" class="cell" data-execution_count="5">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>special <span class="op">=</span> {<span class="st">"&lt;|endoftext|&gt;"</span>: <span class="dv">151643</span>, <span class="st">"&lt;|im_start|&gt;"</span>: <span class="dv">151644</span>, <span class="st">"&lt;|im_end|&gt;"</span>: <span class="dv">151645</span>}</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>generator <span class="op">=</span> torch.Generator().manual_seed(<span class="dv">0</span>)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>ordinary <span class="op">=</span> torch.randint(<span class="dv">0</span>, <span class="dv">151000</span>, (<span class="dv">2000</span>,), generator<span class="op">=</span>generator)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>base, instruct <span class="op">=</span> embeddings[<span class="st">"base"</span>], embeddings[<span class="st">"instruct"</span>]</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>cosine <span class="op">=</span> torch.nn.functional.cosine_similarity</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> describe(label, ids):</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>    b, i <span class="op">=</span> base[ids], instruct[ids]</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        label,</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>        b.norm(dim<span class="op">=-</span><span class="dv">1</span>).median().item(),</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>        i.norm(dim<span class="op">=-</span><span class="dv">1</span>).median().item(),</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>        cosine(b, i, dim<span class="op">=-</span><span class="dv">1</span>).median().item(),</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>        ((b <span class="op">-</span> i).norm(dim<span class="op">=-</span><span class="dv">1</span>) <span class="op">/</span> b.norm(dim<span class="op">=-</span><span class="dv">1</span>)).median().item()</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>measured <span class="op">=</span> {</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ordinary"</span>: describe(<span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(ordinary)<span class="sc">:,}</span><span class="ss"> ordinary tokens (median)"</span>, ordinary),</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>{</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>        name: describe(name, torch.tensor([i]))</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> name, i <span class="kw">in</span> special.items()</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>table <span class="op">=</span> pd.DataFrame(</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a>    <span class="bu">list</span>(measured.values()),</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>    columns<span class="op">=</span>[</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>        <span class="st">"token"</span>, <span class="st">"length in base"</span>, <span class="st">"length in instruct"</span>,</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a>        <span class="st">"cosine, base vs instruct"</span>, <span class="st">"relative change"</span></span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a>).set_index(<span class="st">"token"</span>).<span class="bu">round</span>(<span class="dv">3</span>)</span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>cos_markers <span class="op">=</span> {</span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a>    <span class="st">"base"</span>: cosine(base[<span class="dv">151644</span>], base[<span class="dv">151645</span>], dim<span class="op">=</span><span class="dv">0</span>).item(),</span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>    <span class="st">"instruct"</span>: cosine(instruct[<span class="dv">151644</span>], instruct[<span class="dv">151645</span>], dim<span class="op">=</span><span class="dv">0</span>).item(),</span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"cosine similarity of the &lt;|im_start|&gt; and &lt;|im_end|&gt; embeddings:"</span>,</span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"base </span><span class="sc">{</span>cos_markers[<span class="st">'base'</span>]<span class="sc">:.4f}</span><span class="ss">,"</span>,</span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"instruct </span><span class="sc">{</span>cos_markers[<span class="st">'instruct'</span>]<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a>table</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>cosine similarity of the &lt;|im_start|&gt; and &lt;|im_end|&gt; embeddings: base 1.0000, instruct 0.5671</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="5">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">length in base</th>
+<th data-quarto-table-cell-role="th">length in instruct</th>
+<th data-quarto-table-cell-role="th">cosine, base vs instruct</th>
+<th data-quarto-table-cell-role="th">relative change</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">token</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">2,000 ordinary tokens (median)</th>
+<td>1.166</td>
+<td>1.117</td>
+<td>0.982</td>
+<td>0.190</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">&lt;|endoftext|&gt;</th>
+<td>1.223</td>
+<td>1.090</td>
+<td>0.983</td>
+<td>0.206</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">&lt;|im_start|&gt;</th>
+<td>0.357</td>
+<td>0.465</td>
+<td>0.695</td>
+<td>0.943</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">&lt;|im_end|&gt;</th>
+<td>0.357</td>
+<td>0.522</td>
+<td>0.625</td>
+<td>1.146</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<div id="6748e1a6" class="cell" data-execution_count="6">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>_, ordinary_len, _, ordinary_cos, ordinary_rel <span class="op">=</span> measured[<span class="st">"ordinary"</span>]</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>_, marker_len, _, _, start_rel <span class="op">=</span> measured[<span class="st">"&lt;|im_start|&gt;"</span>]</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>_, _, _, _, end_rel <span class="op">=</span> measured[<span class="st">"&lt;|im_end|&gt;"</span>]</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="co"># the paragraph below</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> cos_markers[<span class="st">"base"</span>] <span class="op">&gt;</span> <span class="fl">0.9999</span> <span class="kw">and</span> cos_markers[<span class="st">"instruct"</span>] <span class="op">&lt;</span> <span class="fl">0.9</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> marker_len <span class="op">&lt;</span> ordinary_len <span class="op">/</span> <span class="dv">2</span>  <span class="co"># short</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(<span class="fl">0.7</span> <span class="op">&lt;</span> r <span class="op">&lt;</span> <span class="fl">1.3</span> <span class="cf">for</span> r <span class="kw">in</span> (start_rel, end_rel))  <span class="co"># their own length</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> ordinary_rel <span class="op">&lt;</span> <span class="fl">0.3</span> <span class="kw">and</span> ordinary_cos <span class="op">&gt;</span> <span class="fl">0.95</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>In the base model, <code>&lt;|im_start|&gt;</code> and <code>&lt;|im_end|&gt;</code> have exactly the same embedding (cosine similarity 1.0000), and a short one (length 0.36, against about 1.2 for ordinary tokens), so the base model cannot tell the two markers apart. In the instruct model they differ (0.567), and during post-training they moved by about their own length (relative change 0.94 and 1.15), while ordinary tokens moved by about 0.19. The ordinary tokens are otherwise very similar between the two models (median cosine similarity 0.98), so the two models are closely related. Identical, short vectors are what we would expect from rows that the base model never trained, though the report does not say so, and this is our inference. It fits what we saw: given the template, the base model has no meaning for the markers, and writes ordinary tokens where they should be.</p>
+<p>The chat markers are not decoration. They are part of what post-training installs, and the format we use for fine-tuning has to match the one the instruct model learned. The next section looks at that format.</p>
+</section>
+<section id="chat-templates" class="level2" data-number="6.5">
+<h2 data-number="6.5" class="anchored" data-anchor-id="chat-templates"><span class="header-section-number">6.5</span> Chat templates</h2>
+<p>A chat is a list of messages, each with a role (<code>system</code>, <code>user</code> or <code>assistant</code>) and some text. A model reads one sequence of tokens, so something has to turn the list into that sequence. That is the job of the <strong>chat template</strong>: a small program, shipped with the tokenizer, that wraps every message in the markers the model was post-trained on. Here is our model’s template applied to a short conversation, with the markers <code>&lt;|im_start|&gt;</code> and <code>&lt;|im_end|&gt;</code> that the base model could not tell apart:</p>
+<div id="b0e3f997" class="cell" data-execution_count="7">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.book.viz <span class="im">import</span> show_tokens</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>example <span class="op">=</span> [</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"role"</span>: <span class="st">"system"</span>, <span class="st">"content"</span>: <span class="st">"Answer with a program."</span>},</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"Q1?"</span>},</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"role"</span>: <span class="st">"assistant"</span>, <span class="st">"content"</span>: <span class="st">"A1"</span>},</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"Q2?"</span>},</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>tok <span class="op">=</span> toks[<span class="st">"instruct"</span>]</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>rendered <span class="op">=</span> tok.apply_chat_template(</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    example, tokenize<span class="op">=</span><span class="va">False</span>, add_generation_prompt<span class="op">=</span><span class="va">True</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(rendered)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>&lt;|im_start|&gt;system
+Answer with a program.&lt;|im_end|&gt;
+&lt;|im_start|&gt;user
+Q1?&lt;|im_end|&gt;
+&lt;|im_start|&gt;assistant
+A1&lt;|im_end|&gt;
+&lt;|im_start|&gt;user
+Q2?&lt;|im_end|&gt;
+&lt;|im_start|&gt;assistant
+</code></pre>
+</div>
+</div>
+<p>Each message becomes <code>&lt;|im_start|&gt;</code>, the role, a newline, the text, <code>&lt;|im_end|&gt;</code> and a newline. The last line is the <strong>generation prompt</strong>, <code>&lt;|im_start|&gt;assistant</code> and a newline, added because we asked for it: it marks the place where the model’s answer begins, and the model then writes the answer and ends it with <code>&lt;|im_end|&gt;</code>, which is how generation knows to stop. Each marker is a single token:</p>
+<div id="a8759af3" class="cell" data-execution_count="8">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"marker ids:"</span>, tok.convert_tokens_to_ids([<span class="st">"&lt;|im_start|&gt;"</span>, <span class="st">"&lt;|im_end|&gt;"</span>]),</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>      <span class="st">"| the end-of-sequence token is"</span>, tok.eos_token)</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>show_tokens(tok, rendered)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>marker ids: [151644, 151645] | the end-of-sequence token is &lt;|im_end|&gt;</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="8">
+<div style="font-family:monospace; white-space:pre-wrap; line-height:1.9; margin:0.4em 0"><span style="background:hsla(210, 75%, 55%, 0.38)" title="id 151644">&lt;|im_start|&gt;</span><span style="background:hsla(30, 75%, 55%, 0.38)" title="id 8948">system</span><span style="background:hsla(130, 75%, 55%, 0.38)" title="id 198">↵
+</span><span style="background:hsla(330, 75%, 55%, 0.38)" title="id 16141">Answer</span><span style="background:hsla(50, 75%, 55%, 0.38)" title="id 448"> with</span><span style="background:hsla(270, 75%, 55%, 0.38)" title="id 264"> a</span><span style="background:hsla(170, 75%, 55%, 0.38)" title="id 2025"> program</span><span style="background:hsla(0, 75%, 55%, 0.38)" title="id 13">.</span><span style="background:hsla(210, 75%, 55%, 0.38)" title="id 151645">&lt;|im_end|&gt;</span><span style="background:hsla(30, 75%, 55%, 0.38)" title="id 198">↵
+</span><span style="background:hsla(130, 75%, 55%, 0.38)" title="id 151644">&lt;|im_start|&gt;</span><span style="background:hsla(330, 75%, 55%, 0.38)" title="id 872">user</span><span style="background:hsla(50, 75%, 55%, 0.38)" title="id 198">↵
+</span><span style="background:hsla(270, 75%, 55%, 0.38)" title="id 48">Q</span><span style="background:hsla(170, 75%, 55%, 0.38)" title="id 16">1</span><span style="background:hsla(0, 75%, 55%, 0.38)" title="id 30">?</span><span style="background:hsla(210, 75%, 55%, 0.38)" title="id 151645">&lt;|im_end|&gt;</span><span style="background:hsla(30, 75%, 55%, 0.38)" title="id 198">↵
+</span><span style="background:hsla(130, 75%, 55%, 0.38)" title="id 151644">&lt;|im_start|&gt;</span><span style="background:hsla(330, 75%, 55%, 0.38)" title="id 77091">assistant</span><span style="background:hsla(50, 75%, 55%, 0.38)" title="id 198">↵
+</span><span style="background:hsla(270, 75%, 55%, 0.38)" title="id 32">A</span><span style="background:hsla(170, 75%, 55%, 0.38)" title="id 16">1</span><span style="background:hsla(0, 75%, 55%, 0.38)" title="id 151645">&lt;|im_end|&gt;</span><span style="background:hsla(210, 75%, 55%, 0.38)" title="id 198">↵
+</span><span style="background:hsla(30, 75%, 55%, 0.38)" title="id 151644">&lt;|im_start|&gt;</span><span style="background:hsla(130, 75%, 55%, 0.38)" title="id 872">user</span><span style="background:hsla(330, 75%, 55%, 0.38)" title="id 198">↵
+</span><span style="background:hsla(50, 75%, 55%, 0.38)" title="id 48">Q</span><span style="background:hsla(270, 75%, 55%, 0.38)" title="id 17">2</span><span style="background:hsla(170, 75%, 55%, 0.38)" title="id 30">?</span><span style="background:hsla(0, 75%, 55%, 0.38)" title="id 151645">&lt;|im_end|&gt;</span><span style="background:hsla(210, 75%, 55%, 0.38)" title="id 198">↵
+</span><span style="background:hsla(30, 75%, 55%, 0.38)" title="id 151644">&lt;|im_start|&gt;</span><span style="background:hsla(130, 75%, 55%, 0.38)" title="id 77091">assistant</span><span style="background:hsla(330, 75%, 55%, 0.38)" title="id 198">↵
+</span></div><div style="font-size:0.8em; opacity:0.7">36 tokens, 171 characters</div>
+</div>
+</div>
+<p><strong>The original Qwen3 format.</strong> The Qwen3 report describes a template that also controls “thinking” (its Table 9). A user message can end with a <code>/think</code> or <code>/no_think</code> flag, and an assistant turn starts with a <code>&lt;think&gt;</code> block holding its reasoning, which is empty for a non-thinking answer. The base model’s tokenizer still ships that template, with a parameter <code>enable_thinking</code>. Our instruct model’s template has none of this, because the model never thinks out loud:</p>
+<div id="d38554b8" class="cell" data-execution_count="9">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>base_tok <span class="op">=</span> toks[<span class="st">"base"</span>]</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> flag <span class="kw">in</span> (<span class="va">True</span>, <span class="va">False</span>):</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    s <span class="op">=</span> base_tok.apply_chat_template(</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>        example, tokenize<span class="op">=</span><span class="va">False</span>, add_generation_prompt<span class="op">=</span><span class="va">True</span>, enable_thinking<span class="op">=</span>flag</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"base template, enable_thinking=</span><span class="sc">{</span>flag<span class="sc">}</span><span class="ss">: ...</span><span class="sc">{</span>s[<span class="op">-</span><span class="dv">45</span>:]<span class="sc">!r}</span><span class="ss">"</span>)</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>    <span class="st">"our model's template mentions thinking:"</span>,</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>    <span class="st">"think"</span> <span class="kw">in</span> toks[<span class="st">"instruct"</span>].chat_template</span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-12"><a href="#cb14-12" aria-hidden="true" tabindex="-1"></a><span class="co"># a /no_think flag in the user's text is just text: the template only copies it</span></span>
+<span id="cb14-13"><a href="#cb14-13" aria-hidden="true" tabindex="-1"></a>ask <span class="op">=</span> <span class="kw">lambda</span> text: base_tok.apply_chat_template(</span>
+<span id="cb14-14"><a href="#cb14-14" aria-hidden="true" tabindex="-1"></a>    [{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: text}],</span>
+<span id="cb14-15"><a href="#cb14-15" aria-hidden="true" tabindex="-1"></a>    tokenize<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb14-16"><a href="#cb14-16" aria-hidden="true" tabindex="-1"></a>    add_generation_prompt<span class="op">=</span><span class="va">True</span></span>
+<span id="cb14-17"><a href="#cb14-17" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-18"><a href="#cb14-18" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb14-19"><a href="#cb14-19" aria-hidden="true" tabindex="-1"></a>    <span class="st">"the template treats the flag as plain text:"</span>,</span>
+<span id="cb14-20"><a href="#cb14-20" aria-hidden="true" tabindex="-1"></a>    ask(<span class="st">"Q? /no_think"</span>) <span class="op">==</span> ask(<span class="st">"Q?"</span>).replace(<span class="st">"Q?"</span>, <span class="st">"Q? /no_think"</span>)</span>
+<span id="cb14-21"><a href="#cb14-21" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>base template, enable_thinking=True: ...'rt|&gt;user\nQ2?&lt;|im_end|&gt;\n&lt;|im_start|&gt;assistant\n'
+base template, enable_thinking=False: ...'d|&gt;\n&lt;|im_start|&gt;assistant\n&lt;think&gt;\n\n&lt;/think&gt;\n\n'
+our model's template mentions thinking: False
+the template treats the flag as plain text: True</code></pre>
+</div>
+</div>
+<p>With thinking switched off, the original template ends the generation prompt with an empty think block, as the report describes. The <code>/think</code> flags are not added by the template: they are text that the user types into the message.</p>
+<p><strong>Why this matters for us.</strong> The template is part of the model’s interface. A fine-tuning example must be rendered with exactly the template the model was post-trained on, so that the markers around our programs mean what the model expects. In our training examples the system message states the task, the user message holds the page and the question, and the assistant message is the gold program. The model learns to write the program and then <code>&lt;|im_end|&gt;</code>. The newline after <code>&lt;|im_end|&gt;</code> is only template text, and the model never has to produce it.</p>
+</section>
+<section id="teacher-forcing-and-exposure-bias" class="level2" data-number="6.6">
+<h2 data-number="6.6" class="anchored" data-anchor-id="teacher-forcing-and-exposure-bias"><span class="header-section-number">6.6</span> Teacher forcing and exposure bias</h2>
+<p>How does a multi-turn conversation become a training example? We use the standard approach to multi-turn supervised fine-tuning. The whole conversation, rendered by the template, goes into <strong>one sequence</strong>, and the model is trained to predict every assistant token given everything before it, including the <strong>gold</strong> (correct) earlier answers. Feeding the model the correct history, instead of its own earlier outputs, is called <strong><a href="./901_glossary.html#gloss-teacher-forcing">teacher forcing</a></strong>. It has a benefit and a cost.</p>
+<p><strong>The benefit is efficiency.</strong> One pass computes the loss on all turns at once. Because a position only sees earlier tokens, this equals training on each truncated prefix separately (the anatomy chapter explained why, and the project’s tests check it), but the page is read once instead of once per turn. The alternative is a <strong>per-turn layout</strong>, in which every turn is its own example with the history as its prompt. ConvFinQA’s own per-turn files are in that layout. We can count what it costs on the training split:</p>
+<div id="ecb11eb7" class="cell" data-execution_count="10">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>count <span class="op">=</span> <span class="kw">lambda</span> messages: <span class="bu">len</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    tok(</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>        tok.apply_chat_template(messages, tokenize<span class="op">=</span><span class="va">False</span>),</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>        add_special_tokens<span class="op">=</span><span class="va">False</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    )[<span class="st">"input_ids"</span>]</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>whole <span class="op">=</span> per_turn <span class="op">=</span> turns <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>conversations <span class="op">=</span> data.load_split(<span class="st">"train"</span>)</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> c <span class="kw">in</span> conversations:</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    messages <span class="op">=</span> conversation_messages(c)</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    n_turns <span class="op">=</span> (<span class="bu">len</span>(messages) <span class="op">-</span> <span class="dv">1</span>) <span class="op">//</span> <span class="dv">2</span></span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    whole <span class="op">+=</span> count(messages)</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    per_turn <span class="op">+=</span> <span class="bu">sum</span>(</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a>        count(messages[: <span class="dv">1</span> <span class="op">+</span> <span class="dv">2</span> <span class="op">*</span> k])</span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1</span>, n_turns <span class="op">+</span> <span class="dv">1</span>)</span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a>    turns <span class="op">+=</span> n_turns</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(conversations)<span class="sc">:,}</span><span class="ss"> conversations, </span><span class="sc">{</span>turns<span class="sc">:,}</span><span class="ss"> turns"</span>)</span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"tokens with one sequence per conversation: </span><span class="sc">{</span>whole<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb16-22"><a href="#cb16-22" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb16-23"><a href="#cb16-23" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"tokens with one sequence per turn:         </span><span class="sc">{</span>per_turn<span class="sc">:,}</span><span class="ss">"</span></span>
+<span id="cb16-24"><a href="#cb16-24" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"  (</span><span class="sc">{</span>per_turn <span class="op">/</span> whole<span class="sc">:.2f}</span><span class="ss"> times as many)"</span></span>
+<span id="cb16-25"><a href="#cb16-25" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>3,037 conversations, 11,104 turns
+tokens with one sequence per conversation: 3,525,034
+tokens with one sequence per turn:         12,333,479  (3.50 times as many)</code></pre>
+</div>
+</div>
+<p>The per-turn layout processes about three and a half times as many tokens, for the same learning signal, which is why it is the less common choice for multi-turn data.</p>
+<p><strong>The cost is exposure bias.</strong> During training the history is always right. At test time the model reads its own earlier answers, which may be wrong, and a wrong early answer changes what follows, so errors compound. The model has never been trained on its own mistakes. Our evaluation reports both settings: with the <strong><a href="./901_glossary.html#gloss-gold-history">gold history</a></strong>, which is the teacher-forced setting and an upper bound, and with the model’s <strong>predicted history</strong>, which is what a real user would experience.</p>
+<p>The methods that address <a href="./901_glossary.html#gloss-exposure-bias">exposure bias</a> train on the model’s own outputs. The on-policy distillation and the reinforcement learning stages of the Qwen3 pipeline are examples <span class="citation" data-cites="yang2025qwen3">(<a href="902_references.html#ref-yang2025qwen3" role="doc-biblioref"><span class="nocase">Yang et al.</span> 2025</a>)</span>. They are beyond the scope of this lab, and training on predicted histories is one of the extensions we suggest at the end of the book.</p>
+</section>
+<section id="where-our-fine-tuning-fits" class="level2" data-number="6.7">
+<h2 data-number="6.7" class="anchored" data-anchor-id="where-our-fine-tuning-fits"><span class="header-section-number">6.7</span> Where our fine-tuning fits</h2>
+<p><a href="#fig-pipeline" class="quarto-xref">Figure&nbsp;<span>6.1</span></a> shows the place of our work. We start from the instruct model, which already knows how to read a chat and answer it, and teach it one narrow task: reading a financial page and a question and writing a program in the DSL. The step is small compared with pretraining and post-training, and a later chapter describes it in detail.</p>
+
+
+<!-- -->
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-yang2025qwen3" class="csl-entry" role="listitem">
+<span class="nocase">Yang, An et al.</span> 2025. <span>“Qwen3 Technical Report.”</span> <em>arXiv Preprint arXiv:2505.09388</em>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const cellDetails = window.document.querySelectorAll(".cell details.code-fold");
+        for (let i=0; i<cellDetails.length; i++) {
+          const details = cellDetails[i];
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell div.sourceCode.cell-code");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./202_anatomy_of.html" class="pagination-link" aria-label="Anatomy of Qwen3-4B">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Anatomy of Qwen3-4B</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./204_probing_the.html" class="pagination-link" aria-label="Probing the untuned model on ConvFinQA">
+        <span class="nav-page-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb18" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu"># From base model to instruct model {#sec-base-instruct}</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>**You will learn:**</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>what separates a base model from an instruct model, and where our fine-tuning fits;</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>what a chat template is, and how a conversation becomes the string a model reads;</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>how a multi-turn conversation is turned into a training example, and what teacher forcing means.</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>Qwen publishes most of its models twice: a **base** model and an **instruct** model. We fine-tune the</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>instruct one. This chapter explains the difference, shows it on the real models, and prepares the way</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>for the chapters on formatting conversations and training, later in the book.</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a><span class="fu">## What "base" and "instruct" mean</span></span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>A **[base model](901_glossary.qmd#gloss-base-model)** is the result of **[pretraining](901_glossary.qmd#gloss-pretraining)**: it has been trained to predict the next token on a</span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a>very large body of text. For Qwen3 that is about 36 trillion tokens in 119 languages and dialects,</span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a>trained in three stages (a general stage, a reasoning-focused stage with more science, coding and</span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a>reasoning data, and a long-context stage). Some of the text is synthetic, in textbook, question and</span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a>answer, and instruction formats, generated by earlier Qwen models <span class="co">[</span><span class="ot">@yang2025qwen3</span><span class="co">]</span>. A base model</span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>continues whatever text it is given. It was not trained to answer.</span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>An **[instruct model](901_glossary.qmd#gloss-instruct-model)** is a base model that has been **[post-trained](901_glossary.qmd#gloss-post-training)** to follow instructions and to</span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>converse in a chat format. For the Qwen3 family, the report describes a multi-stage pipeline for the</span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>large models, with fine-tuning on reasoning data, reinforcement learning, and the merging of a</span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>"thinking" and a "non-thinking" mode. The small models, including the 4B, were instead trained by</span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>**strong-to-weak distillation**: they learn from the outputs and the logits of larger Qwen3 models</span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">@yang2025qwen3</span><span class="co">]</span>. We do not need these methods in this lab, but a short tour of them, in the next</span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>section, shows what post-training looks like.</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a>The report calls the pretrained model <span class="in">`Qwen3-4B-Base`</span> and the post-trained one <span class="in">`Qwen3-4B`</span>, which can</span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>either think before answering or not <span class="co">[</span><span class="ot">@yang2025qwen3</span><span class="co">]</span>. Our model, <span class="in">`Qwen3-4B-Instruct-2507`</span>, is a later</span>
+<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>release: its model card describes it as an updated *non-thinking* version of Qwen3-4B, which does not</span>
+<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>write a reasoning section before its answer. The technical report was published before this update, and</span>
+<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>we did not find a published description of how the update was trained, so we say nothing about that.</span>
+<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a>Two things the name does **not** tell us. The model was not trained for ConvFinQA or for our program</span>
+<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a>language, which is the gap this lab closes. And we do not know what financial text its training data</span>
+<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a>contained, because the data mixture is not published in detail.</span>
+<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a><span class="al">![The three stages in this lab's story. The first two were done by Qwen. We add the third, a small fine-tuning step, on top of the instruct model.](figures/pipeline.svg)</span>{#fig-pipeline fig-alt="Three boxes joined by arrows. The first, pretraining, is next-token prediction on very large text corpora and produces a base model. The second, post-training, teaches following instructions and answering in a chat format and produces the instruct model. The third, our fine-tuning, uses LoRA on ConvFinQA to write DSL programs and produces our model."}</span>
+<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a><span class="fu">## What post-training looks like</span></span>
+<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>@fig-posttraining redraws the report's overview of how the Qwen3 models were post-trained <span class="co">[</span><span class="ot">@yang2025qwen3</span><span class="co">]</span>.</span>
+<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>Everything starts from a base model and follows one of two routes, one for the large flagship models and</span>
+<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a>one for the lightweight ones, which include the 4B. The two routes are linked: the finished flagship</span>
+<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>models serve as the teachers in the lightweight route.</span>
+<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-49"><a href="#cb18-49" aria-hidden="true" tabindex="-1"></a><span class="al">![Post-training of the Qwen3 models, redrawn after Figure 1 of the Qwen3 report. The flagship models go through four stages; the lightweight models are trained by distillation, with the flagship models as teachers.](figures/posttraining.svg)</span>{#fig-posttraining fig-alt="Flow chart. Base models split into two routes. On the left, the flagship route has four stages in order: long chain-of-thought cold start, reasoning reinforcement learning, thinking mode fusion and general reinforcement learning, ending in the flagship models Qwen3-235B-A22B and Qwen3-32B. An arrow from the flagship models leads into the distillation stage of the right-hand route, labelled teachers. On the right, the lightweight route is a single stage, strong-to-weak distillation, ending in the lightweight models Qwen3-30B-A3B and the 14B, 8B, 4B, 1.7B and 0.6B models. Stages are coloured by kind: supervised fine-tuning, reinforcement learning, or distillation."}</span>
+<span id="cb18-50"><a href="#cb18-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-51"><a href="#cb18-51" aria-hidden="true" tabindex="-1"></a>**The flagship route, in four stages**</span>
+<span id="cb18-52"><a href="#cb18-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-53"><a href="#cb18-53" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Long chain-of-thought cold start** (supervised fine-tuning). The model is fine-tuned on a curated set</span>
+<span id="cb18-54"><a href="#cb18-54" aria-hidden="true" tabindex="-1"></a>   of math, code, logical-reasoning and science problems that have verified answers, with long</span>
+<span id="cb18-55"><a href="#cb18-55" aria-hidden="true" tabindex="-1"></a>   step-by-step solutions. The aim is to teach basic reasoning patterns with few examples and few</span>
+<span id="cb18-56"><a href="#cb18-56" aria-hidden="true" tabindex="-1"></a>   steps, so as not to limit the next stage.</span>
+<span id="cb18-57"><a href="#cb18-57" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Reasoning RL** (reinforcement learning). The model is trained further on a few thousand problems</span>
+<span id="cb18-58"><a href="#cb18-58" aria-hidden="true" tabindex="-1"></a>   whose answers can be checked automatically (the report uses 3,995 of them), rewarded when the</span>
+<span id="cb18-59"><a href="#cb18-59" aria-hidden="true" tabindex="-1"></a>   answer is right, to improve its reasoning.</span>
+<span id="cb18-60"><a href="#cb18-60" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**Thinking mode fusion** (supervised fine-tuning). The model is fine-tuned on a mix of examples with</span>
+<span id="cb18-61"><a href="#cb18-61" aria-hidden="true" tabindex="-1"></a>   and without a reasoning section, using a chat template that adds a <span class="in">`/think`</span> or <span class="in">`/no_think`</span> flag, so</span>
+<span id="cb18-62"><a href="#cb18-62" aria-hidden="true" tabindex="-1"></a>   that one model can do both. We meet this template in the next section.</span>
+<span id="cb18-63"><a href="#cb18-63" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>**General RL** (reinforcement learning). Reinforcement learning with rewards for over 20 kinds of</span>
+<span id="cb18-64"><a href="#cb18-64" aria-hidden="true" tabindex="-1"></a>   task, among them following instructions, following formats, matching human preferences, using tools</span>
+<span id="cb18-65"><a href="#cb18-65" aria-hidden="true" tabindex="-1"></a>   and answering from retrieved documents.</span>
+<span id="cb18-66"><a href="#cb18-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-67"><a href="#cb18-67" aria-hidden="true" tabindex="-1"></a>**The lightweight route: strong-to-weak distillation.** Instead of repeating the four stages for each</span>
+<span id="cb18-68"><a href="#cb18-68" aria-hidden="true" tabindex="-1"></a>small model, the small model learns from a larger one. First it is fine-tuned on the larger models'</span>
+<span id="cb18-69"><a href="#cb18-69" aria-hidden="true" tabindex="-1"></a>answers (*off-policy*, because the answers were not written by the student). Then the student writes its</span>
+<span id="cb18-70"><a href="#cb18-70" aria-hidden="true" tabindex="-1"></a>own answers, and is trained so that its output probabilities match those of a Qwen3-32B or Qwen3-235B-A22B</span>
+<span id="cb18-71"><a href="#cb18-71" aria-hidden="true" tabindex="-1"></a>teacher on the same text (*on-policy*). In the report's preliminary experiments this took about a tenth</span>
+<span id="cb18-72"><a href="#cb18-72" aria-hidden="true" tabindex="-1"></a>of the GPU hours of the four-stage method.</span>
+<span id="cb18-73"><a href="#cb18-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-74"><a href="#cb18-74" aria-hidden="true" tabindex="-1"></a>Two kinds of training appear in this list: **[supervised fine-tuning](901_glossary.qmd#gloss-sft)**, where the model is shown</span>
+<span id="cb18-75"><a href="#cb18-75" aria-hidden="true" tabindex="-1"></a>examples and trained to reproduce them, and **reinforcement learning**, where it is rewarded for good</span>
+<span id="cb18-76"><a href="#cb18-76" aria-hidden="true" tabindex="-1"></a>answers. In this lab we do only the first. Supervised fine-tuning on ConvFinQA turns is what we describe</span>
+<span id="cb18-77"><a href="#cb18-77" aria-hidden="true" tabindex="-1"></a>in detail in the chapters to come, and the other methods are beyond our scope.</span>
+<span id="cb18-78"><a href="#cb18-78" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-79"><a href="#cb18-79" aria-hidden="true" tabindex="-1"></a><span class="fu">## Base and instruct, side by side</span></span>
+<span id="cb18-80"><a href="#cb18-80" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-81"><a href="#cb18-81" aria-hidden="true" tabindex="-1"></a>The previous two chapters already used the instruct model: its tokenizer, the architecture we took</span>
+<span id="cb18-82"><a href="#cb18-82" aria-hidden="true" tabindex="-1"></a>apart, and the code-fenced answer to the AAPL question all came from <span class="in">`Qwen3-4B-Instruct-2507`</span>. Now we</span>
+<span id="cb18-83"><a href="#cb18-83" aria-hidden="true" tabindex="-1"></a>load the base model next to it and give both the same prompts. Two things are worth checking first.</span>
+<span id="cb18-84"><a href="#cb18-84" aria-hidden="true" tabindex="-1"></a>The two tokenizers use the same vocabulary, so the same text becomes the same token ids, and they</span>
+<span id="cb18-85"><a href="#cb18-85" aria-hidden="true" tabindex="-1"></a>differ in the token that ends a text:</span>
+<span id="cb18-86"><a href="#cb18-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-89"><a href="#cb18-89" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-90"><a href="#cb18-90" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> gc</span>
+<span id="cb18-91"><a href="#cb18-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-92"><a href="#cb18-92" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb18-93"><a href="#cb18-93" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> torch</span>
+<span id="cb18-94"><a href="#cb18-94" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> AutoModelForCausalLM, AutoTokenizer</span>
+<span id="cb18-95"><a href="#cb18-95" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-96"><a href="#cb18-96" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa <span class="im">import</span> data</span>
+<span id="cb18-97"><a href="#cb18-97" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.dsl <span class="im">import</span> executor</span>
+<span id="cb18-98"><a href="#cb18-98" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.formatting <span class="im">import</span> SYSTEM_PROMPT, conversation_messages</span>
+<span id="cb18-99"><a href="#cb18-99" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-100"><a href="#cb18-100" aria-hidden="true" tabindex="-1"></a>names <span class="op">=</span> {<span class="st">"base"</span>: <span class="st">"Qwen/Qwen3-4B-Base"</span>, <span class="st">"instruct"</span>: <span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span>}</span>
+<span id="cb18-101"><a href="#cb18-101" aria-hidden="true" tabindex="-1"></a>toks <span class="op">=</span> {kind: AutoTokenizer.from_pretrained(name) <span class="cf">for</span> kind, name <span class="kw">in</span> names.items()}</span>
+<span id="cb18-102"><a href="#cb18-102" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-103"><a href="#cb18-103" aria-hidden="true" tabindex="-1"></a>sample <span class="op">=</span> <span class="st">"Hello 206588 world"</span></span>
+<span id="cb18-104"><a href="#cb18-104" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> toks[<span class="st">"base"</span>](sample)[<span class="st">"input_ids"</span>] <span class="op">==</span> toks[<span class="st">"instruct"</span>](sample)[<span class="st">"input_ids"</span>]</span>
+<span id="cb18-105"><a href="#cb18-105" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"vocabulary sizes:      "</span>, {kind: <span class="bu">len</span>(t) <span class="cf">for</span> kind, t <span class="kw">in</span> toks.items()})</span>
+<span id="cb18-106"><a href="#cb18-106" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"end-of-sequence token: "</span>, {kind: t.eos_token <span class="cf">for</span> kind, t <span class="kw">in</span> toks.items()})</span>
+<span id="cb18-107"><a href="#cb18-107" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-108"><a href="#cb18-108" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-109"><a href="#cb18-109" aria-hidden="true" tabindex="-1"></a>We use four prompts. Three have nothing to do with finance: a direct question, the start of a sentence,</span>
+<span id="cb18-110"><a href="#cb18-110" aria-hidden="true" tabindex="-1"></a>and a question-and-answer pattern. The fourth is the first turn of the ConvFinQA conversation from @sec-tokens</span>
+<span id="cb18-111"><a href="#cb18-111" aria-hidden="true" tabindex="-1"></a>and @sec-anatomy. Each prompt is given to each model in two forms: as **plain text**, and wrapped in the</span>
+<span id="cb18-112"><a href="#cb18-112" aria-hidden="true" tabindex="-1"></a>model's **chat template**, which we look at in the next section. Decoding is greedy, and at most 60 new</span>
+<span id="cb18-113"><a href="#cb18-113" aria-hidden="true" tabindex="-1"></a>tokens are generated.</span>
+<span id="cb18-114"><a href="#cb18-114" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-117"><a href="#cb18-117" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-118"><a href="#cb18-118" aria-hidden="true" tabindex="-1"></a>conv <span class="op">=</span> {c[<span class="st">"id"</span>]: c <span class="cf">for</span> c <span class="kw">in</span> data.load_split(<span class="st">"train"</span>)}[</span>
+<span id="cb18-119"><a href="#cb18-119" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Single_AAPL/2002/page_23.pdf-1"</span></span>
+<span id="cb18-120"><a href="#cb18-120" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb18-121"><a href="#cb18-121" aria-hidden="true" tabindex="-1"></a>page <span class="op">=</span> data.context_text(conv)</span>
+<span id="cb18-122"><a href="#cb18-122" aria-hidden="true" tabindex="-1"></a>question <span class="op">=</span> conv[<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>][<span class="dv">0</span>]</span>
+<span id="cb18-123"><a href="#cb18-123" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-124"><a href="#cb18-124" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> user(text):</span>
+<span id="cb18-125"><a href="#cb18-125" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> [{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: text}]</span>
+<span id="cb18-126"><a href="#cb18-126" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-127"><a href="#cb18-127" aria-hidden="true" tabindex="-1"></a>prompts <span class="op">=</span> {</span>
+<span id="cb18-128"><a href="#cb18-128" aria-hidden="true" tabindex="-1"></a>    <span class="st">"a question"</span>: (</span>
+<span id="cb18-129"><a href="#cb18-129" aria-hidden="true" tabindex="-1"></a>        <span class="st">"What is the capital of France?"</span>,</span>
+<span id="cb18-130"><a href="#cb18-130" aria-hidden="true" tabindex="-1"></a>        user(<span class="st">"What is the capital of France?"</span>)</span>
+<span id="cb18-131"><a href="#cb18-131" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb18-132"><a href="#cb18-132" aria-hidden="true" tabindex="-1"></a>    <span class="st">"a sentence to complete"</span>: (</span>
+<span id="cb18-133"><a href="#cb18-133" aria-hidden="true" tabindex="-1"></a>        <span class="st">"The capital of France is"</span>,</span>
+<span id="cb18-134"><a href="#cb18-134" aria-hidden="true" tabindex="-1"></a>        user(<span class="st">"The capital of France is"</span>)</span>
+<span id="cb18-135"><a href="#cb18-135" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb18-136"><a href="#cb18-136" aria-hidden="true" tabindex="-1"></a>    <span class="st">"a question-answer pattern"</span>: (</span>
+<span id="cb18-137"><a href="#cb18-137" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Q: What is 17 + 25?</span><span class="ch">\n</span><span class="st">A:"</span>,</span>
+<span id="cb18-138"><a href="#cb18-138" aria-hidden="true" tabindex="-1"></a>        user(<span class="st">"Q: What is 17 + 25?</span><span class="ch">\n</span><span class="st">A:"</span>)</span>
+<span id="cb18-139"><a href="#cb18-139" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb18-140"><a href="#cb18-140" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ConvFinQA, turn 1"</span>: (</span>
+<span id="cb18-141"><a href="#cb18-141" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"</span><span class="sc">{</span>SYSTEM_PROMPT<span class="sc">}</span><span class="ch">\n\n</span><span class="sc">{</span>page<span class="sc">}</span><span class="ch">\n\n</span><span class="ss">Question: </span><span class="sc">{</span>question<span class="sc">}</span><span class="ch">\n</span><span class="ss">Answer:"</span>,</span>
+<span id="cb18-142"><a href="#cb18-142" aria-hidden="true" tabindex="-1"></a>        conversation_messages(conv)[:<span class="dv">2</span>],</span>
+<span id="cb18-143"><a href="#cb18-143" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb18-144"><a href="#cb18-144" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb18-145"><a href="#cb18-145" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-146"><a href="#cb18-146" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> run(kind):</span>
+<span id="cb18-147"><a href="#cb18-147" aria-hidden="true" tabindex="-1"></a>    <span class="co">"""Generate for every prompt with one model, and keep its embedding</span></span>
+<span id="cb18-148"><a href="#cb18-148" aria-hidden="true" tabindex="-1"></a><span class="co">    matrix. Frees the GPU afterwards.</span></span>
+<span id="cb18-149"><a href="#cb18-149" aria-hidden="true" tabindex="-1"></a><span class="co">    """</span></span>
+<span id="cb18-150"><a href="#cb18-150" aria-hidden="true" tabindex="-1"></a>    tok <span class="op">=</span> toks[kind]</span>
+<span id="cb18-151"><a href="#cb18-151" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> AutoModelForCausalLM.from_pretrained(</span>
+<span id="cb18-152"><a href="#cb18-152" aria-hidden="true" tabindex="-1"></a>        names[kind], dtype<span class="op">=</span>torch.bfloat16</span>
+<span id="cb18-153"><a href="#cb18-153" aria-hidden="true" tabindex="-1"></a>    ).to(<span class="st">"cuda"</span>).<span class="bu">eval</span>()</span>
+<span id="cb18-154"><a href="#cb18-154" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-155"><a href="#cb18-155" aria-hidden="true" tabindex="-1"></a>    <span class="kw">def</span> generate(text):</span>
+<span id="cb18-156"><a href="#cb18-156" aria-hidden="true" tabindex="-1"></a>        ids <span class="op">=</span> tok(</span>
+<span id="cb18-157"><a href="#cb18-157" aria-hidden="true" tabindex="-1"></a>            text,</span>
+<span id="cb18-158"><a href="#cb18-158" aria-hidden="true" tabindex="-1"></a>            return_tensors<span class="op">=</span><span class="st">"pt"</span>,</span>
+<span id="cb18-159"><a href="#cb18-159" aria-hidden="true" tabindex="-1"></a>            add_special_tokens<span class="op">=</span><span class="va">False</span></span>
+<span id="cb18-160"><a href="#cb18-160" aria-hidden="true" tabindex="-1"></a>        )[<span class="st">"input_ids"</span>].to(<span class="st">"cuda"</span>)</span>
+<span id="cb18-161"><a href="#cb18-161" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-162"><a href="#cb18-162" aria-hidden="true" tabindex="-1"></a>        <span class="cf">with</span> torch.no_grad():</span>
+<span id="cb18-163"><a href="#cb18-163" aria-hidden="true" tabindex="-1"></a>            out <span class="op">=</span> model.generate(</span>
+<span id="cb18-164"><a href="#cb18-164" aria-hidden="true" tabindex="-1"></a>                ids,</span>
+<span id="cb18-165"><a href="#cb18-165" aria-hidden="true" tabindex="-1"></a>                max_new_tokens<span class="op">=</span><span class="dv">60</span>,</span>
+<span id="cb18-166"><a href="#cb18-166" aria-hidden="true" tabindex="-1"></a>                do_sample<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb18-167"><a href="#cb18-167" aria-hidden="true" tabindex="-1"></a>                temperature<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb18-168"><a href="#cb18-168" aria-hidden="true" tabindex="-1"></a>                top_p<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb18-169"><a href="#cb18-169" aria-hidden="true" tabindex="-1"></a>                top_k<span class="op">=</span><span class="va">None</span>,</span>
+<span id="cb18-170"><a href="#cb18-170" aria-hidden="true" tabindex="-1"></a>                pad_token_id<span class="op">=</span>tok.pad_token_id,</span>
+<span id="cb18-171"><a href="#cb18-171" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb18-172"><a href="#cb18-172" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> tok.decode(out[<span class="dv">0</span>, ids.shape[<span class="dv">1</span>]:])</span>
+<span id="cb18-173"><a href="#cb18-173" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-174"><a href="#cb18-174" aria-hidden="true" tabindex="-1"></a>    results <span class="op">=</span> {}</span>
+<span id="cb18-175"><a href="#cb18-175" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> label, (plain, messages) <span class="kw">in</span> prompts.items():</span>
+<span id="cb18-176"><a href="#cb18-176" aria-hidden="true" tabindex="-1"></a>        chat <span class="op">=</span> tok.apply_chat_template(</span>
+<span id="cb18-177"><a href="#cb18-177" aria-hidden="true" tabindex="-1"></a>            messages, tokenize<span class="op">=</span><span class="va">False</span>, add_generation_prompt<span class="op">=</span><span class="va">True</span></span>
+<span id="cb18-178"><a href="#cb18-178" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb18-179"><a href="#cb18-179" aria-hidden="true" tabindex="-1"></a>        results[label] <span class="op">=</span> {</span>
+<span id="cb18-180"><a href="#cb18-180" aria-hidden="true" tabindex="-1"></a>            <span class="st">"plain text"</span>: generate(plain),</span>
+<span id="cb18-181"><a href="#cb18-181" aria-hidden="true" tabindex="-1"></a>            <span class="st">"chat template"</span>: generate(chat)</span>
+<span id="cb18-182"><a href="#cb18-182" aria-hidden="true" tabindex="-1"></a>        }</span>
+<span id="cb18-183"><a href="#cb18-183" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-184"><a href="#cb18-184" aria-hidden="true" tabindex="-1"></a>    embeddings <span class="op">=</span> model.model.embed_tokens.weight.detach().<span class="bu">float</span>().cpu()</span>
+<span id="cb18-185"><a href="#cb18-185" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-186"><a href="#cb18-186" aria-hidden="true" tabindex="-1"></a>    <span class="kw">del</span> model</span>
+<span id="cb18-187"><a href="#cb18-187" aria-hidden="true" tabindex="-1"></a>    gc.collect()</span>
+<span id="cb18-188"><a href="#cb18-188" aria-hidden="true" tabindex="-1"></a>    torch.cuda.empty_cache()</span>
+<span id="cb18-189"><a href="#cb18-189" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-190"><a href="#cb18-190" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> results, embeddings</span>
+<span id="cb18-191"><a href="#cb18-191" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-192"><a href="#cb18-192" aria-hidden="true" tabindex="-1"></a>outputs, embeddings <span class="op">=</span> {}, {}</span>
+<span id="cb18-193"><a href="#cb18-193" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> kind <span class="kw">in</span> names:</span>
+<span id="cb18-194"><a href="#cb18-194" aria-hidden="true" tabindex="-1"></a>    outputs[kind], embeddings[kind] <span class="op">=</span> run(kind)</span>
+<span id="cb18-195"><a href="#cb18-195" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-196"><a href="#cb18-196" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-197"><a href="#cb18-197" aria-hidden="true" tabindex="-1"></a>The outputs, cut to their first 90 characters (<span class="in">`&lt;|endoftext|&gt;`</span> and <span class="in">`&lt;|im_end|&gt;`</span> are the tokens that</span>
+<span id="cb18-198"><a href="#cb18-198" aria-hidden="true" tabindex="-1"></a>end a text; a text that ends with neither was cut off at 60 tokens):</span>
+<span id="cb18-199"><a href="#cb18-199" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-202"><a href="#cb18-202" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-203"><a href="#cb18-203" aria-hidden="true" tabindex="-1"></a>shorten <span class="op">=</span> <span class="kw">lambda</span> s, n<span class="op">=</span><span class="dv">90</span>: <span class="bu">repr</span>(s)[:n] <span class="op">+</span> (<span class="st">"…"</span> <span class="cf">if</span> <span class="bu">len</span>(<span class="bu">repr</span>(s)) <span class="op">&gt;</span> n <span class="cf">else</span> <span class="st">""</span>)</span>
+<span id="cb18-204"><a href="#cb18-204" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> label <span class="kw">in</span> prompts:</span>
+<span id="cb18-205"><a href="#cb18-205" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"== </span><span class="sc">{</span>label<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb18-206"><a href="#cb18-206" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> kind <span class="kw">in</span> names:</span>
+<span id="cb18-207"><a href="#cb18-207" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> how <span class="kw">in</span> (<span class="st">"plain text"</span>, <span class="st">"chat template"</span>):</span>
+<span id="cb18-208"><a href="#cb18-208" aria-hidden="true" tabindex="-1"></a>            <span class="bu">print</span>(<span class="ss">f"  </span><span class="sc">{</span>kind<span class="sc">:8s}</span><span class="ss"> </span><span class="sc">{</span>how<span class="sc">:13s}</span><span class="ss"> </span><span class="sc">{</span>shorten(outputs[kind][label][how])<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb18-209"><a href="#cb18-209" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-210"><a href="#cb18-210" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-211"><a href="#cb18-211" aria-hidden="true" tabindex="-1"></a>What we see, on these four prompts:</span>
+<span id="cb18-212"><a href="#cb18-212" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-213"><a href="#cb18-213" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Base model, plain text.** It answered the direct question and the plain-text ConvFinQA question,</span>
+<span id="cb18-214"><a href="#cb18-214" aria-hidden="true" tabindex="-1"></a>  ending each with its end-of-text token. On the other two prompts it kept going: it finished the</span>
+<span id="cb18-215"><a href="#cb18-215" aria-hidden="true" tabindex="-1"></a>  sentence and then wrote a true/false quiz question, and it answered the sum and then invented more</span>
+<span id="cb18-216"><a href="#cb18-216" aria-hidden="true" tabindex="-1"></a>  questions in the same pattern. So the base model is a text continuer that also answers some prompts.</span>
+<span id="cb18-217"><a href="#cb18-217" aria-hidden="true" tabindex="-1"></a>  This fits the report's remark that its pretraining data includes synthetic question-answering and</span>
+<span id="cb18-218"><a href="#cb18-218" aria-hidden="true" tabindex="-1"></a>  instruction text <span class="co">[</span><span class="ot">@yang2025qwen3</span><span class="co">]</span>, but we cannot tell from four prompts how much that explains.</span>
+<span id="cb18-219"><a href="#cb18-219" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Base model, chat template.** On the three short prompts it repeated the prompt and produced ordinary</span>
+<span id="cb18-220"><a href="#cb18-220" aria-hidden="true" tabindex="-1"></a>  tokens (<span class="in">`ож`</span>, an emoji) where the chat markers belong, and then looped. On the long ConvFinQA prompt it</span>
+<span id="cb18-221"><a href="#cb18-221" aria-hidden="true" tabindex="-1"></a>  answered normally. We tried too few prompts to know how often each happens.</span>
+<span id="cb18-222"><a href="#cb18-222" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Instruct model, plain text.** It answers but does not end its answer: it keeps writing in the same</span>
+<span id="cb18-223"><a href="#cb18-223" aria-hidden="true" tabindex="-1"></a>  vein (more capitals, the sum again, and on the ConvFinQA prompt an invented program).</span>
+<span id="cb18-224"><a href="#cb18-224" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Instruct model, chat template.** Clean answers, each ending with <span class="in">`&lt;|im_end|&gt;`</span>.</span>
+<span id="cb18-225"><a href="#cb18-225" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-226"><a href="#cb18-226" aria-hidden="true" tabindex="-1"></a>**On the ConvFinQA prompt**, every output contains the right number, 5363. But the task is to write a</span>
+<span id="cb18-227"><a href="#cb18-227" aria-hidden="true" tabindex="-1"></a>program in our DSL, so we hand each output to the executor from the DSL chapter:</span>
+<span id="cb18-228"><a href="#cb18-228" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-231"><a href="#cb18-231" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-232"><a href="#cb18-232" aria-hidden="true" tabindex="-1"></a>strip <span class="op">=</span> <span class="kw">lambda</span> s: s.replace(<span class="st">"&lt;|endoftext|&gt;"</span>, <span class="st">""</span>).replace(<span class="st">"&lt;|im_end|&gt;"</span>, <span class="st">""</span>).strip()</span>
+<span id="cb18-233"><a href="#cb18-233" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
+<span id="cb18-234"><a href="#cb18-234" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> kind <span class="kw">in</span> names:</span>
+<span id="cb18-235"><a href="#cb18-235" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> how <span class="kw">in</span> (<span class="st">"plain text"</span>, <span class="st">"chat template"</span>):</span>
+<span id="cb18-236"><a href="#cb18-236" aria-hidden="true" tabindex="-1"></a>        out <span class="op">=</span> outputs[kind][<span class="st">"ConvFinQA, turn 1"</span>][how]</span>
+<span id="cb18-237"><a href="#cb18-237" aria-hidden="true" tabindex="-1"></a>        value, error <span class="op">=</span> executor.try_execute(strip(out))</span>
+<span id="cb18-238"><a href="#cb18-238" aria-hidden="true" tabindex="-1"></a>        rows.append((kind, how, <span class="st">"5363"</span> <span class="kw">in</span> out, value, error))</span>
+<span id="cb18-239"><a href="#cb18-239" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb18-240"><a href="#cb18-240" aria-hidden="true" tabindex="-1"></a>    rows,</span>
+<span id="cb18-241"><a href="#cb18-241" aria-hidden="true" tabindex="-1"></a>    columns<span class="op">=</span>[<span class="st">"model"</span>, <span class="st">"prompt format"</span>, <span class="st">"contains 5363"</span>, <span class="st">"executed value"</span>, <span class="st">"error"</span>]</span>
+<span id="cb18-242"><a href="#cb18-242" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-243"><a href="#cb18-243" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-244"><a href="#cb18-244" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-245"><a href="#cb18-245" aria-hidden="true" tabindex="-1"></a>None of the four outputs is a program the executor can run. The knowledge is there, but not the format,</span>
+<span id="cb18-246"><a href="#cb18-246" aria-hidden="true" tabindex="-1"></a>and the format is what we will teach.</span>
+<span id="cb18-247"><a href="#cb18-247" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-248"><a href="#cb18-248" aria-hidden="true" tabindex="-1"></a><span class="fu">## What post-training did to the chat markers</span></span>
+<span id="cb18-249"><a href="#cb18-249" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-250"><a href="#cb18-250" aria-hidden="true" tabindex="-1"></a>The base model's odd behaviour with the chat template has a visible cause in its embeddings. We compare</span>
+<span id="cb18-251"><a href="#cb18-251" aria-hidden="true" tabindex="-1"></a>the embedding vectors of the two chat markers and of the end-of-text token in the two models, with</span>
+<span id="cb18-252"><a href="#cb18-252" aria-hidden="true" tabindex="-1"></a>a random sample of ordinary tokens as a reference. For each token we print the vector's length</span>
+<span id="cb18-253"><a href="#cb18-253" aria-hidden="true" tabindex="-1"></a>(norm), the cosine similarity of its vector in the two models, and how much it changed from the base to</span>
+<span id="cb18-254"><a href="#cb18-254" aria-hidden="true" tabindex="-1"></a>the instruct model, relative to its length.</span>
+<span id="cb18-255"><a href="#cb18-255" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-258"><a href="#cb18-258" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-259"><a href="#cb18-259" aria-hidden="true" tabindex="-1"></a>special <span class="op">=</span> {<span class="st">"&lt;|endoftext|&gt;"</span>: <span class="dv">151643</span>, <span class="st">"&lt;|im_start|&gt;"</span>: <span class="dv">151644</span>, <span class="st">"&lt;|im_end|&gt;"</span>: <span class="dv">151645</span>}</span>
+<span id="cb18-260"><a href="#cb18-260" aria-hidden="true" tabindex="-1"></a>generator <span class="op">=</span> torch.Generator().manual_seed(<span class="dv">0</span>)</span>
+<span id="cb18-261"><a href="#cb18-261" aria-hidden="true" tabindex="-1"></a>ordinary <span class="op">=</span> torch.randint(<span class="dv">0</span>, <span class="dv">151000</span>, (<span class="dv">2000</span>,), generator<span class="op">=</span>generator)</span>
+<span id="cb18-262"><a href="#cb18-262" aria-hidden="true" tabindex="-1"></a>base, instruct <span class="op">=</span> embeddings[<span class="st">"base"</span>], embeddings[<span class="st">"instruct"</span>]</span>
+<span id="cb18-263"><a href="#cb18-263" aria-hidden="true" tabindex="-1"></a>cosine <span class="op">=</span> torch.nn.functional.cosine_similarity</span>
+<span id="cb18-264"><a href="#cb18-264" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-265"><a href="#cb18-265" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> describe(label, ids):</span>
+<span id="cb18-266"><a href="#cb18-266" aria-hidden="true" tabindex="-1"></a>    b, i <span class="op">=</span> base[ids], instruct[ids]</span>
+<span id="cb18-267"><a href="#cb18-267" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> (</span>
+<span id="cb18-268"><a href="#cb18-268" aria-hidden="true" tabindex="-1"></a>        label,</span>
+<span id="cb18-269"><a href="#cb18-269" aria-hidden="true" tabindex="-1"></a>        b.norm(dim<span class="op">=-</span><span class="dv">1</span>).median().item(),</span>
+<span id="cb18-270"><a href="#cb18-270" aria-hidden="true" tabindex="-1"></a>        i.norm(dim<span class="op">=-</span><span class="dv">1</span>).median().item(),</span>
+<span id="cb18-271"><a href="#cb18-271" aria-hidden="true" tabindex="-1"></a>        cosine(b, i, dim<span class="op">=-</span><span class="dv">1</span>).median().item(),</span>
+<span id="cb18-272"><a href="#cb18-272" aria-hidden="true" tabindex="-1"></a>        ((b <span class="op">-</span> i).norm(dim<span class="op">=-</span><span class="dv">1</span>) <span class="op">/</span> b.norm(dim<span class="op">=-</span><span class="dv">1</span>)).median().item()</span>
+<span id="cb18-273"><a href="#cb18-273" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb18-274"><a href="#cb18-274" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-275"><a href="#cb18-275" aria-hidden="true" tabindex="-1"></a>measured <span class="op">=</span> {</span>
+<span id="cb18-276"><a href="#cb18-276" aria-hidden="true" tabindex="-1"></a>    <span class="st">"ordinary"</span>: describe(<span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(ordinary)<span class="sc">:,}</span><span class="ss"> ordinary tokens (median)"</span>, ordinary),</span>
+<span id="cb18-277"><a href="#cb18-277" aria-hidden="true" tabindex="-1"></a>    <span class="op">**</span>{</span>
+<span id="cb18-278"><a href="#cb18-278" aria-hidden="true" tabindex="-1"></a>        name: describe(name, torch.tensor([i]))</span>
+<span id="cb18-279"><a href="#cb18-279" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> name, i <span class="kw">in</span> special.items()</span>
+<span id="cb18-280"><a href="#cb18-280" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb18-281"><a href="#cb18-281" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb18-282"><a href="#cb18-282" aria-hidden="true" tabindex="-1"></a>table <span class="op">=</span> pd.DataFrame(</span>
+<span id="cb18-283"><a href="#cb18-283" aria-hidden="true" tabindex="-1"></a>    <span class="bu">list</span>(measured.values()),</span>
+<span id="cb18-284"><a href="#cb18-284" aria-hidden="true" tabindex="-1"></a>    columns<span class="op">=</span>[</span>
+<span id="cb18-285"><a href="#cb18-285" aria-hidden="true" tabindex="-1"></a>        <span class="st">"token"</span>, <span class="st">"length in base"</span>, <span class="st">"length in instruct"</span>,</span>
+<span id="cb18-286"><a href="#cb18-286" aria-hidden="true" tabindex="-1"></a>        <span class="st">"cosine, base vs instruct"</span>, <span class="st">"relative change"</span></span>
+<span id="cb18-287"><a href="#cb18-287" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb18-288"><a href="#cb18-288" aria-hidden="true" tabindex="-1"></a>).set_index(<span class="st">"token"</span>).<span class="bu">round</span>(<span class="dv">3</span>)</span>
+<span id="cb18-289"><a href="#cb18-289" aria-hidden="true" tabindex="-1"></a>cos_markers <span class="op">=</span> {</span>
+<span id="cb18-290"><a href="#cb18-290" aria-hidden="true" tabindex="-1"></a>    <span class="st">"base"</span>: cosine(base[<span class="dv">151644</span>], base[<span class="dv">151645</span>], dim<span class="op">=</span><span class="dv">0</span>).item(),</span>
+<span id="cb18-291"><a href="#cb18-291" aria-hidden="true" tabindex="-1"></a>    <span class="st">"instruct"</span>: cosine(instruct[<span class="dv">151644</span>], instruct[<span class="dv">151645</span>], dim<span class="op">=</span><span class="dv">0</span>).item(),</span>
+<span id="cb18-292"><a href="#cb18-292" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb18-293"><a href="#cb18-293" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"cosine similarity of the &lt;|im_start|&gt; and &lt;|im_end|&gt; embeddings:"</span>,</span>
+<span id="cb18-294"><a href="#cb18-294" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"base </span><span class="sc">{</span>cos_markers[<span class="st">'base'</span>]<span class="sc">:.4f}</span><span class="ss">,"</span>,</span>
+<span id="cb18-295"><a href="#cb18-295" aria-hidden="true" tabindex="-1"></a>      <span class="ss">f"instruct </span><span class="sc">{</span>cos_markers[<span class="st">'instruct'</span>]<span class="sc">:.4f}</span><span class="ss">"</span>)</span>
+<span id="cb18-296"><a href="#cb18-296" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-297"><a href="#cb18-297" aria-hidden="true" tabindex="-1"></a>table</span>
+<span id="cb18-298"><a href="#cb18-298" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-299"><a href="#cb18-299" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-302"><a href="#cb18-302" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-303"><a href="#cb18-303" aria-hidden="true" tabindex="-1"></a>_, ordinary_len, _, ordinary_cos, ordinary_rel <span class="op">=</span> measured[<span class="st">"ordinary"</span>]</span>
+<span id="cb18-304"><a href="#cb18-304" aria-hidden="true" tabindex="-1"></a>_, marker_len, _, _, start_rel <span class="op">=</span> measured[<span class="st">"&lt;|im_start|&gt;"</span>]</span>
+<span id="cb18-305"><a href="#cb18-305" aria-hidden="true" tabindex="-1"></a>_, _, _, _, end_rel <span class="op">=</span> measured[<span class="st">"&lt;|im_end|&gt;"</span>]</span>
+<span id="cb18-306"><a href="#cb18-306" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-307"><a href="#cb18-307" aria-hidden="true" tabindex="-1"></a><span class="co"># the paragraph below</span></span>
+<span id="cb18-308"><a href="#cb18-308" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> cos_markers[<span class="st">"base"</span>] <span class="op">&gt;</span> <span class="fl">0.9999</span> <span class="kw">and</span> cos_markers[<span class="st">"instruct"</span>] <span class="op">&lt;</span> <span class="fl">0.9</span></span>
+<span id="cb18-309"><a href="#cb18-309" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> marker_len <span class="op">&lt;</span> ordinary_len <span class="op">/</span> <span class="dv">2</span>  <span class="co"># short</span></span>
+<span id="cb18-310"><a href="#cb18-310" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(<span class="fl">0.7</span> <span class="op">&lt;</span> r <span class="op">&lt;</span> <span class="fl">1.3</span> <span class="cf">for</span> r <span class="kw">in</span> (start_rel, end_rel))  <span class="co"># their own length</span></span>
+<span id="cb18-311"><a href="#cb18-311" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> ordinary_rel <span class="op">&lt;</span> <span class="fl">0.3</span> <span class="kw">and</span> ordinary_cos <span class="op">&gt;</span> <span class="fl">0.95</span></span>
+<span id="cb18-312"><a href="#cb18-312" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-313"><a href="#cb18-313" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-314"><a href="#cb18-314" aria-hidden="true" tabindex="-1"></a>In the base model, <span class="in">`&lt;|im_start|&gt;`</span> and <span class="in">`&lt;|im_end|&gt;`</span> have exactly the same embedding (cosine similarity</span>
+<span id="cb18-315"><a href="#cb18-315" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{cos_markers['base']:.4f}"`</span>), and a short one (length <span class="in">`{python} f"{marker_len:.2f}"`</span>, against about <span class="in">`{python} f"{ordinary_len:.1f}"`</span> for ordinary tokens), so the base model cannot</span>
+<span id="cb18-316"><a href="#cb18-316" aria-hidden="true" tabindex="-1"></a>tell the two markers apart. In the instruct model they differ (<span class="in">`{python} f"{cos_markers['instruct']:.3f}"`</span>), and during post-training they</span>
+<span id="cb18-317"><a href="#cb18-317" aria-hidden="true" tabindex="-1"></a>moved by about their own length (relative change <span class="in">`{python} f"{start_rel:.2f}"`</span> and <span class="in">`{python} f"{end_rel:.2f}"`</span>), while ordinary tokens moved by about</span>
+<span id="cb18-318"><a href="#cb18-318" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{ordinary_rel:.2f}"`</span>. The ordinary tokens are otherwise very similar between the two models (median cosine similarity</span>
+<span id="cb18-319"><a href="#cb18-319" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{ordinary_cos:.2f}"`</span>), so the two models are closely related. Identical, short vectors are what we would expect from</span>
+<span id="cb18-320"><a href="#cb18-320" aria-hidden="true" tabindex="-1"></a>rows that the base model never trained, though the report does not say so, and this is our inference.</span>
+<span id="cb18-321"><a href="#cb18-321" aria-hidden="true" tabindex="-1"></a>It fits what we saw: given the template, the base model has no meaning for the markers, and writes</span>
+<span id="cb18-322"><a href="#cb18-322" aria-hidden="true" tabindex="-1"></a>ordinary tokens where they should be.</span>
+<span id="cb18-323"><a href="#cb18-323" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-324"><a href="#cb18-324" aria-hidden="true" tabindex="-1"></a>The chat markers are not decoration. They are part of what post-training installs, and the format we use</span>
+<span id="cb18-325"><a href="#cb18-325" aria-hidden="true" tabindex="-1"></a>for fine-tuning has to match the one the instruct model learned. The next section looks at that format.</span>
+<span id="cb18-326"><a href="#cb18-326" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-327"><a href="#cb18-327" aria-hidden="true" tabindex="-1"></a><span class="fu">## Chat templates</span></span>
+<span id="cb18-328"><a href="#cb18-328" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-329"><a href="#cb18-329" aria-hidden="true" tabindex="-1"></a>A chat is a list of messages, each with a role (<span class="in">`system`</span>, <span class="in">`user`</span> or <span class="in">`assistant`</span>) and some text. A model</span>
+<span id="cb18-330"><a href="#cb18-330" aria-hidden="true" tabindex="-1"></a>reads one sequence of tokens, so something has to turn the list into that sequence. That is the job of</span>
+<span id="cb18-331"><a href="#cb18-331" aria-hidden="true" tabindex="-1"></a>the **chat template**: a small program, shipped with the tokenizer, that wraps every message in the</span>
+<span id="cb18-332"><a href="#cb18-332" aria-hidden="true" tabindex="-1"></a>markers the model was post-trained on. Here is our model's template applied to a short conversation, with</span>
+<span id="cb18-333"><a href="#cb18-333" aria-hidden="true" tabindex="-1"></a>the markers <span class="in">`&lt;|im_start|&gt;`</span> and <span class="in">`&lt;|im_end|&gt;`</span> that the base model could not tell apart:</span>
+<span id="cb18-334"><a href="#cb18-334" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-337"><a href="#cb18-337" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-338"><a href="#cb18-338" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.book.viz <span class="im">import</span> show_tokens</span>
+<span id="cb18-339"><a href="#cb18-339" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-340"><a href="#cb18-340" aria-hidden="true" tabindex="-1"></a>example <span class="op">=</span> [</span>
+<span id="cb18-341"><a href="#cb18-341" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"role"</span>: <span class="st">"system"</span>, <span class="st">"content"</span>: <span class="st">"Answer with a program."</span>},</span>
+<span id="cb18-342"><a href="#cb18-342" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"Q1?"</span>},</span>
+<span id="cb18-343"><a href="#cb18-343" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"role"</span>: <span class="st">"assistant"</span>, <span class="st">"content"</span>: <span class="st">"A1"</span>},</span>
+<span id="cb18-344"><a href="#cb18-344" aria-hidden="true" tabindex="-1"></a>    {<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: <span class="st">"Q2?"</span>},</span>
+<span id="cb18-345"><a href="#cb18-345" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb18-346"><a href="#cb18-346" aria-hidden="true" tabindex="-1"></a>tok <span class="op">=</span> toks[<span class="st">"instruct"</span>]</span>
+<span id="cb18-347"><a href="#cb18-347" aria-hidden="true" tabindex="-1"></a>rendered <span class="op">=</span> tok.apply_chat_template(</span>
+<span id="cb18-348"><a href="#cb18-348" aria-hidden="true" tabindex="-1"></a>    example, tokenize<span class="op">=</span><span class="va">False</span>, add_generation_prompt<span class="op">=</span><span class="va">True</span></span>
+<span id="cb18-349"><a href="#cb18-349" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-350"><a href="#cb18-350" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(rendered)</span>
+<span id="cb18-351"><a href="#cb18-351" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-352"><a href="#cb18-352" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-353"><a href="#cb18-353" aria-hidden="true" tabindex="-1"></a>Each message becomes <span class="in">`&lt;|im_start|&gt;`</span>, the role, a newline, the text, <span class="in">`&lt;|im_end|&gt;`</span> and a newline. The last</span>
+<span id="cb18-354"><a href="#cb18-354" aria-hidden="true" tabindex="-1"></a>line is the **generation prompt**, <span class="in">`&lt;|im_start|&gt;assistant`</span> and a newline, added because we asked for it:</span>
+<span id="cb18-355"><a href="#cb18-355" aria-hidden="true" tabindex="-1"></a>it marks the place where the model's answer begins, and the model then writes the answer and ends it</span>
+<span id="cb18-356"><a href="#cb18-356" aria-hidden="true" tabindex="-1"></a>with <span class="in">`&lt;|im_end|&gt;`</span>, which is how generation knows to stop. Each marker is a single token:</span>
+<span id="cb18-357"><a href="#cb18-357" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-360"><a href="#cb18-360" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-361"><a href="#cb18-361" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"marker ids:"</span>, tok.convert_tokens_to_ids([<span class="st">"&lt;|im_start|&gt;"</span>, <span class="st">"&lt;|im_end|&gt;"</span>]),</span>
+<span id="cb18-362"><a href="#cb18-362" aria-hidden="true" tabindex="-1"></a>      <span class="st">"| the end-of-sequence token is"</span>, tok.eos_token)</span>
+<span id="cb18-363"><a href="#cb18-363" aria-hidden="true" tabindex="-1"></a>show_tokens(tok, rendered)</span>
+<span id="cb18-364"><a href="#cb18-364" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-365"><a href="#cb18-365" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-366"><a href="#cb18-366" aria-hidden="true" tabindex="-1"></a>**The original Qwen3 format.** The Qwen3 report describes a template that also controls "thinking"</span>
+<span id="cb18-367"><a href="#cb18-367" aria-hidden="true" tabindex="-1"></a>(its Table 9). A user message can end with a <span class="in">`/think`</span> or <span class="in">`/no_think`</span> flag, and an assistant turn starts</span>
+<span id="cb18-368"><a href="#cb18-368" aria-hidden="true" tabindex="-1"></a>with a <span class="in">`&lt;think&gt;`</span> block holding its reasoning, which is empty for a non-thinking answer. The base</span>
+<span id="cb18-369"><a href="#cb18-369" aria-hidden="true" tabindex="-1"></a>model's tokenizer still ships that template, with a parameter <span class="in">`enable_thinking`</span>. Our instruct model's</span>
+<span id="cb18-370"><a href="#cb18-370" aria-hidden="true" tabindex="-1"></a>template has none of this, because the model never thinks out loud:</span>
+<span id="cb18-371"><a href="#cb18-371" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-374"><a href="#cb18-374" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-375"><a href="#cb18-375" aria-hidden="true" tabindex="-1"></a>base_tok <span class="op">=</span> toks[<span class="st">"base"</span>]</span>
+<span id="cb18-376"><a href="#cb18-376" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> flag <span class="kw">in</span> (<span class="va">True</span>, <span class="va">False</span>):</span>
+<span id="cb18-377"><a href="#cb18-377" aria-hidden="true" tabindex="-1"></a>    s <span class="op">=</span> base_tok.apply_chat_template(</span>
+<span id="cb18-378"><a href="#cb18-378" aria-hidden="true" tabindex="-1"></a>        example, tokenize<span class="op">=</span><span class="va">False</span>, add_generation_prompt<span class="op">=</span><span class="va">True</span>, enable_thinking<span class="op">=</span>flag</span>
+<span id="cb18-379"><a href="#cb18-379" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb18-380"><a href="#cb18-380" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"base template, enable_thinking=</span><span class="sc">{</span>flag<span class="sc">}</span><span class="ss">: ...</span><span class="sc">{</span>s[<span class="op">-</span><span class="dv">45</span>:]<span class="sc">!r}</span><span class="ss">"</span>)</span>
+<span id="cb18-381"><a href="#cb18-381" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb18-382"><a href="#cb18-382" aria-hidden="true" tabindex="-1"></a>    <span class="st">"our model's template mentions thinking:"</span>,</span>
+<span id="cb18-383"><a href="#cb18-383" aria-hidden="true" tabindex="-1"></a>    <span class="st">"think"</span> <span class="kw">in</span> toks[<span class="st">"instruct"</span>].chat_template</span>
+<span id="cb18-384"><a href="#cb18-384" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-385"><a href="#cb18-385" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-386"><a href="#cb18-386" aria-hidden="true" tabindex="-1"></a><span class="co"># a /no_think flag in the user's text is just text: the template only copies it</span></span>
+<span id="cb18-387"><a href="#cb18-387" aria-hidden="true" tabindex="-1"></a>ask <span class="op">=</span> <span class="kw">lambda</span> text: base_tok.apply_chat_template(</span>
+<span id="cb18-388"><a href="#cb18-388" aria-hidden="true" tabindex="-1"></a>    [{<span class="st">"role"</span>: <span class="st">"user"</span>, <span class="st">"content"</span>: text}],</span>
+<span id="cb18-389"><a href="#cb18-389" aria-hidden="true" tabindex="-1"></a>    tokenize<span class="op">=</span><span class="va">False</span>,</span>
+<span id="cb18-390"><a href="#cb18-390" aria-hidden="true" tabindex="-1"></a>    add_generation_prompt<span class="op">=</span><span class="va">True</span></span>
+<span id="cb18-391"><a href="#cb18-391" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-392"><a href="#cb18-392" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb18-393"><a href="#cb18-393" aria-hidden="true" tabindex="-1"></a>    <span class="st">"the template treats the flag as plain text:"</span>,</span>
+<span id="cb18-394"><a href="#cb18-394" aria-hidden="true" tabindex="-1"></a>    ask(<span class="st">"Q? /no_think"</span>) <span class="op">==</span> ask(<span class="st">"Q?"</span>).replace(<span class="st">"Q?"</span>, <span class="st">"Q? /no_think"</span>)</span>
+<span id="cb18-395"><a href="#cb18-395" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-396"><a href="#cb18-396" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-397"><a href="#cb18-397" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-398"><a href="#cb18-398" aria-hidden="true" tabindex="-1"></a>With thinking switched off, the original template ends the generation prompt with an empty think block,</span>
+<span id="cb18-399"><a href="#cb18-399" aria-hidden="true" tabindex="-1"></a>as the report describes. The <span class="in">`/think`</span> flags are not added by the template: they are text that the user</span>
+<span id="cb18-400"><a href="#cb18-400" aria-hidden="true" tabindex="-1"></a>types into the message.</span>
+<span id="cb18-401"><a href="#cb18-401" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-402"><a href="#cb18-402" aria-hidden="true" tabindex="-1"></a>**Why this matters for us.** The template is part of the model's interface. A fine-tuning example must be</span>
+<span id="cb18-403"><a href="#cb18-403" aria-hidden="true" tabindex="-1"></a>rendered with exactly the template the model was post-trained on, so that the markers around our</span>
+<span id="cb18-404"><a href="#cb18-404" aria-hidden="true" tabindex="-1"></a>programs mean what the model expects. In our training examples the system message states the task, the</span>
+<span id="cb18-405"><a href="#cb18-405" aria-hidden="true" tabindex="-1"></a>user message holds the page and the question, and the assistant message is the gold program. The model</span>
+<span id="cb18-406"><a href="#cb18-406" aria-hidden="true" tabindex="-1"></a>learns to write the program and then <span class="in">`&lt;|im_end|&gt;`</span>. The newline after <span class="in">`&lt;|im_end|&gt;`</span> is only template</span>
+<span id="cb18-407"><a href="#cb18-407" aria-hidden="true" tabindex="-1"></a>text, and the model never has to produce it.</span>
+<span id="cb18-408"><a href="#cb18-408" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-409"><a href="#cb18-409" aria-hidden="true" tabindex="-1"></a><span class="fu">## Teacher forcing and exposure bias</span></span>
+<span id="cb18-410"><a href="#cb18-410" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-411"><a href="#cb18-411" aria-hidden="true" tabindex="-1"></a>How does a multi-turn conversation become a training example? We use the standard approach to multi-turn</span>
+<span id="cb18-412"><a href="#cb18-412" aria-hidden="true" tabindex="-1"></a>supervised fine-tuning. The whole conversation, rendered by the template, goes into **one sequence**,</span>
+<span id="cb18-413"><a href="#cb18-413" aria-hidden="true" tabindex="-1"></a>and the model is trained to predict every assistant token given everything before it, including the</span>
+<span id="cb18-414"><a href="#cb18-414" aria-hidden="true" tabindex="-1"></a>**gold** (correct) earlier answers. Feeding the model the correct history, instead of its own earlier</span>
+<span id="cb18-415"><a href="#cb18-415" aria-hidden="true" tabindex="-1"></a>outputs, is called **[teacher forcing](901_glossary.qmd#gloss-teacher-forcing)**. It has a benefit and a cost.</span>
+<span id="cb18-416"><a href="#cb18-416" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-417"><a href="#cb18-417" aria-hidden="true" tabindex="-1"></a>**The benefit is efficiency.** One pass computes the loss on all turns at once. Because a position only</span>
+<span id="cb18-418"><a href="#cb18-418" aria-hidden="true" tabindex="-1"></a>sees earlier tokens, this equals training on each truncated prefix separately (the anatomy chapter</span>
+<span id="cb18-419"><a href="#cb18-419" aria-hidden="true" tabindex="-1"></a>explained why, and the project's tests check it), but the page is read once instead of once per turn.</span>
+<span id="cb18-420"><a href="#cb18-420" aria-hidden="true" tabindex="-1"></a>The alternative is a **per-turn layout**, in which every turn is its own example with the history as its</span>
+<span id="cb18-421"><a href="#cb18-421" aria-hidden="true" tabindex="-1"></a>prompt. ConvFinQA's own per-turn files are in that layout. We can count what it costs on the training</span>
+<span id="cb18-422"><a href="#cb18-422" aria-hidden="true" tabindex="-1"></a>split:</span>
+<span id="cb18-423"><a href="#cb18-423" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-426"><a href="#cb18-426" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb18-427"><a href="#cb18-427" aria-hidden="true" tabindex="-1"></a>count <span class="op">=</span> <span class="kw">lambda</span> messages: <span class="bu">len</span>(</span>
+<span id="cb18-428"><a href="#cb18-428" aria-hidden="true" tabindex="-1"></a>    tok(</span>
+<span id="cb18-429"><a href="#cb18-429" aria-hidden="true" tabindex="-1"></a>        tok.apply_chat_template(messages, tokenize<span class="op">=</span><span class="va">False</span>),</span>
+<span id="cb18-430"><a href="#cb18-430" aria-hidden="true" tabindex="-1"></a>        add_special_tokens<span class="op">=</span><span class="va">False</span></span>
+<span id="cb18-431"><a href="#cb18-431" aria-hidden="true" tabindex="-1"></a>    )[<span class="st">"input_ids"</span>]</span>
+<span id="cb18-432"><a href="#cb18-432" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-433"><a href="#cb18-433" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-434"><a href="#cb18-434" aria-hidden="true" tabindex="-1"></a>whole <span class="op">=</span> per_turn <span class="op">=</span> turns <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb18-435"><a href="#cb18-435" aria-hidden="true" tabindex="-1"></a>conversations <span class="op">=</span> data.load_split(<span class="st">"train"</span>)</span>
+<span id="cb18-436"><a href="#cb18-436" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> c <span class="kw">in</span> conversations:</span>
+<span id="cb18-437"><a href="#cb18-437" aria-hidden="true" tabindex="-1"></a>    messages <span class="op">=</span> conversation_messages(c)</span>
+<span id="cb18-438"><a href="#cb18-438" aria-hidden="true" tabindex="-1"></a>    n_turns <span class="op">=</span> (<span class="bu">len</span>(messages) <span class="op">-</span> <span class="dv">1</span>) <span class="op">//</span> <span class="dv">2</span></span>
+<span id="cb18-439"><a href="#cb18-439" aria-hidden="true" tabindex="-1"></a>    whole <span class="op">+=</span> count(messages)</span>
+<span id="cb18-440"><a href="#cb18-440" aria-hidden="true" tabindex="-1"></a>    per_turn <span class="op">+=</span> <span class="bu">sum</span>(</span>
+<span id="cb18-441"><a href="#cb18-441" aria-hidden="true" tabindex="-1"></a>        count(messages[: <span class="dv">1</span> <span class="op">+</span> <span class="dv">2</span> <span class="op">*</span> k])</span>
+<span id="cb18-442"><a href="#cb18-442" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k <span class="kw">in</span> <span class="bu">range</span>(<span class="dv">1</span>, n_turns <span class="op">+</span> <span class="dv">1</span>)</span>
+<span id="cb18-443"><a href="#cb18-443" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb18-444"><a href="#cb18-444" aria-hidden="true" tabindex="-1"></a>    turns <span class="op">+=</span> n_turns</span>
+<span id="cb18-445"><a href="#cb18-445" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-446"><a href="#cb18-446" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(conversations)<span class="sc">:,}</span><span class="ss"> conversations, </span><span class="sc">{</span>turns<span class="sc">:,}</span><span class="ss"> turns"</span>)</span>
+<span id="cb18-447"><a href="#cb18-447" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"tokens with one sequence per conversation: </span><span class="sc">{</span>whole<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb18-448"><a href="#cb18-448" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb18-449"><a href="#cb18-449" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"tokens with one sequence per turn:         </span><span class="sc">{</span>per_turn<span class="sc">:,}</span><span class="ss">"</span></span>
+<span id="cb18-450"><a href="#cb18-450" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"  (</span><span class="sc">{</span>per_turn <span class="op">/</span> whole<span class="sc">:.2f}</span><span class="ss"> times as many)"</span></span>
+<span id="cb18-451"><a href="#cb18-451" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-452"><a href="#cb18-452" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb18-453"><a href="#cb18-453" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-454"><a href="#cb18-454" aria-hidden="true" tabindex="-1"></a>The per-turn layout processes about three and a half times as many tokens, for the same learning signal,</span>
+<span id="cb18-455"><a href="#cb18-455" aria-hidden="true" tabindex="-1"></a>which is why it is the less common choice for multi-turn data.</span>
+<span id="cb18-456"><a href="#cb18-456" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-457"><a href="#cb18-457" aria-hidden="true" tabindex="-1"></a>**The cost is exposure bias.** During training the history is always right. At test time the model</span>
+<span id="cb18-458"><a href="#cb18-458" aria-hidden="true" tabindex="-1"></a>reads its own earlier answers, which may be wrong, and a wrong early answer changes what follows, so</span>
+<span id="cb18-459"><a href="#cb18-459" aria-hidden="true" tabindex="-1"></a>errors compound. The model has never been trained on its own mistakes. Our evaluation reports both</span>
+<span id="cb18-460"><a href="#cb18-460" aria-hidden="true" tabindex="-1"></a>settings: with the **[gold history](901_glossary.qmd#gloss-gold-history)**, which is the teacher-forced setting and an upper bound, and with</span>
+<span id="cb18-461"><a href="#cb18-461" aria-hidden="true" tabindex="-1"></a>the model's **predicted history**, which is what a real user would experience.</span>
+<span id="cb18-462"><a href="#cb18-462" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-463"><a href="#cb18-463" aria-hidden="true" tabindex="-1"></a>The methods that address <span class="co">[</span><span class="ot">exposure bias</span><span class="co">](901_glossary.qmd#gloss-exposure-bias)</span> train on the model's own outputs. The on-policy distillation</span>
+<span id="cb18-464"><a href="#cb18-464" aria-hidden="true" tabindex="-1"></a>and the reinforcement learning stages of the Qwen3 pipeline are examples <span class="co">[</span><span class="ot">@yang2025qwen3</span><span class="co">]</span>. They are</span>
+<span id="cb18-465"><a href="#cb18-465" aria-hidden="true" tabindex="-1"></a>beyond the scope of this lab, and training on predicted histories is one of the extensions we suggest</span>
+<span id="cb18-466"><a href="#cb18-466" aria-hidden="true" tabindex="-1"></a>at the end of the book.</span>
+<span id="cb18-467"><a href="#cb18-467" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-468"><a href="#cb18-468" aria-hidden="true" tabindex="-1"></a><span class="fu">## Where our fine-tuning fits</span></span>
+<span id="cb18-469"><a href="#cb18-469" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-470"><a href="#cb18-470" aria-hidden="true" tabindex="-1"></a>@fig-pipeline shows the place of our work. We start from the instruct model, which already knows how to</span>
+<span id="cb18-471"><a href="#cb18-471" aria-hidden="true" tabindex="-1"></a>read a chat and answer it, and teach it one narrow task: reading a financial page and a question and</span>
+<span id="cb18-472"><a href="#cb18-472" aria-hidden="true" tabindex="-1"></a>writing a program in the DSL. The step is small compared with pretraining and post-training, and a</span>
+<span id="cb18-473"><a href="#cb18-473" aria-hidden="true" tabindex="-1"></a>later chapter describes it in detail.</span>
+</code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

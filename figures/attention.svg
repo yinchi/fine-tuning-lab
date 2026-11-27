@@ -1,0 +1,105 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="590" height="975" viewBox="0 0 590 975">
+<rect width="590" height="975" fill="white"/>
+<rect x="163" y="815" width="104" height="42" rx="8" fill="#ffffff" stroke="#444444" stroke-width="1.5"/>
+<rect x="293" y="815" width="104" height="42" rx="8" fill="#ffffff" stroke="#444444" stroke-width="1.5"/>
+<rect x="443" y="815" width="104" height="42" rx="8" fill="#ffffff" stroke="#444444" stroke-width="1.5"/>
+<rect x="163" y="740" width="104" height="34" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="293" y="740" width="104" height="34" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="443" y="740" width="104" height="34" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="150" y="650" width="260" height="40" rx="8" fill="#d5e8d4" stroke="#82b366" stroke-width="1.5"/>
+<rect x="150" y="570" width="260" height="40" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="8" y="570" width="110" height="40" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="285" y="490" width="270" height="40" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="150" y="410" width="260" height="40" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="175" y="330" width="210" height="40" rx="8" fill="#f8cecc" stroke="#b85450" stroke-width="1.5"/>
+<rect x="215" y="250" width="340" height="40" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="295" y="170" width="180" height="36" rx="8" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<rect x="295" y="95" width="180" height="40" rx="8" fill="#ffffff" stroke="#444444" stroke-width="1.5"/>
+<text x="215" y="832" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="215" dy="0">W_Q</tspan></text>
+<text x="215" y="847" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555555"><tspan x="215" dy="0">matrix multiplication</tspan></text>
+<text x="345" y="832" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="345" dy="0">W_K</tspan></text>
+<text x="345" y="847" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555555"><tspan x="345" dy="0">matrix multiplication</tspan></text>
+<text x="495" y="832" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="495" dy="0">W_V</tspan></text>
+<text x="495" y="847" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555555"><tspan x="495" dy="0">matrix multiplication</tspan></text>
+<text x="215" y="761.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="215" dy="0">split into heads</tspan></text>
+<text x="345" y="761.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="345" dy="0">split into heads</tspan></text>
+<text x="495" y="761.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="495" dy="0">split into heads</tspan></text>
+<text x="280" y="674.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="280" dy="0">RMSNorm on every query and key vector</tspan></text>
+<text x="280" y="594.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="280" dy="0">rotate by position (RoPE)</tspan></text>
+<text x="63" y="594.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="63" dy="0">token positions</tspan></text>
+<text x="420" y="514.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="420" dy="0">repeat each key/value head n_Q / n_KV times</tspan></text>
+<text x="280" y="434.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="280" dy="0">scores = Q·Kᵀ / √d</tspan></text>
+<text x="280" y="354.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="280" dy="0">add causal mask M, softmax</tspan></text>
+<text x="385" y="274.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="385" dy="0">weights × V</tspan></text>
+<text x="385" y="192.5" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="385" dy="0">concatenate the heads</tspan></text>
+<text x="385" y="112" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="385" dy="0">W_O</tspan></text>
+<text x="385" y="127" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555555"><tspan x="385" dy="0">back to hidden size</tspan></text>
+<text x="345" y="955" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#2b2b2b"><tspan x="345" dy="0">input X  (b, s, h)</tspan></text>
+<path d="M 345 941 L 345 925" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="345.00,916.00 349.50,925.00 340.50,925.00" fill="#2b2b2b"/>
+<circle cx="345" cy="916" r="3" fill="#2b2b2b"/>
+<path d="M 345 916 L 225.00 916.00 Q 215 916 215.00 906.00 L 215 866" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="215.00,857.00 219.50,866.00 210.50,866.00" fill="#2b2b2b"/>
+<path d="M 345 916 L 345 866" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="345.00,857.00 349.50,866.00 340.50,866.00" fill="#2b2b2b"/>
+<path d="M 345 916 L 485.00 916.00 Q 495 916 495.00 906.00 L 495 866" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="495.00,857.00 499.50,866.00 490.50,866.00" fill="#2b2b2b"/>
+<path d="M 215 815 L 215 783" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="215.00,774.00 219.50,783.00 210.50,783.00" fill="#2b2b2b"/>
+<path d="M 345 815 L 345 783" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="345.00,774.00 349.50,783.00 340.50,783.00" fill="#2b2b2b"/>
+<path d="M 495 815 L 495 783" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="495.00,774.00 499.50,783.00 490.50,783.00" fill="#2b2b2b"/>
+<path d="M 215 740 L 215 699" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="215.00,690.00 219.50,699.00 210.50,699.00" fill="#2b2b2b"/>
+<path d="M 345 740 L 345 699" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="345.00,690.00 349.50,699.00 340.50,699.00" fill="#2b2b2b"/>
+<path d="M 495 740 L 495 539" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="495.00,530.00 499.50,539.00 490.50,539.00" fill="#2b2b2b"/>
+<path d="M 215 650 L 215 619" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="215.00,610.00 219.50,619.00 210.50,619.00" fill="#2b2b2b"/>
+<path d="M 345 650 L 345 619" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="345.00,610.00 349.50,619.00 340.50,619.00" fill="#2b2b2b"/>
+<path d="M 215 570 L 215 459" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="215.00,450.00 219.50,459.00 210.50,459.00" fill="#2b2b2b"/>
+<path d="M 345 570 L 345 539" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="345.00,530.00 349.50,539.00 340.50,539.00" fill="#2b2b2b"/>
+<path d="M 345 490 L 345 459" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="345.00,450.00 349.50,459.00 340.50,459.00" fill="#2b2b2b"/>
+<path d="M 495 490 L 495 299" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="495.00,290.00 499.50,299.00 490.50,299.00" fill="#2b2b2b"/>
+<path d="M 280 410 L 280 379" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="280.00,370.00 284.50,379.00 275.50,379.00" fill="#2b2b2b"/>
+<path d="M 280 330 L 280 299" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="280.00,290.00 284.50,299.00 275.50,299.00" fill="#2b2b2b"/>
+<path d="M 385 250 L 385 215" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="385.00,206.00 389.50,215.00 380.50,215.00" fill="#2b2b2b"/>
+<path d="M 385 170 L 385 144" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="385.00,135.00 389.50,144.00 380.50,144.00" fill="#2b2b2b"/>
+<path d="M 385 95 L 385 57" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="385.00,48.00 389.50,57.00 380.50,57.00" fill="#2b2b2b"/>
+<text x="385" y="36" font-family="Helvetica, Arial, sans-serif" font-size="13" text-anchor="middle" fill="#2b2b2b"><tspan x="385" dy="0">output  (b, s, h)</tspan></text>
+<path d="M 118 590 L 141 590" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="150.00,590.00 141.00,594.50 141.00,585.50" fill="#2b2b2b"/>
+<text x="221" y="802" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="221" dy="0">(b, s, n_Q·d)</tspan></text>
+<text x="351" y="802" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="351" dy="0">(b, s, n_KV·d)</tspan></text>
+<text x="501" y="802" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="501" dy="0">(b, s, n_KV·d)</tspan></text>
+<text x="221" y="722" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="221" dy="0">(b, n_Q, s, d)</tspan></text>
+<text x="351" y="722" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="351" dy="0">(b, n_KV, s, d)</tspan></text>
+<text x="501" y="722" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="501" dy="0">(b, n_KV, s, d)</tspan></text>
+<text x="351" y="470" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="351" dy="0">(b, n_Q, s, d)</tspan></text>
+<text x="501" y="470" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="501" dy="0">(b, n_Q, s, d)</tspan></text>
+<text x="286" y="394" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="286" dy="0">(b, n_Q, s, s)</tspan></text>
+<text x="286" y="314" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="286" dy="0">(b, n_Q, s, s)</tspan></text>
+<text x="391" y="232" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="391" dy="0">(b, n_Q, s, d)</tspan></text>
+<text x="391" y="156" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="start" fill="#555555"><tspan x="391" dy="0">(b, s, n_Q·d)</tspan></text>
+<rect x="8" y="14" width="16" height="12" rx="3" fill="#ffffff" stroke="#444444" stroke-width="1.5"/>
+<text x="30" y="24" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#555555"><tspan x="30" dy="0">learned matrix</tspan></text>
+<rect x="8" y="34" width="16" height="12" rx="3" fill="#d5e8d4" stroke="#82b366" stroke-width="1.5"/>
+<text x="30" y="44" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#555555"><tspan x="30" dy="0">RMSNorm</tspan></text>
+<rect x="8" y="54" width="16" height="12" rx="3" fill="#f1f1f1" stroke="#888888" stroke-width="1.5"/>
+<text x="30" y="64" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#555555"><tspan x="30" dy="0">no learned weights</tspan></text>
+<rect x="8" y="74" width="16" height="12" rx="3" fill="#f8cecc" stroke="#b85450" stroke-width="1.5"/>
+<text x="30" y="84" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#555555"><tspan x="30" dy="0">causal mask, softmax</tspan></text>
+<text x="8" y="124" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="start" fill="#555555"><tspan x="8" dy="0">b: batch · s: sequence length</tspan><tspan x="8" dy="14">h: hidden_size · d: head_dim</tspan><tspan x="8" dy="14">n_Q: query heads · n_KV: key/value heads</tspan></text>
+</svg>

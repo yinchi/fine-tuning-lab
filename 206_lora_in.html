@@ -1,0 +1,1564 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>9&nbsp; LoRA in detail – Fine-tuning lab: LLMs on ConvFinQA</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./301_formatting_conversations.html" rel="next">
+<link href="./205_how_fine_tuning.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-825aa897e66f6637425967c223a89f82.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./201_from_text.html">Foundations</a></li><li class="breadcrumb-item"><a href="./206_lora_in.html"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Fine-tuning lab: LLMs on ConvFinQA</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Setup &amp; data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./101_environment_setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Environment setup</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./102_what_convfinqa.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./103_the_dsl.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">The DSL and its executor</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./201_from_text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">From text to tokens to next-token probabilities</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./202_anatomy_of.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Anatomy of Qwen3-4B</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./203_from_base.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./204_probing_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./205_how_fine_tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">How fine-tuning works</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./206_lora_in.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Experiments</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./301_formatting_conversations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Formatting conversations for training</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./302_the_untuned.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The untuned baseline</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./303_training_with.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Training with LoRA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./304_evaluating_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Evaluating the fine-tuned model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./305_dsl_vs.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">DSL or Python?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./306_constrained_decoding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Constrained decoding</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Beyond</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./402_the_final.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./403_rank_sweep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">How much rank does the task need?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./404_summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Summary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./901_glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./902_references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">References</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#the-idea" id="toc-the-idea" class="nav-link active" data-scroll-target="#the-idea"><span class="header-section-number">9.1</span> The idea</a></li>
+  <li><a href="#where-the-adapters-go" id="toc-where-the-adapters-go" class="nav-link" data-scroll-target="#where-the-adapters-go"><span class="header-section-number">9.2</span> Where the adapters go</a></li>
+  <li><a href="#what-it-costs" id="toc-what-it-costs" class="nav-link" data-scroll-target="#what-it-costs"><span class="header-section-number">9.3</span> What it costs</a></li>
+  <li><a href="#two-checks-on-the-real-model" id="toc-two-checks-on-the-real-model" class="nav-link" data-scroll-target="#two-checks-on-the-real-model"><span class="header-section-number">9.4</span> Two checks on the real model</a></li>
+  <li><a href="#rank-alpha-and-what-we-leave-out" id="toc-rank-alpha-and-what-we-leave-out" class="nav-link" data-scroll-target="#rank-alpha-and-what-we-leave-out"><span class="header-section-number">9.5</span> Rank, alpha and what we leave out</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./201_from_text.html">Foundations</a></li><li class="breadcrumb-item"><a href="./206_lora_in.html"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></a></li></ol></nav>
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><span id="sec-lora" class="quarto-section-identifier"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></span></h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><strong>You will learn:</strong></p>
+<ul>
+<li>what a LoRA <a href="./901_glossary.html#gloss-adapter">adapter</a> is, and why a <em>low-rank</em> update is a reasonable thing to try;</li>
+<li>which layers of Qwen3-4B get adapters, and what they cost in parameters;</li>
+<li>how to check, on the real model, that an adapter starts as the identity, and what happens when it is merged into the weights.</li>
+</ul>
+<p><a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a> showed that fine-tuning every weight is expensive: the weights, their gradients and the optimizer state all have to fit in memory, and a narrow task may not need all of that freedom. <strong><a href="./901_glossary.html#gloss-lora">LoRA</a></strong> (low-rank adaptation) <span class="citation" data-cites="hu2022lora">(<a href="902_references.html#ref-hu2022lora" role="doc-biblioref">Hu et al. 2022</a>)</span> freezes the model and learns a small correction to each of its big matrices instead. Writing a large matrix as the product of two thin ones is an old trick: recommender systems, for example, factor the matrix of user ratings into a user part and an item part <span class="citation" data-cites="koren2009matrix">(<a href="902_references.html#ref-koren2009matrix" role="doc-biblioref">Koren et al. 2009</a>)</span>. LoRA uses the same trick on a different object. What is factored is not the data but the <em>update</em> to a frozen weight.</p>
+<section id="the-idea" class="level2" data-number="9.1">
+<h2 data-number="9.1" class="anchored" data-anchor-id="the-idea"><span class="header-section-number">9.1</span> The idea</h2>
+<p>A linear layer in the model multiplies its input by a weight matrix <span class="math inline">\(W\)</span>. LoRA leaves <span class="math inline">\(W\)</span> alone and adds a correction that is the product of two thin matrices:</p>
+<p><span class="math display">\[
+W' = W + \frac{\alpha}{r}\, B\,A, \qquad B \in \mathbb{R}^{d_\text{out} \times r}, \quad A \in \mathbb{R}^{r \times d_\text{in}} .
+\]</span></p>
+<p>The number <span class="math inline">\(r\)</span>, the <strong><a href="./901_glossary.html#gloss-rank">rank</a></strong>, is chosen small (we start with 16) compared with <span class="math inline">\(d_\text{in}\)</span> and <span class="math inline">\(d_\text{out}\)</span>, which are in the thousands. A product of an <span class="math inline">\(r\)</span>-column and an <span class="math inline">\(r\)</span>-row matrix can only change the layer’s output within an <span class="math inline">\(r\)</span>-dimensional space, so the update is <strong>low-rank</strong> however large the layer is. <a href="#fig-lora-matrix" class="quarto-xref">Figure&nbsp;<span>9.1</span></a> shows one matrix of Qwen3-4B in two equivalent views.</p>
+<div id="fig-lora-matrix" class="quarto-float quarto-figure quarto-figure-center anchored" alt="Two panels. Left: W-prime equals frozen W plus a thin tall B times a thin flat A, scaled by alpha over r. Right: the input splits into a path through frozen W and a path through A then B; the two outputs are summed. A dashed box around A and B notes that their product is never built.">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-lora-matrix-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="figures/lora_matrix.svg" class="img-fluid figure-img" alt="Two panels. Left: W-prime equals frozen W plus a thin tall B times a thin flat A, scaled by alpha over r. Right: the input splits into a path through frozen W and a path through A then B; the two outputs are summed. A dashed box around A and B notes that their product is never built.">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-lora-matrix-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;9.1: One weight matrix with a LoRA adapter (Qwen3-4B’s <code>gate_proj</code>, rank 16). Left: the adapted weight is the frozen W plus the product of two thin matrices scaled by α/r, which is what merging produces. Right: what training runs. The input goes through W and, separately, through A then B, and the outputs are added, so the full 9,728 × 2,560 product is never built in memory. Only r = 16 numbers pass between A and B, and the trained matrices hold 196,608 weights, against 24.9 million in W. The thin matrices are drawn wider than their true proportion.
+</figcaption>
+</figure>
+</div>
+<p>Three details are worth knowing.</p>
+<ul>
+<li><strong>Why it is cheap.</strong> During training the input is multiplied by <span class="math inline">\(A\)</span> first and then by <span class="math inline">\(B\)</span>, so only a vector of <span class="math inline">\(r\)</span> numbers sits between them. The big update matrix <span class="math inline">\(BA\)</span> is never formed. Only <span class="math inline">\(A\)</span> and <span class="math inline">\(B\)</span> have gradients and optimizer state, which is why LoRA’s memory cost in <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a> was small.</li>
+<li><strong>Why it starts as the identity.</strong> <span class="math inline">\(B\)</span> is initialized to zero and <span class="math inline">\(A\)</span> to small random values (PEFT’s default is the same initialization as an ordinary linear layer: uniform in <span class="math inline">\(\pm 1/\sqrt{d_\text{in}}\)</span>, about <span class="math inline">\(\pm 0.02\)</span> for our matrices; other schemes exist, some of which start from the weights’ singular components). At step 0 the correction <span class="math inline">\(BA\)</span> is exactly zero, so the model begins as the base model. <span class="math inline">\(A\)</span> must not be zero too: with <span class="math inline">\(B = 0\)</span> the gradient of <span class="math inline">\(B\)</span> depends on <span class="math inline">\(A\)</span>’s output, so a zero <span class="math inline">\(A\)</span> would give no gradient to start from.</li>
+<li><strong>What <span class="math inline">\(\alpha/r\)</span> does.</strong> It scales the correction. We set <span class="math inline">\(\alpha = 2r\)</span>, so the scale is 2 at every rank we try; changing <span class="math inline">\(\alpha\)</span> is, to a first approximation, like changing the learning rate of the adapter.</li>
+</ul>
+<p>The bet LoRA makes is that the change a task needs, <span class="math inline">\(W' - W\)</span>, is of low rank. It is a bet, not a fact: the training chapter tests it by looking at the singular values of the update the training produces.</p>
+</section>
+<section id="where-the-adapters-go" class="level2" data-number="9.2">
+<h2 data-number="9.2" class="anchored" data-anchor-id="where-the-adapters-go"><span class="header-section-number">9.2</span> Where the adapters go</h2>
+<p>We put an adapter on every linear layer of the transformer blocks, which PEFT calls <code>target_modules="all-linear"</code>. <a href="#fig-lora-layer" class="quarto-xref">Figure&nbsp;<span>9.2</span></a> marks them on one decoder layer: four in attention and three in the feed-forward block.</p>
+<div id="fig-lora-layer" class="quarto-float quarto-figure quarto-figure-center anchored" alt="A decoder layer inside a dashed box labelled 36 times. Seven boxes are highlighted: q, k, v and o projections in the attention part, and gate, up and down projections in the feed-forward part. The embeddings, the two RMSNorms and the output head are grey.">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-lora-layer-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="figures/lora_layer.svg" class="img-fluid figure-img" alt="A decoder layer inside a dashed box labelled 36 times. Seven boxes are highlighted: q, k, v and o projections in the attention part, and gate, up and down projections in the feed-forward part. The embeddings, the two RMSNorms and the output head are grey.">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-lora-layer-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;9.2: One decoder layer of Qwen3-4B, repeated 36 times. The seven linear layers LoRA adapts are green: q, k, v and o in attention, and gate, up and down in the feed-forward block. The embeddings, the norms, the output head and the parts with no weights have no adapter.
+</figcaption>
+</figure>
+</div>
+<p>That is <span class="math inline">\(36 \times 7 = 252\)</span> adapters, the number of modules <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a> counted. The embeddings, the normalization scales and the output head are not adapted, and stay as they were.</p>
+</section>
+<section id="what-it-costs" class="level2" data-number="9.3">
+<h2 data-number="9.3" class="anchored" data-anchor-id="what-it-costs"><span class="header-section-number">9.3</span> What it costs</h2>
+<p>A matrix with <span class="math inline">\(d_\text{in}\)</span> inputs and <span class="math inline">\(d_\text{out}\)</span> outputs has <span class="math inline">\(d_\text{in}\, d_\text{out}\)</span> weights; its adapter has <span class="math inline">\(r\,(d_\text{in} + d_\text{out})\)</span>. We can compute the cost for Qwen3-4B from the model’s configuration, and check the total against what PEFT reports once it has wrapped the real model.</p>
+<div id="2be6b2ef" class="cell" data-execution_count="1">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> AutoConfig</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.artifacts <span class="im">import</span> artifact, get</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="at">@artifact</span>(</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">"lora_checks"</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>  deps<span class="op">=</span>[<span class="st">"train_val_split"</span>],</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>  files<span class="op">=</span>[<span class="st">"configs/lora_checks.json"</span>],</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>  heavy<span class="op">=</span><span class="va">True</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_lora_checks(out, deps, files):</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> json</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.formatting <span class="im">import</span> prompt_messages</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.adapters <span class="im">import</span> lora_checks</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    cfg <span class="op">=</span> files[<span class="st">"configs/lora_checks.json"</span>].json()</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    conv <span class="op">=</span> <span class="bu">next</span>(<span class="bu">iter</span>(deps[<span class="st">"train_val_split"</span>].jsonl(<span class="st">"val.jsonl"</span>)))</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> lora_checks(</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>        cfg[<span class="st">"model"</span>], prompt_messages(conv, <span class="dv">0</span>),</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>        r<span class="op">=</span>cfg[<span class="st">"r"</span>],</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>        alpha<span class="op">=</span>cfg[<span class="st">"alpha"</span>],</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>        b_std<span class="op">=</span>cfg[<span class="st">"b_std"</span>],</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>        seed<span class="op">=</span>cfg[<span class="st">"seed"</span>],</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>        memory_cap_gb<span class="op">=</span>cfg[<span class="st">"memory_cap_gb"</span>],</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    (out <span class="op">/</span> <span class="st">"checks.json"</span>).write_text(json.dumps(result))</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>checks <span class="op">=</span> get(<span class="st">"lora_checks"</span>).json(<span class="st">"checks.json"</span>)</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> AutoConfig.from_pretrained(<span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span>)</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a>hidden <span class="op">=</span> config.hidden_size</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>ff <span class="op">=</span> config.intermediate_size</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>layers <span class="op">=</span> config.num_hidden_layers</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>q_out <span class="op">=</span> config.num_attention_heads <span class="op">*</span> config.head_dim</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>kv_out <span class="op">=</span> config.num_key_value_heads <span class="op">*</span> config.head_dim</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>projections <span class="op">=</span> {  <span class="co"># name: (inputs, outputs)</span></span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>    <span class="st">"q_proj"</span>: (hidden, q_out),</span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>    <span class="st">"k_proj"</span>: (hidden, kv_out),</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>    <span class="st">"v_proj"</span>: (hidden, kv_out),</span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>    <span class="st">"o_proj"</span>: (q_out, hidden),</span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>    <span class="st">"gate_proj"</span>: (hidden, ff),</span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>    <span class="st">"up_proj"</span>: (hidden, ff),</span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a>    <span class="st">"down_proj"</span>: (ff, hidden),</span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> <span class="dv">16</span></span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> {</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a>    name: {</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a>        <span class="st">"shape (in → out)"</span>: <span class="ss">f"</span><span class="sc">{</span>i<span class="sc">:,}</span><span class="ss"> → </span><span class="sc">{</span>o<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a>        <span class="st">"full weights"</span>: <span class="ss">f"</span><span class="sc">{</span>i <span class="op">*</span> o<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"adapter weights, r=</span><span class="sc">{</span>r<span class="sc">}</span><span class="ss">"</span>: <span class="ss">f"</span><span class="sc">{</span>r <span class="op">*</span> (i <span class="op">+</span> o)<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a>        <span class="st">"adapter / full"</span>: <span class="ss">f"</span><span class="sc">{</span>r <span class="op">*</span> (i <span class="op">+</span> o) <span class="op">/</span> (i <span class="op">*</span> o)<span class="sc">:.1%}</span><span class="ss">"</span>,</span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a>        <span class="st">"largest useful rank"</span>: <span class="ss">f"</span><span class="sc">{</span><span class="bu">min</span>(i, o)<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a>        <span class="st">"break-even rank"</span>: <span class="ss">f"</span><span class="sc">{</span><span class="bu">round</span>(i <span class="op">*</span> o <span class="op">/</span> (i <span class="op">+</span> o))<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, (i, o) <span class="kw">in</span> projections.items()</span>
+<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(rows).T</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">shape (in → out)</th>
+<th data-quarto-table-cell-role="th">full weights</th>
+<th data-quarto-table-cell-role="th">adapter weights, r=16</th>
+<th data-quarto-table-cell-role="th">adapter / full</th>
+<th data-quarto-table-cell-role="th">largest useful rank</th>
+<th data-quarto-table-cell-role="th">break-even rank</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">q_proj</th>
+<td>2,560 → 4,096</td>
+<td>10,485,760</td>
+<td>106,496</td>
+<td>1.0%</td>
+<td>2,560</td>
+<td>1,575</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">k_proj</th>
+<td>2,560 → 1,024</td>
+<td>2,621,440</td>
+<td>57,344</td>
+<td>2.2%</td>
+<td>1,024</td>
+<td>731</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">v_proj</th>
+<td>2,560 → 1,024</td>
+<td>2,621,440</td>
+<td>57,344</td>
+<td>2.2%</td>
+<td>1,024</td>
+<td>731</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">o_proj</th>
+<td>4,096 → 2,560</td>
+<td>10,485,760</td>
+<td>106,496</td>
+<td>1.0%</td>
+<td>2,560</td>
+<td>1,575</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">gate_proj</th>
+<td>2,560 → 9,728</td>
+<td>24,903,680</td>
+<td>196,608</td>
+<td>0.8%</td>
+<td>2,560</td>
+<td>2,027</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">up_proj</th>
+<td>2,560 → 9,728</td>
+<td>24,903,680</td>
+<td>196,608</td>
+<td>0.8%</td>
+<td>2,560</td>
+<td>2,027</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">down_proj</th>
+<td>9,728 → 2,560</td>
+<td>24,903,680</td>
+<td>196,608</td>
+<td>0.8%</td>
+<td>2,560</td>
+<td>2,027</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<div id="282d5f1f" class="cell" data-execution_count="2">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>per_layer <span class="op">=</span> <span class="bu">sum</span>(r <span class="op">*</span> (i <span class="op">+</span> o) <span class="cf">for</span> i, o <span class="kw">in</span> projections.values())</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>total <span class="op">=</span> per_layer <span class="op">*</span> layers</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"adapter weights per layer: </span><span class="sc">{</span>per_layer<span class="sc">:,}</span><span class="ss">;  × </span><span class="sc">{</span>layers<span class="sc">}</span><span class="ss"> layers = </span><span class="sc">{</span>total<span class="sc">:,}</span><span class="ss">"</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>peft <span class="op">=</span> checks[<span class="st">"bf16"</span>]</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"PEFT's count of trainable parameters:   </span><span class="sc">{</span>peft[<span class="st">'trainable_params'</span>]<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"adapted modules: </span><span class="sc">{</span>peft[<span class="st">'adapted_modules'</span>]<span class="sc">}</span><span class="ss">   "</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"share of the model: </span><span class="sc">{</span>total <span class="op">/</span> checks[<span class="st">'base_params'</span>]<span class="sc">:.2%}</span><span class="ss">"</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> total <span class="op">==</span> peft[<span class="st">"trainable_params"</span>]<span class="op">\</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>    <span class="kw">and</span> peft[<span class="st">"adapted_modules"</span>] <span class="op">==</span> layers <span class="op">*</span> <span class="bu">len</span>(projections)</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"saved as fp32, the adapter is about </span><span class="sc">{</span>total <span class="op">*</span> <span class="dv">4</span> <span class="op">/</span> <span class="fl">1e6</span><span class="sc">:.0f}</span><span class="ss"> MB"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>adapter weights per layer: 917,504;  × 36 layers = 33,030,144
+PEFT's count of trainable parameters:   33,030,144
+adapted modules: 252   share of the model: 0.82%
+saved as fp32, the adapter is about 132 MB</code></pre>
+</div>
+</div>
+<div id="e4f081eb" class="cell" data-execution_count="3">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>largest <span class="op">=</span> {name: <span class="bu">min</span>(i, o) <span class="cf">for</span> name, (i, o) <span class="kw">in</span> projections.items()}</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>break_even <span class="op">=</span> {</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    name: i <span class="op">*</span> o <span class="op">/</span> (i <span class="op">+</span> o) <span class="cf">for</span> name, (i, o) <span class="kw">in</span> projections.items()</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>wide <span class="op">=</span> <span class="bu">max</span>(largest.values())</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>narrow <span class="op">=</span> <span class="bu">min</span>(largest.values())</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">sorted</span>(<span class="bu">set</span>(largest.values())) <span class="op">==</span> [narrow, wide]</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> [n <span class="cf">for</span> n, v <span class="kw">in</span> largest.items() <span class="cf">if</span> v <span class="op">==</span> narrow] <span class="op">==</span> [<span class="st">"k_proj"</span>, <span class="st">"v_proj"</span>]</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(be <span class="op">&gt;</span> <span class="dv">10</span> <span class="op">*</span> r <span class="cf">for</span> be <span class="kw">in</span> break_even.values())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p>At rank 16 the adapters hold 33.0 million weights, 0.82% of the model, and the count equals PEFT’s. Two columns of the table matter for choosing a rank.</p>
+<ul>
+<li><strong>Largest useful rank.</strong> The product <span class="math inline">\(BA\)</span> can never have a rank above <span class="math inline">\(\min(d_\text{in}, d_\text{out})\)</span>. At that rank the update can be any matrix of the layer’s shape: 2,560 for most matrices and 1,024 for <span class="math inline">\(k\)</span> and <span class="math inline">\(v\)</span>. A rank beyond it adds weights and no new updates.</li>
+<li><strong>Break-even rank.</strong> Where <span class="math inline">\(r\,(d_\text{in}+d_\text{out}) = d_\text{in}\, d_\text{out}\)</span>, the adapter has as many weights as the matrix it adapts: between 731 and 2,027 here. Above that LoRA is not smaller than full fine-tuning, so useful ranks sit far below it. Our <span class="math inline">\(r = 16\)</span> is 0.6% of the largest useful rank for most matrices, and 1.6% for <span class="math inline">\(k\)</span> and <span class="math inline">\(v\)</span>.</li>
+</ul>
+<p>Even at the largest rank, LoRA would not be the same as full fine-tuning: the embeddings and norms stay frozen, and the update is learned through the two factors, which behaves differently from training <span class="math inline">\(W\)</span> directly.</p>
+</section>
+<section id="two-checks-on-the-real-model" class="level2" data-number="9.4">
+<h2 data-number="9.4" class="anchored" data-anchor-id="two-checks-on-the-real-model"><span class="header-section-number">9.4</span> Two checks on the real model</h2>
+<p>The claims above are about the model we use, so we test them on it. The artifact above loaded Qwen3-4B twice, in bf16 and in fp32, wrapped it with PEFT at rank 16 and <span class="math inline">\(\alpha = 32\)</span>, and ran one prompt, the first turn of a validation conversation (1348 tokens), through the original model, the wrapped one and the merged one.</p>
+<p><strong>It starts as the base model.</strong> With <span class="math inline">\(B = 0\)</span> the logits of the wrapped model and of the original must be the same:</p>
+<div id="f68e5d28" class="cell" data-execution_count="4">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> precision <span class="kw">in</span> (<span class="st">"bf16"</span>, <span class="st">"fp32"</span>):</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"</span><span class="sc">{</span>precision<span class="sc">}</span><span class="ss">: largest difference between the wrapped and the "</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"original model's logits: </span><span class="sc">{</span>checks[precision][<span class="st">'step0_max_abs_diff'</span>]<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(checks[p][<span class="st">"step0_max_abs_diff"</span>] <span class="op">==</span> <span class="fl">0.0</span> <span class="cf">for</span> p <span class="kw">in</span> (<span class="st">"bf16"</span>, <span class="st">"fp32"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>bf16: largest difference between the wrapped and the original model's logits: 0.0
+fp32: largest difference between the wrapped and the original model's logits: 0.0</code></pre>
+</div>
+</div>
+<p>The logits are identical, not merely close: adding a correction of exactly zero changes nothing, in any precision.</p>
+<p><strong>Merging, in fp32 and in bf16.</strong> After training, the correction can be folded into the weights, <span class="math inline">\(W \leftarrow W + \tfrac{\alpha}{r} BA\)</span>, so the model runs with no extra layers and no extra cost. To test that on a model whose adapter actually does something, we give <span class="math inline">\(B\)</span> random values (small ones, with a standard deviation of 0.01), which moves the logits, and compare the output with the adapter kept separate against the output after <a href="./901_glossary.html#gloss-merging">merging</a> it. We do it twice, with the model in fp32 and in bf16:</p>
+<div id="869fa71b" class="cell" data-execution_count="5">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>merge_table <span class="op">=</span> pd.DataFrame({</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    precision: {</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>        <span class="st">"largest logit change caused by the adapter"</span>:</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>            checks[precision][<span class="st">"adapter_effect_max_abs"</span>],</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>        <span class="st">"largest difference, merged vs separate"</span>:</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>            checks[precision][<span class="st">"merge_max_abs_diff"</span>],</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"same top token, merged vs separate"</span>:</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>checks[precision][<span class="st">'merge_top1_agreement'</span>]<span class="sc">:.1%}</span><span class="ss">"</span>,</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="st">"same top token, adapter vs base model"</span>:</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>checks[precision][<span class="st">'adapter_top1_agreement'</span>]<span class="sc">:.1%}</span><span class="ss">"</span>,</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> precision <span class="kw">in</span> (<span class="st">"fp32"</span>, <span class="st">"bf16"</span>)</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>checks[<span class="st">'n_positions'</span>]<span class="sc">}</span><span class="ss"> positions; the logits of the original model "</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"go up to about </span><span class="sc">{</span>checks[<span class="st">'bf16'</span>][<span class="st">'logit_scale'</span>]<span class="sc">:.0f}</span><span class="ss">"</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a>merge_table</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>1348 positions; the logits of the original model go up to about 52</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="5">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">fp32</th>
+<th data-quarto-table-cell-role="th">bf16</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">largest logit change caused by the adapter</th>
+<td>14.689929</td>
+<td>15.125</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">largest difference, merged vs separate</th>
+<td>0.001925</td>
+<td>15.28125</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">same top token, merged vs separate</th>
+<td>100.0%</td>
+<td>95.7%</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">same top token, adapter vs base model</th>
+<td>95.2%</td>
+<td>93.2%</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<div id="45a4d7e5" class="cell" data-execution_count="6">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>fp32, bf16 <span class="op">=</span> checks[<span class="st">"fp32"</span>], checks[<span class="st">"bf16"</span>]</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> fp32[<span class="st">"merge_max_abs_diff"</span>] <span class="op">&lt;</span> <span class="fl">0.01</span> <span class="op">*</span> fp32[<span class="st">"adapter_effect_max_abs"</span>]<span class="op">\</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    <span class="kw">and</span> fp32[<span class="st">"merge_top1_agreement"</span>] <span class="op">==</span> <span class="fl">1.0</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p><strong>In fp32, merging is the same function.</strong> The largest difference between the merged and the separate adapter is 0.002 in the logits, against 14.7 for the effect of the adapter itself, and the top token is the same at every position: the difference is float rounding.</p>
+<p><strong>In bf16, it is not.</strong> The largest difference is 15.3, as large as the adapter’s own effect, and the merged model picks a different top token at 4% of the positions. One likely reason: the merged weights <span class="math inline">\(W + \tfrac{\alpha}{r}BA\)</span> are rounded to bf16 when they are stored, which discards the low bits of a small correction, and the separate adapter keeps them. Another is probably that a random <span class="math inline">\(B\)</span> is a large, arbitrary perturbation of the model, which makes its output sensitive to every small rounding, so a trained adapter, smaller and with structure, may merge better. We have not measured that.</p>
+<p>What does keep the adapter’s exact effect is not to merge it into bf16 weights: either leave it separate, a bf16 base model with an fp32 adapter, which is how we train it and PEFT’s default, or merge and keep the whole model in fp32 (twice the memory). Merging and then casting to bf16 stores rounded weights, which is the case we measured, so a merged bf16 model has to be evaluated before it is relied on. <a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a> does that on the trained adapter.</p>
+</section>
+<section id="rank-alpha-and-what-we-leave-out" class="level2" data-number="9.5">
+<h2 data-number="9.5" class="anchored" data-anchor-id="rank-alpha-and-what-we-leave-out"><span class="header-section-number">9.5</span> Rank, alpha and what we leave out</h2>
+<ul>
+<li><strong>Rank</strong> is capacity: a rank-<span class="math inline">\(r\)</span> update can change each layer’s output in only <span class="math inline">\(r\)</span> directions. Too small and the model cannot fit the task; beyond what the task needs, more rank only adds weights. How much the task needs is an empirical question, and we answer it with a rank sweep, below and above 16 (<a href="403_rank_sweep.html" class="quarto-xref"><span>Chapter 17</span></a>).</li>
+<li><strong><a href="./901_glossary.html#gloss-alpha">Alpha</a></strong> sets the size of the correction. Keeping <span class="math inline">\(\alpha = 2r\)</span> keeps the scale fixed at 2 whatever the rank, so rank is the only thing the sweep changes.</li>
+<li><strong><a href="./901_glossary.html#gloss-qlora">QLoRA</a></strong> <span class="citation" data-cites="dettmers2023qlora">(<a href="902_references.html#ref-dettmers2023qlora" role="doc-biblioref">Dettmers et al. 2023</a>)</span> stores the frozen base weights in 4 bits, to save memory, and trains the adapters in higher precision on top. We do not need it: the 4B model’s bf16 weights take 8 GB, which the machine holds with room to spare.</li>
+</ul>
+<div class="callout callout-style-default callout-note callout-titled" title="Under the hood">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Under the hood
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The two views of <a href="#fig-lora-matrix" class="quarto-xref">Figure&nbsp;<span>9.1</span></a> compute the same function in exact arithmetic, but they are not interchangeable in practice. Training runs the right-hand view, because it never builds the big matrix. Merging builds <span class="math inline">\(W + \tfrac{\alpha}{r}BA\)</span> once, which is what makes inference free of extra cost. A merge cannot be undone exactly: once the correction is added to bf16 weights the original <span class="math inline">\(W\)</span> cannot be recovered, so we keep the adapter file and not only the merged model. In fp32 the adapter of the main run is about 132 MB, against 8 GB for the model.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled" title="Further reading">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Further reading
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>The LoRA paper <span class="citation" data-cites="hu2022lora">(<a href="902_references.html#ref-hu2022lora" role="doc-biblioref">Hu et al. 2022</a>)</span> introduces the method and the low-rank hypothesis it rests on.</li>
+<li>QLoRA <span class="citation" data-cites="dettmers2023qlora">(<a href="902_references.html#ref-dettmers2023qlora" role="doc-biblioref">Dettmers et al. 2023</a>)</span> combines it with a 4-bit base model.</li>
+<li>Low-rank factorization for recommendation <span class="citation" data-cites="koren2009matrix">(<a href="902_references.html#ref-koren2009matrix" role="doc-biblioref">Koren et al. 2009</a>)</span> is the older use of the same product-of-thin-matrices idea.</li>
+</ul>
+</div>
+</div>
+
+
+<!-- -->
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-dettmers2023qlora" class="csl-entry" role="listitem">
+Dettmers, Tim, Artidoro Pagnoni, Ari Holtzman, and Luke Zettlemoyer. 2023. <span>“<span>QLoRA</span>: Efficient Finetuning of Quantized <span>LLMs</span>.”</span> <em>Advances in Neural Information Processing Systems</em> 36.
+</div>
+<div id="ref-hu2022lora" class="csl-entry" role="listitem">
+Hu, Edward J., Yelong Shen, Phillip Wallis, et al. 2022. <span>“<span>LoRA</span>: Low-Rank Adaptation of Large Language Models.”</span> <em>International Conference on Learning Representations</em>.
+</div>
+<div id="ref-koren2009matrix" class="csl-entry" role="listitem">
+Koren, Yehuda, Robert Bell, and Chris Volinsky. 2009. <span>“Matrix Factorization Techniques for Recommender Systems.”</span> <em>Computer</em> 42 (8): 30–37.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const cellDetails = window.document.querySelectorAll(".cell details.code-fold");
+        for (let i=0; i<cellDetails.length; i++) {
+          const details = cellDetails[i];
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell div.sourceCode.cell-code");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./205_how_fine_tuning.html" class="pagination-link" aria-label="How fine-tuning works">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">How fine-tuning works</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./301_formatting_conversations.html" class="pagination-link" aria-label="Formatting conversations for training">
+        <span class="nav-page-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Formatting conversations for training</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb10" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="fu"># LoRA in detail {#sec-lora}</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>**You will learn:**</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>what a LoRA <span class="co">[</span><span class="ot">adapter</span><span class="co">](901_glossary.qmd#gloss-adapter)</span> is, and why a *low-rank* update is a reasonable thing to try;</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>which layers of Qwen3-4B get adapters, and what they cost in parameters;</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>how to check, on the real model, that an adapter starts as the identity, and what happens when it is merged into the weights.</span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>@sec-fine-tuning showed that fine-tuning every weight is expensive: the weights, their gradients and the</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a>optimizer state all have to fit in memory, and a narrow task may not need all of that freedom.</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>**[LoRA](901_glossary.qmd#gloss-lora)** (low-rank adaptation) <span class="co">[</span><span class="ot">@hu2022lora</span><span class="co">]</span> freezes the model and learns a small correction to each of its</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>big matrices instead. Writing a large matrix as the product of two thin ones is an old trick: recommender</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>systems, for example, factor the matrix of user ratings into a user part and an item part</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">@koren2009matrix</span><span class="co">]</span>. LoRA uses the same trick on a different object. What is factored is not the data but the</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>*update* to a frozen weight.</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a><span class="fu">## The idea</span></span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>A linear layer in the model multiplies its input by a weight matrix $W$. LoRA leaves $W$ alone and adds</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>a correction that is the product of two thin matrices:</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>W' = W + \frac{\alpha}{r}\, B\,A, \qquad B \in \mathbb{R}^{d_\text{out} \times r}, \quad A \in \mathbb{R}^{r \times d_\text{in}} .</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>$$</span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>The number $r$, the **[rank](901_glossary.qmd#gloss-rank)**, is chosen small (we start with 16) compared with $d_\text{in}$ and $d_\text{out}$,</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>which are in the thousands. A product of an $r$-column and an $r$-row matrix can only change the layer's</span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>output within an $r$-dimensional space, so the update is **low-rank** however large the layer is.</span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>@fig-lora-matrix shows one matrix of Qwen3-4B in two equivalent views.</span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a><span class="al">![One weight matrix with a LoRA adapter (Qwen3-4B's `gate_proj`, rank 16). Left: the adapted weight is the frozen W plus the product of two thin matrices scaled by α/r, which is what merging produces. Right: what training runs. The input goes through W and, separately, through A then B, and the outputs are added, so the full 9,728 × 2,560 product is never built in memory. Only r = 16 numbers pass between A and B, and the trained matrices hold 196,608 weights, against 24.9 million in W. The thin matrices are drawn wider than their true proportion.](figures/lora_matrix.svg)</span>{#fig-lora-matrix fig-alt="Two panels. Left: W-prime equals frozen W plus a thin tall B times a thin flat A, scaled by alpha over r. Right: the input splits into a path through frozen W and a path through A then B; the two outputs are summed. A dashed box around A and B notes that their product is never built."}</span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a>Three details are worth knowing.</span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Why it is cheap.** During training the input is multiplied by $A$ first and then by $B$, so only a vector of</span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a>  $r$ numbers sits between them. The big update matrix $BA$ is never formed. Only $A$ and $B$ have gradients and</span>
+<span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>  optimizer state, which is why LoRA's memory cost in @sec-fine-tuning was small.</span>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Why it starts as the identity.** $B$ is initialized to zero and $A$ to small random values (PEFT's default is</span>
+<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a>  the same initialization as an ordinary linear layer: uniform in $\pm 1/\sqrt{d_\text{in}}$, about $\pm 0.02$ for our</span>
+<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a>  matrices; other schemes exist, some of which start from the weights' singular components). At step 0 the</span>
+<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>  correction $BA$ is exactly zero, so the model begins as the base model. $A$ must not be zero too: with $B = 0$</span>
+<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>  the gradient of $B$ depends on $A$'s output, so a zero $A$ would give no gradient to start from.</span>
+<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**What $\alpha/r$ does.** It scales the correction. We set $\alpha = 2r$, so the scale is 2 at every rank we</span>
+<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a>  try; changing $\alpha$ is, to a first approximation, like changing the learning rate of the adapter.</span>
+<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a>The bet LoRA makes is that the change a task needs, $W' - W$, is of low rank. It is a bet, not a fact: the training</span>
+<span id="cb10-47"><a href="#cb10-47" aria-hidden="true" tabindex="-1"></a>chapter tests it by looking at the singular values of the update the</span>
+<span id="cb10-48"><a href="#cb10-48" aria-hidden="true" tabindex="-1"></a>training produces.</span>
+<span id="cb10-49"><a href="#cb10-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-50"><a href="#cb10-50" aria-hidden="true" tabindex="-1"></a><span class="fu">## Where the adapters go</span></span>
+<span id="cb10-51"><a href="#cb10-51" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-52"><a href="#cb10-52" aria-hidden="true" tabindex="-1"></a>We put an adapter on every linear layer of the transformer blocks, which PEFT calls <span class="in">`target_modules="all-linear"`</span>.</span>
+<span id="cb10-53"><a href="#cb10-53" aria-hidden="true" tabindex="-1"></a>@fig-lora-layer marks them on one decoder layer: four in attention and three in the feed-forward block.</span>
+<span id="cb10-54"><a href="#cb10-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-55"><a href="#cb10-55" aria-hidden="true" tabindex="-1"></a><span class="al">![One decoder layer of Qwen3-4B, repeated 36 times. The seven linear layers LoRA adapts are green: q, k, v and o in attention, and gate, up and down in the feed-forward block. The embeddings, the norms, the output head and the parts with no weights have no adapter.](figures/lora_layer.svg)</span>{#fig-lora-layer fig-alt="A decoder layer inside a dashed box labelled 36 times. Seven boxes are highlighted: q, k, v and o projections in the attention part, and gate, up and down projections in the feed-forward part. The embeddings, the two RMSNorms and the output head are grey."}</span>
+<span id="cb10-56"><a href="#cb10-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-57"><a href="#cb10-57" aria-hidden="true" tabindex="-1"></a>That is $36 \times 7 = 252$ adapters, the number of modules @sec-anatomy counted. The embeddings, the</span>
+<span id="cb10-58"><a href="#cb10-58" aria-hidden="true" tabindex="-1"></a>normalization scales and the output head are not adapted, and stay as they were.</span>
+<span id="cb10-59"><a href="#cb10-59" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-60"><a href="#cb10-60" aria-hidden="true" tabindex="-1"></a><span class="fu">## What it costs</span></span>
+<span id="cb10-61"><a href="#cb10-61" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-62"><a href="#cb10-62" aria-hidden="true" tabindex="-1"></a>A matrix with $d_\text{in}$ inputs and $d_\text{out}$ outputs has $d_\text{in}\, d_\text{out}$ weights; its adapter has</span>
+<span id="cb10-63"><a href="#cb10-63" aria-hidden="true" tabindex="-1"></a>$r\,(d_\text{in} + d_\text{out})$. We can compute the cost for Qwen3-4B from the model's configuration, and check the</span>
+<span id="cb10-64"><a href="#cb10-64" aria-hidden="true" tabindex="-1"></a>total against what PEFT reports once it has wrapped the real model.</span>
+<span id="cb10-65"><a href="#cb10-65" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-68"><a href="#cb10-68" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb10-69"><a href="#cb10-69" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb10-70"><a href="#cb10-70" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> math</span>
+<span id="cb10-71"><a href="#cb10-71" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-72"><a href="#cb10-72" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb10-73"><a href="#cb10-73" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> AutoConfig</span>
+<span id="cb10-74"><a href="#cb10-74" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-75"><a href="#cb10-75" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.artifacts <span class="im">import</span> artifact, get</span>
+<span id="cb10-76"><a href="#cb10-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-77"><a href="#cb10-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-78"><a href="#cb10-78" aria-hidden="true" tabindex="-1"></a><span class="at">@artifact</span>(</span>
+<span id="cb10-79"><a href="#cb10-79" aria-hidden="true" tabindex="-1"></a>  <span class="st">"lora_checks"</span>,</span>
+<span id="cb10-80"><a href="#cb10-80" aria-hidden="true" tabindex="-1"></a>  deps<span class="op">=</span>[<span class="st">"train_val_split"</span>],</span>
+<span id="cb10-81"><a href="#cb10-81" aria-hidden="true" tabindex="-1"></a>  files<span class="op">=</span>[<span class="st">"configs/lora_checks.json"</span>],</span>
+<span id="cb10-82"><a href="#cb10-82" aria-hidden="true" tabindex="-1"></a>  heavy<span class="op">=</span><span class="va">True</span></span>
+<span id="cb10-83"><a href="#cb10-83" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-84"><a href="#cb10-84" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_lora_checks(out, deps, files):</span>
+<span id="cb10-85"><a href="#cb10-85" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> json</span>
+<span id="cb10-86"><a href="#cb10-86" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-87"><a href="#cb10-87" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.formatting <span class="im">import</span> prompt_messages</span>
+<span id="cb10-88"><a href="#cb10-88" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.adapters <span class="im">import</span> lora_checks</span>
+<span id="cb10-89"><a href="#cb10-89" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-90"><a href="#cb10-90" aria-hidden="true" tabindex="-1"></a>    cfg <span class="op">=</span> files[<span class="st">"configs/lora_checks.json"</span>].json()</span>
+<span id="cb10-91"><a href="#cb10-91" aria-hidden="true" tabindex="-1"></a>    conv <span class="op">=</span> <span class="bu">next</span>(<span class="bu">iter</span>(deps[<span class="st">"train_val_split"</span>].jsonl(<span class="st">"val.jsonl"</span>)))</span>
+<span id="cb10-92"><a href="#cb10-92" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> lora_checks(</span>
+<span id="cb10-93"><a href="#cb10-93" aria-hidden="true" tabindex="-1"></a>        cfg[<span class="st">"model"</span>], prompt_messages(conv, <span class="dv">0</span>),</span>
+<span id="cb10-94"><a href="#cb10-94" aria-hidden="true" tabindex="-1"></a>        r<span class="op">=</span>cfg[<span class="st">"r"</span>],</span>
+<span id="cb10-95"><a href="#cb10-95" aria-hidden="true" tabindex="-1"></a>        alpha<span class="op">=</span>cfg[<span class="st">"alpha"</span>],</span>
+<span id="cb10-96"><a href="#cb10-96" aria-hidden="true" tabindex="-1"></a>        b_std<span class="op">=</span>cfg[<span class="st">"b_std"</span>],</span>
+<span id="cb10-97"><a href="#cb10-97" aria-hidden="true" tabindex="-1"></a>        seed<span class="op">=</span>cfg[<span class="st">"seed"</span>],</span>
+<span id="cb10-98"><a href="#cb10-98" aria-hidden="true" tabindex="-1"></a>        memory_cap_gb<span class="op">=</span>cfg[<span class="st">"memory_cap_gb"</span>],</span>
+<span id="cb10-99"><a href="#cb10-99" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb10-100"><a href="#cb10-100" aria-hidden="true" tabindex="-1"></a>    (out <span class="op">/</span> <span class="st">"checks.json"</span>).write_text(json.dumps(result))</span>
+<span id="cb10-101"><a href="#cb10-101" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-102"><a href="#cb10-102" aria-hidden="true" tabindex="-1"></a>checks <span class="op">=</span> get(<span class="st">"lora_checks"</span>).json(<span class="st">"checks.json"</span>)</span>
+<span id="cb10-103"><a href="#cb10-103" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-104"><a href="#cb10-104" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> AutoConfig.from_pretrained(<span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span>)</span>
+<span id="cb10-105"><a href="#cb10-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-106"><a href="#cb10-106" aria-hidden="true" tabindex="-1"></a>hidden <span class="op">=</span> config.hidden_size</span>
+<span id="cb10-107"><a href="#cb10-107" aria-hidden="true" tabindex="-1"></a>ff <span class="op">=</span> config.intermediate_size</span>
+<span id="cb10-108"><a href="#cb10-108" aria-hidden="true" tabindex="-1"></a>layers <span class="op">=</span> config.num_hidden_layers</span>
+<span id="cb10-109"><a href="#cb10-109" aria-hidden="true" tabindex="-1"></a>q_out <span class="op">=</span> config.num_attention_heads <span class="op">*</span> config.head_dim</span>
+<span id="cb10-110"><a href="#cb10-110" aria-hidden="true" tabindex="-1"></a>kv_out <span class="op">=</span> config.num_key_value_heads <span class="op">*</span> config.head_dim</span>
+<span id="cb10-111"><a href="#cb10-111" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-112"><a href="#cb10-112" aria-hidden="true" tabindex="-1"></a>projections <span class="op">=</span> {  <span class="co"># name: (inputs, outputs)</span></span>
+<span id="cb10-113"><a href="#cb10-113" aria-hidden="true" tabindex="-1"></a>    <span class="st">"q_proj"</span>: (hidden, q_out),</span>
+<span id="cb10-114"><a href="#cb10-114" aria-hidden="true" tabindex="-1"></a>    <span class="st">"k_proj"</span>: (hidden, kv_out),</span>
+<span id="cb10-115"><a href="#cb10-115" aria-hidden="true" tabindex="-1"></a>    <span class="st">"v_proj"</span>: (hidden, kv_out),</span>
+<span id="cb10-116"><a href="#cb10-116" aria-hidden="true" tabindex="-1"></a>    <span class="st">"o_proj"</span>: (q_out, hidden),</span>
+<span id="cb10-117"><a href="#cb10-117" aria-hidden="true" tabindex="-1"></a>    <span class="st">"gate_proj"</span>: (hidden, ff),</span>
+<span id="cb10-118"><a href="#cb10-118" aria-hidden="true" tabindex="-1"></a>    <span class="st">"up_proj"</span>: (hidden, ff),</span>
+<span id="cb10-119"><a href="#cb10-119" aria-hidden="true" tabindex="-1"></a>    <span class="st">"down_proj"</span>: (ff, hidden),</span>
+<span id="cb10-120"><a href="#cb10-120" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-121"><a href="#cb10-121" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-122"><a href="#cb10-122" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> <span class="dv">16</span></span>
+<span id="cb10-123"><a href="#cb10-123" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> {</span>
+<span id="cb10-124"><a href="#cb10-124" aria-hidden="true" tabindex="-1"></a>    name: {</span>
+<span id="cb10-125"><a href="#cb10-125" aria-hidden="true" tabindex="-1"></a>        <span class="st">"shape (in → out)"</span>: <span class="ss">f"</span><span class="sc">{</span>i<span class="sc">:,}</span><span class="ss"> → </span><span class="sc">{</span>o<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb10-126"><a href="#cb10-126" aria-hidden="true" tabindex="-1"></a>        <span class="st">"full weights"</span>: <span class="ss">f"</span><span class="sc">{</span>i <span class="op">*</span> o<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb10-127"><a href="#cb10-127" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"adapter weights, r=</span><span class="sc">{</span>r<span class="sc">}</span><span class="ss">"</span>: <span class="ss">f"</span><span class="sc">{</span>r <span class="op">*</span> (i <span class="op">+</span> o)<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb10-128"><a href="#cb10-128" aria-hidden="true" tabindex="-1"></a>        <span class="st">"adapter / full"</span>: <span class="ss">f"</span><span class="sc">{</span>r <span class="op">*</span> (i <span class="op">+</span> o) <span class="op">/</span> (i <span class="op">*</span> o)<span class="sc">:.1%}</span><span class="ss">"</span>,</span>
+<span id="cb10-129"><a href="#cb10-129" aria-hidden="true" tabindex="-1"></a>        <span class="st">"largest useful rank"</span>: <span class="ss">f"</span><span class="sc">{</span><span class="bu">min</span>(i, o)<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb10-130"><a href="#cb10-130" aria-hidden="true" tabindex="-1"></a>        <span class="st">"break-even rank"</span>: <span class="ss">f"</span><span class="sc">{</span><span class="bu">round</span>(i <span class="op">*</span> o <span class="op">/</span> (i <span class="op">+</span> o))<span class="sc">:,}</span><span class="ss">"</span>,</span>
+<span id="cb10-131"><a href="#cb10-131" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb10-132"><a href="#cb10-132" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name, (i, o) <span class="kw">in</span> projections.items()</span>
+<span id="cb10-133"><a href="#cb10-133" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-134"><a href="#cb10-134" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(rows).T</span>
+<span id="cb10-135"><a href="#cb10-135" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-136"><a href="#cb10-136" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-139"><a href="#cb10-139" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb10-140"><a href="#cb10-140" aria-hidden="true" tabindex="-1"></a>per_layer <span class="op">=</span> <span class="bu">sum</span>(r <span class="op">*</span> (i <span class="op">+</span> o) <span class="cf">for</span> i, o <span class="kw">in</span> projections.values())</span>
+<span id="cb10-141"><a href="#cb10-141" aria-hidden="true" tabindex="-1"></a>total <span class="op">=</span> per_layer <span class="op">*</span> layers</span>
+<span id="cb10-142"><a href="#cb10-142" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb10-143"><a href="#cb10-143" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"adapter weights per layer: </span><span class="sc">{</span>per_layer<span class="sc">:,}</span><span class="ss">;  × </span><span class="sc">{</span>layers<span class="sc">}</span><span class="ss"> layers = </span><span class="sc">{</span>total<span class="sc">:,}</span><span class="ss">"</span></span>
+<span id="cb10-144"><a href="#cb10-144" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-145"><a href="#cb10-145" aria-hidden="true" tabindex="-1"></a>peft <span class="op">=</span> checks[<span class="st">"bf16"</span>]</span>
+<span id="cb10-146"><a href="#cb10-146" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"PEFT's count of trainable parameters:   </span><span class="sc">{</span>peft[<span class="st">'trainable_params'</span>]<span class="sc">:,}</span><span class="ss">"</span>)</span>
+<span id="cb10-147"><a href="#cb10-147" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb10-148"><a href="#cb10-148" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"adapted modules: </span><span class="sc">{</span>peft[<span class="st">'adapted_modules'</span>]<span class="sc">}</span><span class="ss">   "</span></span>
+<span id="cb10-149"><a href="#cb10-149" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"share of the model: </span><span class="sc">{</span>total <span class="op">/</span> checks[<span class="st">'base_params'</span>]<span class="sc">:.2%}</span><span class="ss">"</span></span>
+<span id="cb10-150"><a href="#cb10-150" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-151"><a href="#cb10-151" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> total <span class="op">==</span> peft[<span class="st">"trainable_params"</span>]<span class="op">\</span></span>
+<span id="cb10-152"><a href="#cb10-152" aria-hidden="true" tabindex="-1"></a>    <span class="kw">and</span> peft[<span class="st">"adapted_modules"</span>] <span class="op">==</span> layers <span class="op">*</span> <span class="bu">len</span>(projections)</span>
+<span id="cb10-153"><a href="#cb10-153" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"saved as fp32, the adapter is about </span><span class="sc">{</span>total <span class="op">*</span> <span class="dv">4</span> <span class="op">/</span> <span class="fl">1e6</span><span class="sc">:.0f}</span><span class="ss"> MB"</span>)</span>
+<span id="cb10-154"><a href="#cb10-154" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-155"><a href="#cb10-155" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-158"><a href="#cb10-158" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb10-159"><a href="#cb10-159" aria-hidden="true" tabindex="-1"></a>largest <span class="op">=</span> {name: <span class="bu">min</span>(i, o) <span class="cf">for</span> name, (i, o) <span class="kw">in</span> projections.items()}</span>
+<span id="cb10-160"><a href="#cb10-160" aria-hidden="true" tabindex="-1"></a>break_even <span class="op">=</span> {</span>
+<span id="cb10-161"><a href="#cb10-161" aria-hidden="true" tabindex="-1"></a>    name: i <span class="op">*</span> o <span class="op">/</span> (i <span class="op">+</span> o) <span class="cf">for</span> name, (i, o) <span class="kw">in</span> projections.items()</span>
+<span id="cb10-162"><a href="#cb10-162" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb10-163"><a href="#cb10-163" aria-hidden="true" tabindex="-1"></a>wide <span class="op">=</span> <span class="bu">max</span>(largest.values())</span>
+<span id="cb10-164"><a href="#cb10-164" aria-hidden="true" tabindex="-1"></a>narrow <span class="op">=</span> <span class="bu">min</span>(largest.values())</span>
+<span id="cb10-165"><a href="#cb10-165" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">sorted</span>(<span class="bu">set</span>(largest.values())) <span class="op">==</span> [narrow, wide]</span>
+<span id="cb10-166"><a href="#cb10-166" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> [n <span class="cf">for</span> n, v <span class="kw">in</span> largest.items() <span class="cf">if</span> v <span class="op">==</span> narrow] <span class="op">==</span> [<span class="st">"k_proj"</span>, <span class="st">"v_proj"</span>]</span>
+<span id="cb10-167"><a href="#cb10-167" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(be <span class="op">&gt;</span> <span class="dv">10</span> <span class="op">*</span> r <span class="cf">for</span> be <span class="kw">in</span> break_even.values())</span>
+<span id="cb10-168"><a href="#cb10-168" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-169"><a href="#cb10-169" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-170"><a href="#cb10-170" aria-hidden="true" tabindex="-1"></a>At rank 16 the adapters hold <span class="in">`{python} f"{total / 1e6:.1f}"`</span> million weights, <span class="in">`{python} f"{total / checks['base_params']:.2%}"`</span></span>
+<span id="cb10-171"><a href="#cb10-171" aria-hidden="true" tabindex="-1"></a>of the model, and the count equals PEFT's. Two columns of the table matter for choosing a rank.</span>
+<span id="cb10-172"><a href="#cb10-172" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-173"><a href="#cb10-173" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Largest useful rank.** The product $BA$ can never have a rank above $\min(d_\text{in}, d_\text{out})$. At</span>
+<span id="cb10-174"><a href="#cb10-174" aria-hidden="true" tabindex="-1"></a>  that rank the update can be any matrix of the layer's shape: <span class="in">`{python} f"{wide:,}"`</span> for most matrices and <span class="in">`{python} f"{narrow:,}"`</span> for $k$ and $v$.</span>
+<span id="cb10-175"><a href="#cb10-175" aria-hidden="true" tabindex="-1"></a>  A rank beyond it adds weights and no new updates.</span>
+<span id="cb10-176"><a href="#cb10-176" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Break-even rank.** Where $r\,(d_\text{in}+d_\text{out}) = d_\text{in}\, d_\text{out}$, the adapter has as many weights as</span>
+<span id="cb10-177"><a href="#cb10-177" aria-hidden="true" tabindex="-1"></a>  the matrix it adapts: between <span class="in">`{python} f"{min(break_even.values()):,.0f}"`</span> and <span class="in">`{python} f"{max(break_even.values()):,.0f}"`</span> here. Above that LoRA is not smaller than full fine-tuning, so</span>
+<span id="cb10-178"><a href="#cb10-178" aria-hidden="true" tabindex="-1"></a>  useful ranks sit far below it. Our $r = 16$ is <span class="in">`{python} f"{r / wide:.1%}"`</span> of the largest useful rank for most matrices, and <span class="in">`{python} f"{r / narrow:.1%}"`</span> for $k$ and $v$.</span>
+<span id="cb10-179"><a href="#cb10-179" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-180"><a href="#cb10-180" aria-hidden="true" tabindex="-1"></a>Even at the largest rank, LoRA would not be the same as full fine-tuning: the embeddings and norms stay frozen,</span>
+<span id="cb10-181"><a href="#cb10-181" aria-hidden="true" tabindex="-1"></a>and the update is learned through the two factors, which behaves differently from training $W$ directly.</span>
+<span id="cb10-182"><a href="#cb10-182" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-183"><a href="#cb10-183" aria-hidden="true" tabindex="-1"></a><span class="fu">## Two checks on the real model</span></span>
+<span id="cb10-184"><a href="#cb10-184" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-185"><a href="#cb10-185" aria-hidden="true" tabindex="-1"></a>The claims above are about the model we use, so we test them on it. The artifact above loaded Qwen3-4B twice, in bf16 and in fp32,</span>
+<span id="cb10-186"><a href="#cb10-186" aria-hidden="true" tabindex="-1"></a>wrapped it with PEFT at rank 16 and $\alpha = 32$, and ran one prompt, the first turn of a validation</span>
+<span id="cb10-187"><a href="#cb10-187" aria-hidden="true" tabindex="-1"></a>conversation (<span class="in">`{python} checks["n_positions"]`</span> tokens), through the original model, the wrapped one and the merged one.</span>
+<span id="cb10-188"><a href="#cb10-188" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-189"><a href="#cb10-189" aria-hidden="true" tabindex="-1"></a>**It starts as the base model.** With $B = 0$ the logits of the wrapped model and of the original must be the same:</span>
+<span id="cb10-190"><a href="#cb10-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-193"><a href="#cb10-193" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb10-194"><a href="#cb10-194" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> precision <span class="kw">in</span> (<span class="st">"bf16"</span>, <span class="st">"fp32"</span>):</span>
+<span id="cb10-195"><a href="#cb10-195" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(</span>
+<span id="cb10-196"><a href="#cb10-196" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"</span><span class="sc">{</span>precision<span class="sc">}</span><span class="ss">: largest difference between the wrapped and the "</span></span>
+<span id="cb10-197"><a href="#cb10-197" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"original model's logits: </span><span class="sc">{</span>checks[precision][<span class="st">'step0_max_abs_diff'</span>]<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb10-198"><a href="#cb10-198" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb10-199"><a href="#cb10-199" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(checks[p][<span class="st">"step0_max_abs_diff"</span>] <span class="op">==</span> <span class="fl">0.0</span> <span class="cf">for</span> p <span class="kw">in</span> (<span class="st">"bf16"</span>, <span class="st">"fp32"</span>))</span>
+<span id="cb10-200"><a href="#cb10-200" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-201"><a href="#cb10-201" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-202"><a href="#cb10-202" aria-hidden="true" tabindex="-1"></a>The logits are identical, not merely close: adding a correction of exactly zero changes nothing, in any precision.</span>
+<span id="cb10-203"><a href="#cb10-203" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-204"><a href="#cb10-204" aria-hidden="true" tabindex="-1"></a>**Merging, in fp32 and in bf16.** After training, the correction can be folded into the weights,</span>
+<span id="cb10-205"><a href="#cb10-205" aria-hidden="true" tabindex="-1"></a>$W \leftarrow W + \tfrac{\alpha}{r} BA$, so the model runs with no extra layers and no extra cost. To test that on a</span>
+<span id="cb10-206"><a href="#cb10-206" aria-hidden="true" tabindex="-1"></a>model whose adapter actually does something, we give $B$ random values (small ones, with a standard deviation</span>
+<span id="cb10-207"><a href="#cb10-207" aria-hidden="true" tabindex="-1"></a>of 0.01), which moves the logits, and compare the output with the adapter kept separate against the output</span>
+<span id="cb10-208"><a href="#cb10-208" aria-hidden="true" tabindex="-1"></a>after <span class="co">[</span><span class="ot">merging</span><span class="co">](901_glossary.qmd#gloss-merging)</span> it. We do it twice, with the model in fp32 and in bf16:</span>
+<span id="cb10-209"><a href="#cb10-209" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-212"><a href="#cb10-212" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb10-213"><a href="#cb10-213" aria-hidden="true" tabindex="-1"></a>merge_table <span class="op">=</span> pd.DataFrame({</span>
+<span id="cb10-214"><a href="#cb10-214" aria-hidden="true" tabindex="-1"></a>    precision: {</span>
+<span id="cb10-215"><a href="#cb10-215" aria-hidden="true" tabindex="-1"></a>        <span class="st">"largest logit change caused by the adapter"</span>:</span>
+<span id="cb10-216"><a href="#cb10-216" aria-hidden="true" tabindex="-1"></a>            checks[precision][<span class="st">"adapter_effect_max_abs"</span>],</span>
+<span id="cb10-217"><a href="#cb10-217" aria-hidden="true" tabindex="-1"></a>        <span class="st">"largest difference, merged vs separate"</span>:</span>
+<span id="cb10-218"><a href="#cb10-218" aria-hidden="true" tabindex="-1"></a>            checks[precision][<span class="st">"merge_max_abs_diff"</span>],</span>
+<span id="cb10-219"><a href="#cb10-219" aria-hidden="true" tabindex="-1"></a>        <span class="st">"same top token, merged vs separate"</span>:</span>
+<span id="cb10-220"><a href="#cb10-220" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>checks[precision][<span class="st">'merge_top1_agreement'</span>]<span class="sc">:.1%}</span><span class="ss">"</span>,</span>
+<span id="cb10-221"><a href="#cb10-221" aria-hidden="true" tabindex="-1"></a>        <span class="st">"same top token, adapter vs base model"</span>:</span>
+<span id="cb10-222"><a href="#cb10-222" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>checks[precision][<span class="st">'adapter_top1_agreement'</span>]<span class="sc">:.1%}</span><span class="ss">"</span>,</span>
+<span id="cb10-223"><a href="#cb10-223" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb10-224"><a href="#cb10-224" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> precision <span class="kw">in</span> (<span class="st">"fp32"</span>, <span class="st">"bf16"</span>)</span>
+<span id="cb10-225"><a href="#cb10-225" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb10-226"><a href="#cb10-226" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb10-227"><a href="#cb10-227" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>checks[<span class="st">'n_positions'</span>]<span class="sc">}</span><span class="ss"> positions; the logits of the original model "</span></span>
+<span id="cb10-228"><a href="#cb10-228" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"go up to about </span><span class="sc">{</span>checks[<span class="st">'bf16'</span>][<span class="st">'logit_scale'</span>]<span class="sc">:.0f}</span><span class="ss">"</span></span>
+<span id="cb10-229"><a href="#cb10-229" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-230"><a href="#cb10-230" aria-hidden="true" tabindex="-1"></a>merge_table</span>
+<span id="cb10-231"><a href="#cb10-231" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-232"><a href="#cb10-232" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-235"><a href="#cb10-235" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb10-236"><a href="#cb10-236" aria-hidden="true" tabindex="-1"></a>fp32, bf16 <span class="op">=</span> checks[<span class="st">"fp32"</span>], checks[<span class="st">"bf16"</span>]</span>
+<span id="cb10-237"><a href="#cb10-237" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> fp32[<span class="st">"merge_max_abs_diff"</span>] <span class="op">&lt;</span> <span class="fl">0.01</span> <span class="op">*</span> fp32[<span class="st">"adapter_effect_max_abs"</span>]<span class="op">\</span></span>
+<span id="cb10-238"><a href="#cb10-238" aria-hidden="true" tabindex="-1"></a>    <span class="kw">and</span> fp32[<span class="st">"merge_top1_agreement"</span>] <span class="op">==</span> <span class="fl">1.0</span></span>
+<span id="cb10-239"><a href="#cb10-239" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb10-240"><a href="#cb10-240" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-241"><a href="#cb10-241" aria-hidden="true" tabindex="-1"></a>**In fp32, merging is the same function.** The largest difference between the merged and the separate adapter is</span>
+<span id="cb10-242"><a href="#cb10-242" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{fp32['merge_max_abs_diff']:.3f}"`</span> in the logits, against <span class="in">`{python} f"{fp32['adapter_effect_max_abs']:.1f}"`</span> for the effect of the adapter</span>
+<span id="cb10-243"><a href="#cb10-243" aria-hidden="true" tabindex="-1"></a>itself, and the top token is the same at every position: the difference is float rounding.</span>
+<span id="cb10-244"><a href="#cb10-244" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-245"><a href="#cb10-245" aria-hidden="true" tabindex="-1"></a>**In bf16, it is not.** The largest difference is <span class="in">`{python} f"{bf16['merge_max_abs_diff']:.1f}"`</span>, as large as the adapter's own</span>
+<span id="cb10-246"><a href="#cb10-246" aria-hidden="true" tabindex="-1"></a>effect, and the merged model picks a different top token at <span class="in">`{python} f"{1 - bf16['merge_top1_agreement']:.0%}"`</span> of the positions.</span>
+<span id="cb10-247"><a href="#cb10-247" aria-hidden="true" tabindex="-1"></a>One likely reason: the merged weights $W + \tfrac{\alpha}{r}BA$ are rounded to bf16 when they are stored, which</span>
+<span id="cb10-248"><a href="#cb10-248" aria-hidden="true" tabindex="-1"></a>discards the low bits of a small correction, and the separate adapter keeps them. Another is probably that a random</span>
+<span id="cb10-249"><a href="#cb10-249" aria-hidden="true" tabindex="-1"></a>$B$ is a large, arbitrary perturbation of the model, which makes its output sensitive to every small rounding, so a</span>
+<span id="cb10-250"><a href="#cb10-250" aria-hidden="true" tabindex="-1"></a>trained adapter, smaller and with structure, may merge better. We have not measured that.</span>
+<span id="cb10-251"><a href="#cb10-251" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-252"><a href="#cb10-252" aria-hidden="true" tabindex="-1"></a>What does keep the adapter's exact effect is not to merge it into bf16 weights: either leave it separate, a bf16</span>
+<span id="cb10-253"><a href="#cb10-253" aria-hidden="true" tabindex="-1"></a>base model with an fp32 adapter, which is how we train it and PEFT's default, or merge and keep the whole model in</span>
+<span id="cb10-254"><a href="#cb10-254" aria-hidden="true" tabindex="-1"></a>fp32 (twice the memory). Merging and then casting to bf16 stores rounded weights, which is the case we measured, so a</span>
+<span id="cb10-255"><a href="#cb10-255" aria-hidden="true" tabindex="-1"></a>merged bf16 model has to be evaluated before it is relied on. @sec-evaluating does that on the trained adapter.</span>
+<span id="cb10-256"><a href="#cb10-256" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-257"><a href="#cb10-257" aria-hidden="true" tabindex="-1"></a><span class="fu">## Rank, alpha and what we leave out</span></span>
+<span id="cb10-258"><a href="#cb10-258" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-259"><a href="#cb10-259" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**Rank** is capacity: a rank-$r$ update can change each layer's output in only $r$ directions. Too small</span>
+<span id="cb10-260"><a href="#cb10-260" aria-hidden="true" tabindex="-1"></a>  and the model cannot fit the task; beyond what the task needs, more rank only adds weights. How much the task needs</span>
+<span id="cb10-261"><a href="#cb10-261" aria-hidden="true" tabindex="-1"></a>  is an empirical question, and we answer it with a rank sweep, below and above 16 (@sec-rank-sweep).</span>
+<span id="cb10-262"><a href="#cb10-262" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**[Alpha](901_glossary.qmd#gloss-alpha)** sets the size of the correction. Keeping $\alpha = 2r$ keeps the scale fixed at 2 whatever the rank, so</span>
+<span id="cb10-263"><a href="#cb10-263" aria-hidden="true" tabindex="-1"></a>  rank is the only thing the sweep changes.</span>
+<span id="cb10-264"><a href="#cb10-264" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**[QLoRA](901_glossary.qmd#gloss-qlora)** <span class="co">[</span><span class="ot">@dettmers2023qlora</span><span class="co">]</span> stores the frozen base weights in 4 bits, to save memory, and trains the adapters in</span>
+<span id="cb10-265"><a href="#cb10-265" aria-hidden="true" tabindex="-1"></a>  higher precision on top. We do not need it: the 4B model's bf16 weights take <span class="in">`{python} f"{2 * checks['base_params'] / 1e9:.0f}"`</span> GB, which the machine holds with room to spare.</span>
+<span id="cb10-266"><a href="#cb10-266" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-267"><a href="#cb10-267" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Under the hood"}</span>
+<span id="cb10-268"><a href="#cb10-268" aria-hidden="true" tabindex="-1"></a>The two views of @fig-lora-matrix compute the same function in exact arithmetic, but they are not interchangeable in practice.</span>
+<span id="cb10-269"><a href="#cb10-269" aria-hidden="true" tabindex="-1"></a>Training runs the right-hand view, because it never builds the big matrix. Merging builds $W + \tfrac{\alpha}{r}BA$</span>
+<span id="cb10-270"><a href="#cb10-270" aria-hidden="true" tabindex="-1"></a>once, which is what makes inference free of extra cost. A merge cannot be undone exactly: once the correction</span>
+<span id="cb10-271"><a href="#cb10-271" aria-hidden="true" tabindex="-1"></a>is added to bf16 weights the original $W$ cannot be recovered, so we keep the adapter file and not only the</span>
+<span id="cb10-272"><a href="#cb10-272" aria-hidden="true" tabindex="-1"></a>merged model. In fp32 the adapter of the main run is about <span class="in">`{python} f"{total * 4 / 1e6:.0f}"`</span> MB, against <span class="in">`{python} f"{2 * checks['base_params'] / 1e9:.0f}"`</span> GB for the model.</span>
+<span id="cb10-273"><a href="#cb10-273" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb10-274"><a href="#cb10-274" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-275"><a href="#cb10-275" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Further reading"}</span>
+<span id="cb10-276"><a href="#cb10-276" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>The LoRA paper <span class="co">[</span><span class="ot">@hu2022lora</span><span class="co">]</span> introduces the method and the low-rank hypothesis it rests on.</span>
+<span id="cb10-277"><a href="#cb10-277" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>QLoRA <span class="co">[</span><span class="ot">@dettmers2023qlora</span><span class="co">]</span> combines it with a 4-bit base model.</span>
+<span id="cb10-278"><a href="#cb10-278" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>Low-rank factorization for recommendation <span class="co">[</span><span class="ot">@koren2009matrix</span><span class="co">]</span> is the older use of the same product-of-thin-matrices idea.</span>
+<span id="cb10-279"><a href="#cb10-279" aria-hidden="true" tabindex="-1"></a>:::</span>
+</code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

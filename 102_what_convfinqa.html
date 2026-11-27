@@ -1,0 +1,2147 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>2&nbsp; What ConvFinQA looks like – Fine-tuning lab: LLMs on ConvFinQA</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./103_the_dsl.html" rel="next">
+<link href="./101_environment_setup.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-825aa897e66f6637425967c223a89f82.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./101_environment_setup.html">Setup &amp; data</a></li><li class="breadcrumb-item"><a href="./102_what_convfinqa.html"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Fine-tuning lab: LLMs on ConvFinQA</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Setup &amp; data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./101_environment_setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Environment setup</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./102_what_convfinqa.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./103_the_dsl.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">The DSL and its executor</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./201_from_text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">From text to tokens to next-token probabilities</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./202_anatomy_of.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Anatomy of Qwen3-4B</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./203_from_base.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./204_probing_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./205_how_fine_tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">How fine-tuning works</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./206_lora_in.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Experiments</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./301_formatting_conversations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Formatting conversations for training</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./302_the_untuned.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The untuned baseline</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./303_training_with.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Training with LoRA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./304_evaluating_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Evaluating the fine-tuned model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./305_dsl_vs.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">DSL or Python?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./306_constrained_decoding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Constrained decoding</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Beyond</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./402_the_final.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./403_rank_sweep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">How much rank does the task need?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./404_summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Summary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./901_glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./902_references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">References</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#getting-the-data" id="toc-getting-the-data" class="nav-link active" data-scroll-target="#getting-the-data"><span class="header-section-number">2.1</span> Getting the data</a></li>
+  <li><a href="#one-record" id="toc-one-record" class="nav-link" data-scroll-target="#one-record"><span class="header-section-number">2.2</span> One record</a></li>
+  <li><a href="#a-type-i-conversation" id="toc-a-type-i-conversation" class="nav-link" data-scroll-target="#a-type-i-conversation"><span class="header-section-number">2.3</span> A Type I conversation</a></li>
+  <li><a href="#a-type-i-conversation-with-a-garbled-table" id="toc-a-type-i-conversation-with-a-garbled-table" class="nav-link" data-scroll-target="#a-type-i-conversation-with-a-garbled-table"><span class="header-section-number">2.4</span> A Type I conversation with a garbled table</a></li>
+  <li><a href="#a-type-ii-conversation" id="toc-a-type-ii-conversation" class="nav-link" data-scroll-target="#a-type-ii-conversation"><span class="header-section-number">2.5</span> A Type II conversation</a></li>
+  <li><a href="#the-dsl" id="toc-the-dsl" class="nav-link" data-scroll-target="#the-dsl"><span class="header-section-number">2.6</span> The DSL</a>
+  <ul class="collapse">
+  <li><a href="#constants" id="toc-constants" class="nav-link" data-scroll-target="#constants"><span class="header-section-number">2.6.1</span> Constants</a></li>
+  <li><a href="#percentages-and-the-executor" id="toc-percentages-and-the-executor" class="nav-link" data-scroll-target="#percentages-and-the-executor"><span class="header-section-number">2.6.2</span> Percentages and the executor</a></li>
+  <li><a href="#what-the-papers-decoder-may-write" id="toc-what-the-papers-decoder-may-write" class="nav-link" data-scroll-target="#what-the-papers-decoder-may-write"><span class="header-section-number">2.6.3</span> What the paper’s decoder may write</a></li>
+  </ul></li>
+  <li><a href="#how-big-is-it" id="toc-how-big-is-it" class="nav-link" data-scroll-target="#how-big-is-it"><span class="header-section-number">2.7</span> How big is it?</a></li>
+  <li><a href="#how-long-is-a-conversation-in-tokens" id="toc-how-long-is-a-conversation-in-tokens" class="nav-link" data-scroll-target="#how-long-is-a-conversation-in-tokens"><span class="header-section-number">2.8</span> How long is a conversation in tokens?</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./101_environment_setup.html">Setup &amp; data</a></li><li class="breadcrumb-item"><a href="./102_what_convfinqa.html"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></a></li></ol></nav>
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><span id="sec-convfinqa" class="quarto-section-identifier"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></span></h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><strong>You will learn:</strong></p>
+<ul>
+<li>how a ConvFinQA conversation is built from one page of an earnings report;</li>
+<li>what the questions, programs and answers look like, for both conversation types;</li>
+<li>how big the data is, and how long a full conversation gets in tokens, which sets <code>max_length</code> for training.</li>
+</ul>
+<p>ConvFinQA <span class="citation" data-cites="chen2022convfinqa">(<a href="902_references.html#ref-chen2022convfinqa" role="doc-biblioref">Chen et al. 2022</a>)</span> turns FinQA questions about earnings-report pages into multi-turn conversations. Each page has text before a table, the table, and text after it. A conversation asks a chain of questions about that page, and each turn has a small <strong>program</strong> in a domain-specific language (<a href="./901_glossary.html#gloss-dsl">DSL</a>) that computes the answer.</p>
+<section id="getting-the-data" class="level2" data-number="2.1">
+<h2 data-number="2.1" class="anchored" data-anchor-id="getting-the-data"><span class="header-section-number">2.1</span> Getting the data</h2>
+<p>The code lives in <code>src/convfinqa/data/</code>. The download clones the authors’ repository and unzips <code>data.zip</code> into <code>data/raw/</code>, and does nothing if the data is already there.</p>
+<div id="12af5a21" class="cell" data-execution_count="1">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> json</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> collections <span class="im">import</span> Counter</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa <span class="im">import</span> data</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.dsl <span class="im">import</span> steps</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>data.download_data()</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>splits <span class="op">=</span> {</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    name: data.load_split(name)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>, <span class="st">"test"</span>, <span class="st">"train_turn"</span>, <span class="st">"dev_turn"</span>]</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>pd.DataFrame({</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    <span class="st">"rows"</span>: {k: <span class="bu">len</span>(v) <span class="cf">for</span> k, v <span class="kw">in</span> splits.items()},</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    <span class="st">"has labels"</span>: {</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>        k: <span class="st">"annotation"</span> <span class="kw">in</span> v[<span class="dv">0</span>] <span class="kw">and</span> <span class="st">"turn_program"</span> <span class="kw">in</span> v[<span class="dv">0</span>][<span class="st">"annotation"</span>]</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k, v <span class="kw">in</span> splits.items()</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>})</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">rows</th>
+<th data-quarto-table-cell-role="th">has labels</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">train</th>
+<td>3037</td>
+<td>True</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">dev</th>
+<td>421</td>
+<td>True</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">test</th>
+<td>434</td>
+<td>False</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">train_turn</th>
+<td>11104</td>
+<td>True</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">dev_turn</th>
+<td>1490</td>
+<td>True</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>The official test split has questions but no answers, so <strong>we use <code>dev</code> as our test set</strong>. For tuning we carve a validation split out of <code>train</code> in a later chapter. The <code>*_turn</code> files hold the same conversations unrolled to one row per turn. We work from the conversation files and unroll ourselves, which the counts above confirm gives the same number of turns:</p>
+<div id="6ceb7aaa" class="cell" data-execution_count="2">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>n_turns <span class="op">=</span> {</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>    s: <span class="bu">sum</span>(<span class="bu">len</span>(c[<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>])</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> splits[s]) <span class="cf">for</span> s <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>]</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> n_turns[<span class="st">"train"</span>] <span class="op">==</span> <span class="bu">len</span>(splits[<span class="st">"train_turn"</span>])<span class="op">\</span></span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="kw">and</span> n_turns[<span class="st">"dev"</span>] <span class="op">==</span> <span class="bu">len</span>(splits[<span class="st">"dev_turn"</span>])</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a>n_turns</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="2">
+<pre><code>{'train': 11104, 'dev': 1490}</code></pre>
+</div>
+</div>
+</section>
+<section id="one-record" class="level2" data-number="2.2">
+<h2 data-number="2.2" class="anchored" data-anchor-id="one-record"><span class="header-section-number">2.2</span> One record</h2>
+<p>A conversation is a JSON object. The fields we use are <code>pre_text</code>, <code>table</code>, <code>post_text</code>, and under <code>annotation</code>: <code>dialogue_break</code> (the questions), <code>turn_program</code>, <code>exe_ans_list</code> (the answers) and <code>qa_split</code> (see Type II below).</p>
+<div id="54e20d72" class="cell" data-execution_count="3">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>by_id <span class="op">=</span> {c[<span class="st">"id"</span>]: c <span class="cf">for</span> c <span class="kw">in</span> splits[<span class="st">"train"</span>]}</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>conv_I <span class="op">=</span> by_id[<span class="st">"Single_AAPL/2002/page_23.pdf-1"</span>]</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Top-level keys of the conversation:"</span>)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">sorted</span>(conv_I.keys()))</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Annotation keys of the conversation:"</span>)</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">sorted</span>(conv_I[<span class="st">"annotation"</span>].keys()))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Top-level keys of the conversation:
+['annotation', 'filename', 'id', 'post_text', 'pre_text', 'qa', 'table', 'table_ori']
+Annotation keys of the conversation:
+['amt_post_text', 'amt_pre_text', 'amt_table', 'answer_list', 'dialogue_break', 'dialogue_break_ori', 'exe_ans_list', 'original_program', 'qa_split', 'step_list', 'turn_program', 'turn_program_ori']</code></pre>
+</div>
+</div>
+</section>
+<section id="a-type-i-conversation" class="level2" data-number="2.3">
+<h2 data-number="2.3" class="anchored" data-anchor-id="a-type-i-conversation"><span class="header-section-number">2.3</span> A Type I conversation</h2>
+<p><a href="./901_glossary.html#gloss-conversation-types">Type I conversations</a> decompose <strong>one</strong> FinQA question into a chain of turns. First the page the model sees: the text before the table (shortened here), the table as markdown, and the text after.</p>
+<div id="c4b00287" class="cell" data-execution_count="4">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> IPython.display <span class="im">import</span> Markdown</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> show_page(conv, n<span class="op">=</span><span class="dv">300</span>):</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    pre <span class="op">=</span> <span class="st">" "</span>.join(conv[<span class="st">"pre_text"</span>])</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    post <span class="op">=</span> <span class="st">" "</span>.join(conv[<span class="st">"post_text"</span>])</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> Markdown(</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"*pre_text (</span><span class="sc">{</span><span class="bu">len</span>(conv[<span class="st">'pre_text'</span>])<span class="sc">}</span><span class="ss"> sentences):* …</span><span class="sc">{</span>pre[<span class="op">-</span>n:]<span class="sc">}</span><span class="ch">\n\n</span><span class="ss">"</span></span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> data.table_to_markdown(conv[<span class="st">"table"</span>])</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> <span class="ss">f"</span><span class="ch">\n\n</span><span class="ss">*post_text (</span><span class="sc">{</span><span class="bu">len</span>(conv[<span class="st">'post_text'</span>])<span class="sc">}</span><span class="ss"> sentences):* </span><span class="sc">{</span>post[:n]<span class="sc">}</span><span class="ss">…"</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>show_page(conv_I)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="4">
+<p><em>pre_text (22 sentences):</em> … declined to 23% ( 23 % ) of net sales in 2001 from 27% ( 27 % ) in 2000 . this decline resulted primarily from gross margin of negative 2% ( 2 % ) experienced during the first quarter of 2001 compared to 26% ( 26 % ) gross margin for the same quarter in 2000 . in addition to lower than normal net .</p>
+<table class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th></th>
+<th>2002</th>
+<th>2001</th>
+<th>2000</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>net sales</td>
+<td>$ 5742</td>
+<td>$ 5363</td>
+<td>$ 7983</td>
+</tr>
+<tr class="even">
+<td>cost of sales</td>
+<td>4139</td>
+<td>4128</td>
+<td>5817</td>
+</tr>
+<tr class="odd">
+<td>gross margin</td>
+<td>$ 1603</td>
+<td>$ 1235</td>
+<td>$ 2166</td>
+</tr>
+<tr class="even">
+<td>gross margin percentage</td>
+<td>28% ( 28 % )</td>
+<td>23% ( 23 % )</td>
+<td>27% ( 27 % )</td>
+</tr>
+</tbody>
+</table>
+<p><em>post_text (1 sentences):</em> .…</p>
+</div>
+</div>
+<p>Then the conversation, one turn per line: question, gold program, and the number the program computes.</p>
+<div id="6c5cd24e" class="cell" data-execution_count="5">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(data.format_conversation(conv_I))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Single_AAPL/2002/page_23.pdf-1  (Type I)
+  [1] Q: what was the total of net sales in 2001?
+      program: 5363
+      answer:  5363
+  [2] Q: and what was that in 2000?
+      program: 7983
+      answer:  7983
+  [3] Q: what was, then, the change in the total of net sales over the year?
+      program: subtract(5363, 7983)
+      answer:  -2620
+  [4] Q: and how much does this change represent in relation to that total in 2000, in percentage?
+      program: subtract(5363, 7983), divide(#0, 7983)
+      answer:  -0.3282</code></pre>
+</div>
+</div>
+<p>The first turns just <strong>select a number</strong> from the table. Later turns compute with them. The last turn restates the full calculation, using <code>#0</code> for “the result of step 0” so the program stays self-contained.</p>
+</section>
+<section id="a-type-i-conversation-with-a-garbled-table" class="level2" data-number="2.4">
+<h2 data-number="2.4" class="anchored" data-anchor-id="a-type-i-conversation-with-a-garbled-table"><span class="header-section-number">2.4</span> A Type I conversation with a garbled table</h2>
+<p>Not every page is this clean. Here is another Type I conversation, whose table header is garbled in the dataset.</p>
+<div id="17eff317" class="cell" data-execution_count="6">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>conv_garbled <span class="op">=</span> by_id[<span class="st">"Single_JKHY/2009/page_28.pdf-3"</span>]</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>show_page(conv_garbled)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display cell-output-markdown" data-execution_count="6">
+<p><em>pre_text (9 sentences):</em> …tal requirements . we expect this trend to continue in the future . the company 2019s cash and cash equivalents increased to $ 118251 at june 30 , 2009 from $ 65565 at june 30 , 2008 . the following table summarizes net cash from operating activities in the statement of cash flows : 2009 2008 2007 .</p>
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>2008</th>
+<th>year ended june 30 2009 2008</th>
+<th>year ended june 30 2009 2008</th>
+<th>year ended june 30 2009</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>net income</td>
+<td>$ 103102</td>
+<td>$ 104222</td>
+<td>$ 104681</td>
+</tr>
+<tr class="even">
+<td>non-cash expenses</td>
+<td>74397</td>
+<td>70420</td>
+<td>56348</td>
+</tr>
+<tr class="odd">
+<td>change in receivables</td>
+<td>21214</td>
+<td>-2913 ( 2913 )</td>
+<td>-28853 ( 28853 )</td>
+</tr>
+<tr class="even">
+<td>change in deferred revenue</td>
+<td>21943</td>
+<td>5100</td>
+<td>24576</td>
+</tr>
+<tr class="odd">
+<td>change in other assets and liabilities</td>
+<td>-14068 ( 14068 )</td>
+<td>4172</td>
+<td>17495</td>
+</tr>
+<tr class="even">
+<td>net cash from operating activities</td>
+<td>$ 206588</td>
+<td>$ 181001</td>
+<td>$ 174247</td>
+</tr>
+</tbody>
+</table>
+<p><em>post_text (15 sentences):</em> year ended june 30 , cash provided by operations increased $ 25587 to $ 206588 for the fiscal year ended june 30 , 2009 as compared to $ 181001 for the fiscal year ended june 30 , 2008 . this increase is primarily attributable to a decrease in receivables compared to the same period a year ago of $ …</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-warning callout-titled" title="The header of this table is garbled in the dataset">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Warning</span>The header of this table is garbled in the dataset
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The raw <code>table_ori</code> shows what went wrong. The header was split across two rows:</p>
+<div id="7fb9d90d" class="cell" data-execution_count="7">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> row <span class="kw">in</span> conv_garbled[<span class="st">"table_ori"</span>][:<span class="dv">3</span>]:</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(row)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>['', 'Year ended June 30, 2009']
+['2008', '2007']
+['Net income', '$103,102', '$104,222', '$104,681']</code></pre>
+</div>
+</div>
+<p>Read together, the first two rows are a single header row, <code>['', 'Year ended June 30, 2009', '2008', '2007']</code>, whose first label was extracted on a separate line from the other two. The cleaned <code>table</code> then built a header from the broken pieces: its columns repeat fragments of “year ended june 30 2009”, and the year labels also show up in <code>pre_text</code> (the trailing <code>: 2009 2008 2007 .</code>). This is how the data ships, not a parsing error of ours.</p>
+<p>The model must work out that the columns are 2009, 2008 and 2007 from the table and the surrounding text, which is part of the task.</p>
+</div>
+</div>
+<div id="e8c678e4" class="cell" data-execution_count="8">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(data.format_conversation(conv_garbled))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Single_JKHY/2009/page_28.pdf-3  (Type I)
+  [1] Q: what is the net cash from operating activities in 2009?
+      program: 206588
+      answer:  206588
+  [2] Q: what about in 2008?
+      program: 181001
+      answer:  181001
+  [3] Q: what is the difference?
+      program: subtract(206588, 181001)
+      answer:  25587
+  [4] Q: what percentage change does this represent?
+      program: subtract(206588, 181001), divide(#0, 181001)
+      answer:  0.14136</code></pre>
+</div>
+</div>
+<p>Most tables are clean. The check below counts how many have repeated header cells:</p>
+<div id="d26334a0" class="cell" data-execution_count="9">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>dup_header <span class="op">=</span> <span class="bu">sum</span>(</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="bu">len</span>(<span class="bu">set</span>(c[<span class="st">"table"</span>][<span class="dv">0</span>])) <span class="op">&lt;</span> <span class="bu">len</span>(c[<span class="st">"table"</span>][<span class="dv">0</span>])</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> splits[<span class="st">"train"</span>]</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>dup_header<span class="sc">}</span><span class="ss"> of </span><span class="sc">{</span><span class="bu">len</span>(splits[<span class="st">'train'</span>])<span class="sc">}</span><span class="ss"> train tables repeat a header "</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"cell (</span><span class="sc">{</span>dup_header <span class="op">/</span> <span class="bu">len</span>(splits[<span class="st">'train'</span>])<span class="sc">:.1%}</span><span class="ss">)"</span></span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>66 of 3037 train tables repeat a header cell (2.2%)</code></pre>
+</div>
+</div>
+</section>
+<section id="a-type-ii-conversation" class="level2" data-number="2.5">
+<h2 data-number="2.5" class="anchored" data-anchor-id="a-type-ii-conversation"><span class="header-section-number">2.5</span> A Type II conversation</h2>
+<p>Type II conversations merge <strong>two</strong> FinQA questions about the same page. <code>qa_split</code> marks which turns belong to which: 0s, then 1s.</p>
+<div id="ec51818e" class="cell" data-execution_count="10">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>conv_II <span class="op">=</span> <span class="bu">next</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    c <span class="cf">for</span> c <span class="kw">in</span> splits[<span class="st">"train"</span>]</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> data.conversation_type(c) <span class="op">==</span> <span class="st">"II"</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    <span class="kw">and</span> <span class="bu">len</span>(c[<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>]) <span class="op">==</span> <span class="dv">6</span></span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(data.format_conversation(conv_II))</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"qa_split:"</span>, conv_II[<span class="st">"annotation"</span>][<span class="st">"qa_split"</span>])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>Double_AWK/2013/page_123.pdf  (Type II)
+  [1] Q: what is the net valuation allowance as of december 31, 2013?
+      program: subtract(13555, 2979)
+      answer:  10576   (part 1)
+  [2] Q: what is the value of decreases in current period tax positions in 2011?
+      program: 3734
+      answer:  3734   (part 2)
+  [3] Q: what about in 2012?
+      program: 2059
+      answer:  2059   (part 2)
+  [4] Q: what is the total for these two years?
+      program: add(3734, 2059)
+      answer:  5793   (part 2)
+  [5] Q: what about if 2013 is included?
+      program: add(3734, 2059), add(#0, 5965)
+      answer:  11758   (part 2)
+  [6] Q: what is the average for three years?
+      program: add(3734, 2059), add(#0, 5965), divide(#1, const_3)
+      answer:  3919.33   (part 2)
+qa_split: [0, 1, 1, 1, 1, 1]</code></pre>
+</div>
+</div>
+</section>
+<section id="the-dsl" class="level2" data-number="2.6">
+<h2 data-number="2.6" class="anchored" data-anchor-id="the-dsl"><span class="header-section-number">2.6</span> The DSL</h2>
+<p>A program is a comma-separated list of steps, <code>op(arg, arg)</code>. A turn that only selects a number has a bare number as its program. The operations are <code>add</code>, <code>subtract</code>, <code>multiply</code>, <code>divide</code>, <code>exp</code> and <code>greater</code>. (The authors’ code also lists FinQA’s <code>table_sum</code>, <code>table_average</code>, <code>table_max</code> and <code>table_min</code>, but no ConvFinQA gold program uses them.) An argument is one of:</p>
+<ul>
+<li>a <strong>number literal</strong> copied from the page, such as <code>206588</code> or <code>0.14136</code>, possibly with a <code>%</code> sign, such as <code>19%</code>;</li>
+<li>a <strong>step reference</strong> <code>#k</code>, the result of step <em>k</em>;</li>
+<li>a <strong>constant</strong> from a fixed list.</li>
+</ul>
+<p>The chapter on the DSL and its executor covers the grammar and the executor in detail. Here we look at what makes an argument a literal or a constant, and how the paper’s model decides what it may write.</p>
+<section id="constants" class="level3" data-number="2.6.1">
+<h3 data-number="2.6.1" class="anchored" data-anchor-id="constants"><span class="header-section-number">2.6.1</span> Constants</h3>
+<p>The constants are not read from the page. The authors’ code defines a fixed list of constants, and every constant in the train and dev programs is in it:</p>
+<div id="8bca2739" class="cell" data-execution_count="11">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> re</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>const_use <span class="op">=</span> Counter(</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    c</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> s <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>]</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> conv <span class="kw">in</span> splits[s]</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> p <span class="kw">in</span> conv[<span class="st">"annotation"</span>][<span class="st">"turn_program"</span>]</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> re.findall(<span class="vs">r"const_</span><span class="dv">\w</span><span class="op">+</span><span class="vs">"</span>, p)</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">set</span>(const_use) <span class="op">&lt;=</span> <span class="bu">set</span>(steps.CONSTANTS)</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>pd.Series(</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>    {c: const_use.get(c, <span class="dv">0</span>) <span class="cf">for</span> c <span class="kw">in</span> steps.CONSTANTS},</span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>    name<span class="op">=</span><span class="st">"uses (train + dev)"</span></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a>).to_frame().T</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="11">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">const_1</th>
+<th data-quarto-table-cell-role="th">const_2</th>
+<th data-quarto-table-cell-role="th">const_3</th>
+<th data-quarto-table-cell-role="th">const_4</th>
+<th data-quarto-table-cell-role="th">const_5</th>
+<th data-quarto-table-cell-role="th">const_6</th>
+<th data-quarto-table-cell-role="th">const_7</th>
+<th data-quarto-table-cell-role="th">const_8</th>
+<th data-quarto-table-cell-role="th">const_9</th>
+<th data-quarto-table-cell-role="th">const_10</th>
+<th data-quarto-table-cell-role="th">const_100</th>
+<th data-quarto-table-cell-role="th">const_1000</th>
+<th data-quarto-table-cell-role="th">const_10000</th>
+<th data-quarto-table-cell-role="th">const_100000</th>
+<th data-quarto-table-cell-role="th">const_1000000</th>
+<th data-quarto-table-cell-role="th">const_10000000</th>
+<th data-quarto-table-cell-role="th">const_1000000000</th>
+<th data-quarto-table-cell-role="th">const_m1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">uses (train + dev)</th>
+<td>132</td>
+<td>136</td>
+<td>138</td>
+<td>36</td>
+<td>28</td>
+<td>14</td>
+<td>12</td>
+<td>12</td>
+<td>18</td>
+<td>7</td>
+<td>1147</td>
+<td>344</td>
+<td>0</td>
+<td>1</td>
+<td>197</td>
+<td>0</td>
+<td>1</td>
+<td>19</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>The list has 18 constants.</p>
+<p>They are mostly scale factors and counts: <code>const_100</code> turns a ratio into a percentage, <code>const_1000</code> and <code>const_1000000</code> convert units, and small integers such as <code>const_3</code> count years for an average (the Type II example above ends with <code>divide(#1, const_3)</code>). The rule is by convention, not by whether the digits occur on the page: a number the question needs but does not read from the document is a constant, and the same digits read off the page are a literal.</p>
+</section>
+<section id="percentages-and-the-executor" class="level3" data-number="2.6.2">
+<h3 data-number="2.6.2" class="anchored" data-anchor-id="percentages-and-the-executor"><span class="header-section-number">2.6.2</span> Percentages and the executor</h3>
+<p>The official executor (<code>str_to_num</code> in the authors’ <code>general_utils.py</code>) strips commas and tries to read a float. If that fails and the string contains <code>%</code>, it removes the sign and divides by 100, so <code>19%</code> is evaluated as 0.19. A <code>const_</code> token is replaced by its number (<code>const_m1</code> is -1). The executor never looks at the page: whether a program may use <code>19%</code> at all is decided elsewhere.</p>
+</section>
+<section id="what-the-papers-decoder-may-write" class="level3" data-number="2.6.3">
+<h3 data-number="2.6.3" class="anchored" data-anchor-id="what-the-papers-decoder-may-write"><span class="header-section-number">2.6.3</span> What the paper’s decoder may write</h3>
+<p>FinQANet’s generator <span class="citation" data-cites="chen2022convfinqa">(<a href="902_references.html#ref-chen2022convfinqa" role="doc-biblioref">Chen et al. 2022</a>)</span> is restricted: at each step it can emit an operator, a constant from the list, a step reference, or a number <strong>copied from its input</strong>. Its input is the question plus the context it is given (supporting text and table rows), split on spaces, and a token counts as a copyable number if, after removing commas, it parses as a number <em>or ends with <code>%</code></em>. This is the rule, implemented in <code>steps.copyable_numbers</code>:</p>
+<div id="923f3e2d" class="cell" data-execution_count="12">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>row <span class="op">=</span> <span class="st">" "</span>.join(conv_I[<span class="st">"table"</span>][<span class="op">-</span><span class="dv">1</span>])</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(row)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(steps.copyable_numbers(row))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>gross margin percentage 28% ( 28 % ) 23% ( 23 % ) 27% ( 27 % )
+['28%', '28', '%', '23%', '23', '%', '27%', '27', '%']</code></pre>
+</div>
+</div>
+<p>This works because the page text is pre-tokenized: punctuation and symbols are separated from the surrounding text by spaces (<code>$ 103102</code>, <code>june 30 , 2009</code>, <code>( 2913 )</code>), so numbers can be extracted cleanly. The exception is <code>%</code>, which the data keeps attached to its number in the first form (<code>28%</code>) and also writes as a separate token in the parenthesised form (<code>( 28 % )</code>). The attached <code>28%</code> is a candidate. In the spaced form, <code>28</code> is a candidate and the lone <code>%</code> also passes the rule, which looks like an accidental quirk of the check.</p>
+<p>Whether our own models should be restricted this way is a separate question, taken up in the constrained-decoding chapter.</p>
+</section>
+</section>
+<section id="how-big-is-it" class="level2" data-number="2.7">
+<h2 data-number="2.7" class="anchored" data-anchor-id="how-big-is-it"><span class="header-section-number">2.7</span> How big is it?</h2>
+<div id="800c732b" class="cell" data-execution_count="13">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb21"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
+<span id="cb21-2"><a href="#cb21-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> split <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>]:</span>
+<span id="cb21-3"><a href="#cb21-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> splits[split]:</span>
+<span id="cb21-4"><a href="#cb21-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> t <span class="kw">in</span> data.turns(c):</span>
+<span id="cb21-5"><a href="#cb21-5" aria-hidden="true" tabindex="-1"></a>            rows.append({</span>
+<span id="cb21-6"><a href="#cb21-6" aria-hidden="true" tabindex="-1"></a>                <span class="st">"split"</span>: split,</span>
+<span id="cb21-7"><a href="#cb21-7" aria-hidden="true" tabindex="-1"></a>                <span class="st">"id"</span>: c[<span class="st">"id"</span>],</span>
+<span id="cb21-8"><a href="#cb21-8" aria-hidden="true" tabindex="-1"></a>                <span class="st">"type"</span>: data.conversation_type(c),</span>
+<span id="cb21-9"><a href="#cb21-9" aria-hidden="true" tabindex="-1"></a>                <span class="st">"turn"</span>: t.index <span class="op">+</span> <span class="dv">1</span>,</span>
+<span id="cb21-10"><a href="#cb21-10" aria-hidden="true" tabindex="-1"></a>                <span class="st">"number_turn"</span>: steps.is_number_turn(t.program),</span>
+<span id="cb21-11"><a href="#cb21-11" aria-hidden="true" tabindex="-1"></a>                <span class="st">"program"</span>: t.program</span>
+<span id="cb21-12"><a href="#cb21-12" aria-hidden="true" tabindex="-1"></a>            })</span>
+<span id="cb21-13"><a href="#cb21-13" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> pd.DataFrame(rows)</span>
+<span id="cb21-14"><a href="#cb21-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-15"><a href="#cb21-15" aria-hidden="true" tabindex="-1"></a>per_conv <span class="op">=</span> df.groupby([<span class="st">"split"</span>, <span class="st">"id"</span>, <span class="st">"type"</span>]).size()<span class="op">\</span></span>
+<span id="cb21-16"><a href="#cb21-16" aria-hidden="true" tabindex="-1"></a>    .rename(<span class="st">"turns"</span>).reset_index()</span>
+<span id="cb21-17"><a href="#cb21-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-18"><a href="#cb21-18" aria-hidden="true" tabindex="-1"></a>summary <span class="op">=</span> per_conv.groupby(<span class="st">"split"</span>).agg(</span>
+<span id="cb21-19"><a href="#cb21-19" aria-hidden="true" tabindex="-1"></a>    conversations<span class="op">=</span>(<span class="st">"id"</span>, <span class="st">"count"</span>),</span>
+<span id="cb21-20"><a href="#cb21-20" aria-hidden="true" tabindex="-1"></a>    turns<span class="op">=</span>(<span class="st">"turns"</span>, <span class="st">"sum"</span>),</span>
+<span id="cb21-21"><a href="#cb21-21" aria-hidden="true" tabindex="-1"></a>    mean_turns<span class="op">=</span>(<span class="st">"turns"</span>, <span class="st">"mean"</span>)</span>
+<span id="cb21-22"><a href="#cb21-22" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb21-23"><a href="#cb21-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-24"><a href="#cb21-24" aria-hidden="true" tabindex="-1"></a>summary[<span class="st">"type II share"</span>] <span class="op">=</span> per_conv.assign(ii<span class="op">=</span>per_conv.<span class="bu">type</span> <span class="op">==</span> <span class="st">"II"</span>)<span class="op">\</span></span>
+<span id="cb21-25"><a href="#cb21-25" aria-hidden="true" tabindex="-1"></a>    .groupby(<span class="st">"split"</span>).ii.mean()</span>
+<span id="cb21-26"><a href="#cb21-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb21-27"><a href="#cb21-27" aria-hidden="true" tabindex="-1"></a>summary.<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="13">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">conversations</th>
+<th data-quarto-table-cell-role="th">turns</th>
+<th data-quarto-table-cell-role="th">mean_turns</th>
+<th data-quarto-table-cell-role="th">type II share</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">split</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">dev</th>
+<td>421</td>
+<td>1490</td>
+<td>3.54</td>
+<td>0.29</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">train</th>
+<td>3037</td>
+<td>11104</td>
+<td>3.66</td>
+<td>0.31</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<div id="30f8088c" class="cell" data-execution_count="14">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="fl">3.2</span>))</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>pivot <span class="op">=</span> per_conv.groupby([<span class="st">"turns"</span>, <span class="st">"type"</span>]).size().unstack(fill_value<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>pivot.plot.bar(stacked<span class="op">=</span><span class="va">True</span>, ax<span class="op">=</span>ax[<span class="dv">0</span>], rot<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].<span class="bu">set</span>(</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"turns in conversation"</span>,</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"conversations"</span>,</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Conversation length"</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>share <span class="op">=</span> df.groupby(<span class="st">"split"</span>).number_turn.mean()</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>share.rename(<span class="st">"number-selection"</span>).to_frame().assign(program<span class="op">=</span><span class="dv">1</span> <span class="op">-</span> share)<span class="op">\</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>    .plot.bar(stacked<span class="op">=</span><span class="va">True</span>, ax<span class="op">=</span>ax[<span class="dv">1</span>], rot<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">1</span>].<span class="bu">set</span>(ylabel<span class="op">=</span><span class="st">"share of turns"</span>, title<span class="op">=</span><span class="st">"Turn kind"</span>)</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="102_what_convfinqa_files/figure-html/cell-15-output-1.png" width="856" height="297" class="figure-img"></p>
+<figcaption>Turns per conversation (train + dev) and the share of number-selection vs.&nbsp;program turns.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>The DSL operations are counted from the <strong>new step each turn adds</strong>: the last step of its program, since each program repeats the earlier steps.</p>
+<div id="78ba06ab" class="cell" data-execution_count="15">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>ops <span class="op">=</span> Counter()</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> p <span class="kw">in</span> df[(df.split <span class="op">==</span> <span class="st">"train"</span>) <span class="op">&amp;</span> <span class="op">~</span>df.number_turn].program:</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    ops[steps.split_steps(p)[<span class="op">-</span><span class="dv">1</span>].split(<span class="st">"("</span>)[<span class="dv">0</span>]] <span class="op">+=</span> <span class="dv">1</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>pd.Series(ops).sort_values().plot.barh(figsize<span class="op">=</span>(<span class="dv">5</span>, <span class="fl">2.5</span>), xlabel<span class="op">=</span><span class="st">"turns"</span>)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>ops</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="15">
+<pre><code>Counter({'divide': 3254,
+         'subtract': 2307,
+         'add': 1119,
+         'multiply': 475,
+         'greater': 36,
+         'exp': 2})</code></pre>
+<p>How often each DSL operation is the new step of a turn (train).</p>
+</div>
+<div class="cell-output cell-output-display">
+<div>
+<figure class="figure">
+<p><img src="102_what_convfinqa_files/figure-html/cell-16-output-2.png" width="473" height="230" class="figure-img"></p>
+</figure>
+</div>
+</div>
+</div>
+</section>
+<section id="how-long-is-a-conversation-in-tokens" class="level2" data-number="2.8">
+<h2 data-number="2.8" class="anchored" data-anchor-id="how-long-is-a-conversation-in-tokens"><span class="header-section-number">2.8</span> How long is a conversation in tokens?</h2>
+<p>Training uses one sequence per <strong>full conversation</strong>: the system prompt, the page, and every question and answer. So the longest conversations set the memory we need. Turning a data row into token ids takes three steps:</p>
+<ol type="1">
+<li><strong>Row to messages.</strong> Our own choice, in <code>conversation_messages</code> (<code>src/convfinqa/formatting.py</code>): a system prompt, then the page and the first question as the first user message, then the gold program as the assistant’s reply, and so on for every turn. The experiments part extends this module for training.</li>
+<li><strong>Messages to one string.</strong> The model’s own <strong><a href="./901_glossary.html#gloss-chat-template">chat template</a></strong>, which ships with its tokenizer. It wraps each message in the special markers that the model was trained with.</li>
+<li><strong>String to token ids.</strong> The tokenizer itself.</li>
+</ol>
+<p>Here is step 2 for the clean Type I conversation from above. The page text and table are cut out so the structure is visible.</p>
+<div id="c721ecc9" class="cell" data-execution_count="16">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> AutoTokenizer</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.formatting <span class="im">import</span> conversation_messages</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>tok <span class="op">=</span> AutoTokenizer.from_pretrained(<span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span>)</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb25-7"><a href="#cb25-7" aria-hidden="true" tabindex="-1"></a>text <span class="op">=</span> tok.apply_chat_template(conversation_messages(conv_I), tokenize<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb25-8"><a href="#cb25-8" aria-hidden="true" tabindex="-1"></a>cut <span class="op">=</span> text.index(<span class="st">"</span><span class="ch">\n\n</span><span class="st">Question:"</span>)</span>
+<span id="cb25-9"><a href="#cb25-9" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(text[:<span class="dv">260</span>] <span class="op">+</span> <span class="st">"</span><span class="ch">\n</span><span class="st">[... page text and table omitted ...]"</span> <span class="op">+</span> text[cut:])</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>&lt;|im_start|&gt;system
+Answer with a program in the ConvFinQA DSL.&lt;|im_end|&gt;
+&lt;|im_start|&gt;user
+in a new business model such as the retail segment is inherently risky , particularly in light of the significant investment involved , the current economic climate , and
+[... page text and table omitted ...]
+
+Question: what was the total of net sales in 2001?&lt;|im_end|&gt;
+&lt;|im_start|&gt;assistant
+5363&lt;|im_end|&gt;
+&lt;|im_start|&gt;user
+and what was that in 2000?&lt;|im_end|&gt;
+&lt;|im_start|&gt;assistant
+7983&lt;|im_end|&gt;
+&lt;|im_start|&gt;user
+what was, then, the change in the total of net sales over the year?&lt;|im_end|&gt;
+&lt;|im_start|&gt;assistant
+subtract(5363, 7983)&lt;|im_end|&gt;
+&lt;|im_start|&gt;user
+and how much does this change represent in relation to that total in 2000, in percentage?&lt;|im_end|&gt;
+&lt;|im_start|&gt;assistant
+subtract(5363, 7983), divide(#0, 7983)&lt;|im_end|&gt;
+</code></pre>
+</div>
+</div>
+<p>The <code>&lt;|im_start|&gt;</code> and <code>&lt;|im_end|&gt;</code> markers delimit each message and carry its role. The model learns to end every answer with <code>&lt;|im_end|&gt;</code>, and that token is part of what we train on.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Which tokenizer, and why it matters">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Which tokenizer, and why it matters
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The ConvFinQA paper doesn’t prescribe a tokenizer; it predates our model. We use the tokenizer and chat template of the model we will fine-tune, <code>Qwen/Qwen3-4B-Instruct-2507</code>, so that the lengths below are what training will see. The numbers, and the <code>max_length</code> we derive from them, belong to this tokenizer and to our formatting. A different base model would give slightly different counts, so check them again before reusing the value.</p>
+</div>
+</div>
+<p>Now we count tokens for every conversation of <code>train</code> and <code>dev</code> (step 3). The count is made by <code>convfinqa.lengths</code>, with <code>add_special_tokens=False</code> because the template has already written the special tokens into the string. It is the artifact <code>conversation_lengths</code>, so that the chapters that need the longest conversation read it from there, and a rebuild from a clean checkout makes it again.</p>
+<div id="094812dd" class="cell" data-execution_count="17">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.artifacts <span class="im">import</span> artifact, get</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="at">@artifact</span>(<span class="st">"conversation_lengths"</span>)</span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_conversation_lengths(out, deps):</span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> json</span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> transformers <span class="im">import</span> AutoTokenizer</span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa <span class="im">import</span> data</span>
+<span id="cb27-13"><a href="#cb27-13" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.lengths <span class="im">import</span> conversation_lengths, max_length_for</span>
+<span id="cb27-14"><a href="#cb27-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-15"><a href="#cb27-15" aria-hidden="true" tabindex="-1"></a>    tok <span class="op">=</span> AutoTokenizer.from_pretrained(<span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span>)</span>
+<span id="cb27-16"><a href="#cb27-16" aria-hidden="true" tabindex="-1"></a>    rows <span class="op">=</span> conversation_lengths(</span>
+<span id="cb27-17"><a href="#cb27-17" aria-hidden="true" tabindex="-1"></a>        tok, {name: data.load_split(name) <span class="cf">for</span> name <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>]}</span>
+<span id="cb27-18"><a href="#cb27-18" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb27-19"><a href="#cb27-19" aria-hidden="true" tabindex="-1"></a>    longest <span class="op">=</span> <span class="bu">max</span>(r[<span class="st">"tokens"</span>] <span class="cf">for</span> r <span class="kw">in</span> rows)</span>
+<span id="cb27-20"><a href="#cb27-20" aria-hidden="true" tabindex="-1"></a>    (out <span class="op">/</span> <span class="st">"lengths.jsonl"</span>).write_text(</span>
+<span id="cb27-21"><a href="#cb27-21" aria-hidden="true" tabindex="-1"></a>        <span class="st">""</span>.join(json.dumps(r) <span class="op">+</span> <span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="cf">for</span> r <span class="kw">in</span> rows)</span>
+<span id="cb27-22"><a href="#cb27-22" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb27-23"><a href="#cb27-23" aria-hidden="true" tabindex="-1"></a>    (out <span class="op">/</span> <span class="st">"lengths.json"</span>).write_text(json.dumps(</span>
+<span id="cb27-24"><a href="#cb27-24" aria-hidden="true" tabindex="-1"></a>        {<span class="st">"longest"</span>: longest, <span class="st">"max_length"</span>: max_length_for(longest)}</span>
+<span id="cb27-25"><a href="#cb27-25" aria-hidden="true" tabindex="-1"></a>    ))</span>
+<span id="cb27-26"><a href="#cb27-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-27"><a href="#cb27-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb27-28"><a href="#cb27-28" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> pd.DataFrame(get(<span class="st">"conversation_lengths"</span>).jsonl(<span class="st">"lengths.jsonl"</span>))</span>
+<span id="cb27-29"><a href="#cb27-29" aria-hidden="true" tabindex="-1"></a>lengths.groupby(<span class="st">"split"</span>).tokens.describe(percentiles<span class="op">=</span>[<span class="fl">0.5</span>, <span class="fl">0.9</span>, <span class="fl">0.99</span>, <span class="fl">0.999</span>])<span class="op">\</span></span>
+<span id="cb27-30"><a href="#cb27-30" aria-hidden="true" tabindex="-1"></a>    .<span class="bu">round</span>(<span class="dv">0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="17">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">count</th>
+<th data-quarto-table-cell-role="th">mean</th>
+<th data-quarto-table-cell-role="th">std</th>
+<th data-quarto-table-cell-role="th">min</th>
+<th data-quarto-table-cell-role="th">50%</th>
+<th data-quarto-table-cell-role="th">90%</th>
+<th data-quarto-table-cell-role="th">99%</th>
+<th data-quarto-table-cell-role="th">99.9%</th>
+<th data-quarto-table-cell-role="th">max</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">split</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">dev</th>
+<td>421.0</td>
+<td>1129.0</td>
+<td>348.0</td>
+<td>451.0</td>
+<td>1073.0</td>
+<td>1553.0</td>
+<td>2150.0</td>
+<td>2284.0</td>
+<td>2291.0</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">train</th>
+<td>3037.0</td>
+<td>1161.0</td>
+<td>361.0</td>
+<td>272.0</td>
+<td>1131.0</td>
+<td>1573.0</td>
+<td>2422.0</td>
+<td>3349.0</td>
+<td>3460.0</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<div id="02fc6dab" class="cell" data-execution_count="18">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb28"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a>lengths.groupby(<span class="st">"split"</span>).tokens.plot.hist(</span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>    bins<span class="op">=</span><span class="dv">60</span>, alpha<span class="op">=</span><span class="fl">0.6</span>, legend<span class="op">=</span><span class="va">True</span>, figsize<span class="op">=</span>(<span class="dv">6</span>, <span class="dv">3</span>)</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"tokens in conversation"</span>)</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display">
+<div class="quarto-figure quarto-figure-center">
+<figure class="figure">
+<p><img src="102_what_convfinqa_files/figure-html/cell-19-output-1.png" width="567" height="278" class="figure-img"></p>
+<figcaption>Tokens per full conversation.</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>We pick <code>max_length</code> as the longest conversation rounded up to a multiple of 256, so that no training conversation is truncated. Truncating would cut off assistant tokens, which are exactly what the loss is computed on. The value is saved in the same artifact for later chapters, since stages pass data through files.</p>
+<div id="c96116cb" class="cell" data-execution_count="19">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>chosen <span class="op">=</span> get(<span class="st">"conversation_lengths"</span>).json(<span class="st">"lengths.json"</span>)</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"longest conversation: </span><span class="sc">{</span>chosen[<span class="st">'longest'</span>]<span class="sc">}</span><span class="ss"> tokens"</span></span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f" -&gt; max_length = </span><span class="sc">{</span>chosen[<span class="st">'max_length'</span>]<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>longest conversation: 3460 tokens -&gt; max_length = 3584</code></pre>
+</div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled" title="Under the hood">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Under the hood
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Notice how numbers like <code>206588</code> cost one token per digit in this tokenizer. The foundations part looks at tokenization properly. It is one reason the model writes a program and a Python executor does the arithmetic.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled" title="Further reading">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Further reading
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The ConvFinQA paper <span class="citation" data-cites="chen2022convfinqa">(<a href="902_references.html#ref-chen2022convfinqa" role="doc-biblioref">Chen et al. 2022</a>)</span> describes how the conversations were built and annotated. The dataset repository is at <a href="https://github.com/czyssrs/ConvFinQA" class="uri">https://github.com/czyssrs/ConvFinQA</a>.</p>
+</div>
+</div>
+
+
+<!-- -->
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-chen2022convfinqa" class="csl-entry" role="listitem">
+Chen, Zhiyu, Shiyang Li, Charese Smiley, Zhiqiang Ma, Sameena Shah, and William Yang Wang. 2022. <span>“<span>ConvFinQA</span>: Exploring the Chain of Numerical Reasoning in Conversational Finance Question Answering.”</span> <em>Proceedings of EMNLP</em>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const cellDetails = window.document.querySelectorAll(".cell details.code-fold");
+        for (let i=0; i<cellDetails.length; i++) {
+          const details = cellDetails[i];
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell div.sourceCode.cell-code");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./101_environment_setup.html" class="pagination-link" aria-label="Environment setup">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Environment setup</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./103_the_dsl.html" class="pagination-link" aria-label="The DSL and its executor">
+        <span class="nav-page-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">The DSL and its executor</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb31" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu"># What ConvFinQA looks like {#sec-convfinqa}</span></span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a>**You will learn:**</span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>how a ConvFinQA conversation is built from one page of an earnings report;</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>what the questions, programs and answers look like, for both conversation types;</span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>how big the data is, and how long a full conversation gets in tokens, which sets <span class="in">`max_length`</span> for training.</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>ConvFinQA <span class="co">[</span><span class="ot">@chen2022convfinqa</span><span class="co">]</span> turns FinQA questions about earnings-report pages into multi-turn</span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a>conversations. Each page has text before a table, the table, and text after it. A conversation asks a</span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a>chain of questions about that page, and each turn has a small **program** in a domain-specific</span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a>language (<span class="co">[</span><span class="ot">DSL</span><span class="co">](901_glossary.qmd#gloss-dsl)</span>) that computes the answer.</span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a><span class="fu">## Getting the data</span></span>
+<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a>The code lives in <span class="in">`src/convfinqa/data/`</span>. The download clones the authors' repository and unzips</span>
+<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a><span class="in">`data.zip`</span> into <span class="in">`data/raw/`</span>, and does nothing if the data is already there.</span>
+<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-21"><a href="#cb31-21" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-22"><a href="#cb31-22" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> json</span>
+<span id="cb31-23"><a href="#cb31-23" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> collections <span class="im">import</span> Counter</span>
+<span id="cb31-24"><a href="#cb31-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> pathlib <span class="im">import</span> Path</span>
+<span id="cb31-25"><a href="#cb31-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-26"><a href="#cb31-26" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb31-27"><a href="#cb31-27" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb31-28"><a href="#cb31-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-29"><a href="#cb31-29" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa <span class="im">import</span> data</span>
+<span id="cb31-30"><a href="#cb31-30" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.dsl <span class="im">import</span> steps</span>
+<span id="cb31-31"><a href="#cb31-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-32"><a href="#cb31-32" aria-hidden="true" tabindex="-1"></a>data.download_data()</span>
+<span id="cb31-33"><a href="#cb31-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-34"><a href="#cb31-34" aria-hidden="true" tabindex="-1"></a>splits <span class="op">=</span> {</span>
+<span id="cb31-35"><a href="#cb31-35" aria-hidden="true" tabindex="-1"></a>    name: data.load_split(name)</span>
+<span id="cb31-36"><a href="#cb31-36" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>, <span class="st">"test"</span>, <span class="st">"train_turn"</span>, <span class="st">"dev_turn"</span>]</span>
+<span id="cb31-37"><a href="#cb31-37" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb31-38"><a href="#cb31-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-39"><a href="#cb31-39" aria-hidden="true" tabindex="-1"></a>pd.DataFrame({</span>
+<span id="cb31-40"><a href="#cb31-40" aria-hidden="true" tabindex="-1"></a>    <span class="st">"rows"</span>: {k: <span class="bu">len</span>(v) <span class="cf">for</span> k, v <span class="kw">in</span> splits.items()},</span>
+<span id="cb31-41"><a href="#cb31-41" aria-hidden="true" tabindex="-1"></a>    <span class="st">"has labels"</span>: {</span>
+<span id="cb31-42"><a href="#cb31-42" aria-hidden="true" tabindex="-1"></a>        k: <span class="st">"annotation"</span> <span class="kw">in</span> v[<span class="dv">0</span>] <span class="kw">and</span> <span class="st">"turn_program"</span> <span class="kw">in</span> v[<span class="dv">0</span>][<span class="st">"annotation"</span>]</span>
+<span id="cb31-43"><a href="#cb31-43" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> k, v <span class="kw">in</span> splits.items()</span>
+<span id="cb31-44"><a href="#cb31-44" aria-hidden="true" tabindex="-1"></a>    }</span>
+<span id="cb31-45"><a href="#cb31-45" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb31-46"><a href="#cb31-46" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-47"><a href="#cb31-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-48"><a href="#cb31-48" aria-hidden="true" tabindex="-1"></a>The official test split has questions but no answers, so **we use `dev` as our test set**. For tuning we</span>
+<span id="cb31-49"><a href="#cb31-49" aria-hidden="true" tabindex="-1"></a>carve a validation split out of <span class="in">`train`</span> in a later chapter.</span>
+<span id="cb31-50"><a href="#cb31-50" aria-hidden="true" tabindex="-1"></a>The <span class="in">`*_turn`</span> files hold the same conversations unrolled to one row per turn. We work from the</span>
+<span id="cb31-51"><a href="#cb31-51" aria-hidden="true" tabindex="-1"></a>conversation files and unroll ourselves, which the counts above confirm gives the same number of turns:</span>
+<span id="cb31-52"><a href="#cb31-52" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-55"><a href="#cb31-55" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-56"><a href="#cb31-56" aria-hidden="true" tabindex="-1"></a>n_turns <span class="op">=</span> {</span>
+<span id="cb31-57"><a href="#cb31-57" aria-hidden="true" tabindex="-1"></a>    s: <span class="bu">sum</span>(<span class="bu">len</span>(c[<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>])</span>
+<span id="cb31-58"><a href="#cb31-58" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> splits[s]) <span class="cf">for</span> s <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>]</span>
+<span id="cb31-59"><a href="#cb31-59" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb31-60"><a href="#cb31-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-61"><a href="#cb31-61" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> n_turns[<span class="st">"train"</span>] <span class="op">==</span> <span class="bu">len</span>(splits[<span class="st">"train_turn"</span>])<span class="op">\</span></span>
+<span id="cb31-62"><a href="#cb31-62" aria-hidden="true" tabindex="-1"></a>    <span class="kw">and</span> n_turns[<span class="st">"dev"</span>] <span class="op">==</span> <span class="bu">len</span>(splits[<span class="st">"dev_turn"</span>])</span>
+<span id="cb31-63"><a href="#cb31-63" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-64"><a href="#cb31-64" aria-hidden="true" tabindex="-1"></a>n_turns</span>
+<span id="cb31-65"><a href="#cb31-65" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-66"><a href="#cb31-66" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-67"><a href="#cb31-67" aria-hidden="true" tabindex="-1"></a><span class="fu">## One record</span></span>
+<span id="cb31-68"><a href="#cb31-68" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-69"><a href="#cb31-69" aria-hidden="true" tabindex="-1"></a>A conversation is a JSON object. The fields we use are <span class="in">`pre_text`</span>, <span class="in">`table`</span>, <span class="in">`post_text`</span>, and under</span>
+<span id="cb31-70"><a href="#cb31-70" aria-hidden="true" tabindex="-1"></a><span class="in">`annotation`</span>: <span class="in">`dialogue_break`</span> (the questions), <span class="in">`turn_program`</span>, <span class="in">`exe_ans_list`</span> (the answers) and</span>
+<span id="cb31-71"><a href="#cb31-71" aria-hidden="true" tabindex="-1"></a><span class="in">`qa_split`</span> (see Type II below).</span>
+<span id="cb31-72"><a href="#cb31-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-75"><a href="#cb31-75" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-76"><a href="#cb31-76" aria-hidden="true" tabindex="-1"></a>by_id <span class="op">=</span> {c[<span class="st">"id"</span>]: c <span class="cf">for</span> c <span class="kw">in</span> splits[<span class="st">"train"</span>]}</span>
+<span id="cb31-77"><a href="#cb31-77" aria-hidden="true" tabindex="-1"></a>conv_I <span class="op">=</span> by_id[<span class="st">"Single_AAPL/2002/page_23.pdf-1"</span>]</span>
+<span id="cb31-78"><a href="#cb31-78" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-79"><a href="#cb31-79" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Top-level keys of the conversation:"</span>)</span>
+<span id="cb31-80"><a href="#cb31-80" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">sorted</span>(conv_I.keys()))</span>
+<span id="cb31-81"><a href="#cb31-81" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-82"><a href="#cb31-82" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"Annotation keys of the conversation:"</span>)</span>
+<span id="cb31-83"><a href="#cb31-83" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="bu">sorted</span>(conv_I[<span class="st">"annotation"</span>].keys()))</span>
+<span id="cb31-84"><a href="#cb31-84" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-85"><a href="#cb31-85" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-86"><a href="#cb31-86" aria-hidden="true" tabindex="-1"></a><span class="fu">## A Type I conversation</span></span>
+<span id="cb31-87"><a href="#cb31-87" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-88"><a href="#cb31-88" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">Type I conversations</span><span class="co">](901_glossary.qmd#gloss-conversation-types)</span> decompose **one** FinQA question into a chain of turns. First the page the model</span>
+<span id="cb31-89"><a href="#cb31-89" aria-hidden="true" tabindex="-1"></a>sees: the text before the table (shortened here), the table as markdown, and the text after.</span>
+<span id="cb31-90"><a href="#cb31-90" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-93"><a href="#cb31-93" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-94"><a href="#cb31-94" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> IPython.display <span class="im">import</span> Markdown</span>
+<span id="cb31-95"><a href="#cb31-95" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-96"><a href="#cb31-96" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> show_page(conv, n<span class="op">=</span><span class="dv">300</span>):</span>
+<span id="cb31-97"><a href="#cb31-97" aria-hidden="true" tabindex="-1"></a>    pre <span class="op">=</span> <span class="st">" "</span>.join(conv[<span class="st">"pre_text"</span>])</span>
+<span id="cb31-98"><a href="#cb31-98" aria-hidden="true" tabindex="-1"></a>    post <span class="op">=</span> <span class="st">" "</span>.join(conv[<span class="st">"post_text"</span>])</span>
+<span id="cb31-99"><a href="#cb31-99" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> Markdown(</span>
+<span id="cb31-100"><a href="#cb31-100" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"*pre_text (</span><span class="sc">{</span><span class="bu">len</span>(conv[<span class="st">'pre_text'</span>])<span class="sc">}</span><span class="ss"> sentences):* …</span><span class="sc">{</span>pre[<span class="op">-</span>n:]<span class="sc">}</span><span class="ch">\n\n</span><span class="ss">"</span></span>
+<span id="cb31-101"><a href="#cb31-101" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> data.table_to_markdown(conv[<span class="st">"table"</span>])</span>
+<span id="cb31-102"><a href="#cb31-102" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> <span class="ss">f"</span><span class="ch">\n\n</span><span class="ss">*post_text (</span><span class="sc">{</span><span class="bu">len</span>(conv[<span class="st">'post_text'</span>])<span class="sc">}</span><span class="ss"> sentences):* </span><span class="sc">{</span>post[:n]<span class="sc">}</span><span class="ss">…"</span></span>
+<span id="cb31-103"><a href="#cb31-103" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb31-104"><a href="#cb31-104" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-105"><a href="#cb31-105" aria-hidden="true" tabindex="-1"></a>show_page(conv_I)</span>
+<span id="cb31-106"><a href="#cb31-106" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-107"><a href="#cb31-107" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-108"><a href="#cb31-108" aria-hidden="true" tabindex="-1"></a>Then the conversation, one turn per line: question, gold program, and the number the program computes.</span>
+<span id="cb31-109"><a href="#cb31-109" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-112"><a href="#cb31-112" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-113"><a href="#cb31-113" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(data.format_conversation(conv_I))</span>
+<span id="cb31-114"><a href="#cb31-114" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-115"><a href="#cb31-115" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-116"><a href="#cb31-116" aria-hidden="true" tabindex="-1"></a>The first turns just **select a number** from the table. Later turns compute with them. The last turn</span>
+<span id="cb31-117"><a href="#cb31-117" aria-hidden="true" tabindex="-1"></a>restates the full calculation, using <span class="in">`#0`</span> for "the result of step 0" so the program stays self-contained.</span>
+<span id="cb31-118"><a href="#cb31-118" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-119"><a href="#cb31-119" aria-hidden="true" tabindex="-1"></a><span class="fu">## A Type I conversation with a garbled table</span></span>
+<span id="cb31-120"><a href="#cb31-120" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-121"><a href="#cb31-121" aria-hidden="true" tabindex="-1"></a>Not every page is this clean. Here is another Type I conversation, whose table header is garbled in</span>
+<span id="cb31-122"><a href="#cb31-122" aria-hidden="true" tabindex="-1"></a>the dataset.</span>
+<span id="cb31-123"><a href="#cb31-123" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-126"><a href="#cb31-126" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-127"><a href="#cb31-127" aria-hidden="true" tabindex="-1"></a>conv_garbled <span class="op">=</span> by_id[<span class="st">"Single_JKHY/2009/page_28.pdf-3"</span>]</span>
+<span id="cb31-128"><a href="#cb31-128" aria-hidden="true" tabindex="-1"></a>show_page(conv_garbled)</span>
+<span id="cb31-129"><a href="#cb31-129" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-130"><a href="#cb31-130" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-131"><a href="#cb31-131" aria-hidden="true" tabindex="-1"></a>::: {.callout-warning title="The header of this table is garbled in the dataset"}</span>
+<span id="cb31-132"><a href="#cb31-132" aria-hidden="true" tabindex="-1"></a>The raw <span class="in">`table_ori`</span> shows what went wrong. The header was split across two rows:</span>
+<span id="cb31-133"><a href="#cb31-133" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-136"><a href="#cb31-136" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-137"><a href="#cb31-137" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> row <span class="kw">in</span> conv_garbled[<span class="st">"table_ori"</span>][:<span class="dv">3</span>]:</span>
+<span id="cb31-138"><a href="#cb31-138" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(row)</span>
+<span id="cb31-139"><a href="#cb31-139" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-140"><a href="#cb31-140" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-141"><a href="#cb31-141" aria-hidden="true" tabindex="-1"></a>Read together, the first two rows are a single header row, `['', 'Year ended June 30, 2009', '2008',</span>
+<span id="cb31-142"><a href="#cb31-142" aria-hidden="true" tabindex="-1"></a>'2007']<span class="in">`, whose first label was extracted on a separate line from the other two. The cleaned `</span>table`</span>
+<span id="cb31-143"><a href="#cb31-143" aria-hidden="true" tabindex="-1"></a>then built a header from the broken pieces: its columns repeat fragments of "year ended june 30 2009",</span>
+<span id="cb31-144"><a href="#cb31-144" aria-hidden="true" tabindex="-1"></a>and the year labels also show up in <span class="in">`pre_text`</span> (the trailing <span class="in">`: 2009 2008 2007 .`</span>). This is how the</span>
+<span id="cb31-145"><a href="#cb31-145" aria-hidden="true" tabindex="-1"></a>data ships, not a parsing error of ours.</span>
+<span id="cb31-146"><a href="#cb31-146" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-147"><a href="#cb31-147" aria-hidden="true" tabindex="-1"></a>The model must work out that the columns are 2009, 2008 and 2007 from the table and the</span>
+<span id="cb31-148"><a href="#cb31-148" aria-hidden="true" tabindex="-1"></a>surrounding text, which is part of the task.</span>
+<span id="cb31-149"><a href="#cb31-149" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb31-150"><a href="#cb31-150" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-153"><a href="#cb31-153" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-154"><a href="#cb31-154" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(data.format_conversation(conv_garbled))</span>
+<span id="cb31-155"><a href="#cb31-155" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-156"><a href="#cb31-156" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-157"><a href="#cb31-157" aria-hidden="true" tabindex="-1"></a>Most tables are clean. The check below counts how many have repeated header cells:</span>
+<span id="cb31-158"><a href="#cb31-158" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-161"><a href="#cb31-161" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-162"><a href="#cb31-162" aria-hidden="true" tabindex="-1"></a>dup_header <span class="op">=</span> <span class="bu">sum</span>(</span>
+<span id="cb31-163"><a href="#cb31-163" aria-hidden="true" tabindex="-1"></a>    <span class="bu">len</span>(<span class="bu">set</span>(c[<span class="st">"table"</span>][<span class="dv">0</span>])) <span class="op">&lt;</span> <span class="bu">len</span>(c[<span class="st">"table"</span>][<span class="dv">0</span>])</span>
+<span id="cb31-164"><a href="#cb31-164" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> splits[<span class="st">"train"</span>]</span>
+<span id="cb31-165"><a href="#cb31-165" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-166"><a href="#cb31-166" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb31-167"><a href="#cb31-167" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>dup_header<span class="sc">}</span><span class="ss"> of </span><span class="sc">{</span><span class="bu">len</span>(splits[<span class="st">'train'</span>])<span class="sc">}</span><span class="ss"> train tables repeat a header "</span></span>
+<span id="cb31-168"><a href="#cb31-168" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"cell (</span><span class="sc">{</span>dup_header <span class="op">/</span> <span class="bu">len</span>(splits[<span class="st">'train'</span>])<span class="sc">:.1%}</span><span class="ss">)"</span></span>
+<span id="cb31-169"><a href="#cb31-169" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-170"><a href="#cb31-170" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-171"><a href="#cb31-171" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-172"><a href="#cb31-172" aria-hidden="true" tabindex="-1"></a><span class="fu">## A Type II conversation</span></span>
+<span id="cb31-173"><a href="#cb31-173" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-174"><a href="#cb31-174" aria-hidden="true" tabindex="-1"></a>Type II conversations merge **two** FinQA questions about the same page. <span class="in">`qa_split`</span> marks which turns</span>
+<span id="cb31-175"><a href="#cb31-175" aria-hidden="true" tabindex="-1"></a>belong to which: 0s, then 1s.</span>
+<span id="cb31-176"><a href="#cb31-176" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-179"><a href="#cb31-179" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-180"><a href="#cb31-180" aria-hidden="true" tabindex="-1"></a>conv_II <span class="op">=</span> <span class="bu">next</span>(</span>
+<span id="cb31-181"><a href="#cb31-181" aria-hidden="true" tabindex="-1"></a>    c <span class="cf">for</span> c <span class="kw">in</span> splits[<span class="st">"train"</span>]</span>
+<span id="cb31-182"><a href="#cb31-182" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> data.conversation_type(c) <span class="op">==</span> <span class="st">"II"</span></span>
+<span id="cb31-183"><a href="#cb31-183" aria-hidden="true" tabindex="-1"></a>    <span class="kw">and</span> <span class="bu">len</span>(c[<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>]) <span class="op">==</span> <span class="dv">6</span></span>
+<span id="cb31-184"><a href="#cb31-184" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-185"><a href="#cb31-185" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(data.format_conversation(conv_II))</span>
+<span id="cb31-186"><a href="#cb31-186" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="st">"qa_split:"</span>, conv_II[<span class="st">"annotation"</span>][<span class="st">"qa_split"</span>])</span>
+<span id="cb31-187"><a href="#cb31-187" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-188"><a href="#cb31-188" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-189"><a href="#cb31-189" aria-hidden="true" tabindex="-1"></a><span class="fu">## The DSL</span></span>
+<span id="cb31-190"><a href="#cb31-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-191"><a href="#cb31-191" aria-hidden="true" tabindex="-1"></a>A program is a comma-separated list of steps, <span class="in">`op(arg, arg)`</span>. A turn that only selects a number has</span>
+<span id="cb31-192"><a href="#cb31-192" aria-hidden="true" tabindex="-1"></a>a bare number as its program. The operations are <span class="in">`add`</span>, <span class="in">`subtract`</span>, <span class="in">`multiply`</span>, <span class="in">`divide`</span>, <span class="in">`exp`</span> and</span>
+<span id="cb31-193"><a href="#cb31-193" aria-hidden="true" tabindex="-1"></a><span class="in">`greater`</span>. (The authors' code also lists FinQA's <span class="in">`table_sum`</span>, <span class="in">`table_average`</span>, <span class="in">`table_max`</span> and</span>
+<span id="cb31-194"><a href="#cb31-194" aria-hidden="true" tabindex="-1"></a><span class="in">`table_min`</span>, but no ConvFinQA gold program uses them.) An argument is one of:</span>
+<span id="cb31-195"><a href="#cb31-195" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-196"><a href="#cb31-196" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a **number literal** copied from the page, such as <span class="in">`206588`</span> or <span class="in">`0.14136`</span>, possibly with a <span class="in">`%`</span></span>
+<span id="cb31-197"><a href="#cb31-197" aria-hidden="true" tabindex="-1"></a>  sign, such as <span class="in">`19%`</span>;</span>
+<span id="cb31-198"><a href="#cb31-198" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a **step reference** <span class="in">`#k`</span>, the result of step *k*;</span>
+<span id="cb31-199"><a href="#cb31-199" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>a **constant** from a fixed list.</span>
+<span id="cb31-200"><a href="#cb31-200" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-201"><a href="#cb31-201" aria-hidden="true" tabindex="-1"></a>The chapter on the DSL and its executor covers the grammar and the executor in detail. Here we look</span>
+<span id="cb31-202"><a href="#cb31-202" aria-hidden="true" tabindex="-1"></a>at what makes an argument a literal or a constant, and how the paper's model decides what it may write.</span>
+<span id="cb31-203"><a href="#cb31-203" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-204"><a href="#cb31-204" aria-hidden="true" tabindex="-1"></a><span class="fu">### Constants</span></span>
+<span id="cb31-205"><a href="#cb31-205" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-206"><a href="#cb31-206" aria-hidden="true" tabindex="-1"></a>The constants are not read from the page. The authors' code defines a fixed list of constants, and every</span>
+<span id="cb31-207"><a href="#cb31-207" aria-hidden="true" tabindex="-1"></a>constant in the train and dev programs is in it:</span>
+<span id="cb31-208"><a href="#cb31-208" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-211"><a href="#cb31-211" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-212"><a href="#cb31-212" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> re</span>
+<span id="cb31-213"><a href="#cb31-213" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-214"><a href="#cb31-214" aria-hidden="true" tabindex="-1"></a>const_use <span class="op">=</span> Counter(</span>
+<span id="cb31-215"><a href="#cb31-215" aria-hidden="true" tabindex="-1"></a>    c</span>
+<span id="cb31-216"><a href="#cb31-216" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> s <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>]</span>
+<span id="cb31-217"><a href="#cb31-217" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> conv <span class="kw">in</span> splits[s]</span>
+<span id="cb31-218"><a href="#cb31-218" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> p <span class="kw">in</span> conv[<span class="st">"annotation"</span>][<span class="st">"turn_program"</span>]</span>
+<span id="cb31-219"><a href="#cb31-219" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> re.findall(<span class="vs">r"const_</span><span class="dv">\w</span><span class="op">+</span><span class="vs">"</span>, p)</span>
+<span id="cb31-220"><a href="#cb31-220" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-221"><a href="#cb31-221" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">set</span>(const_use) <span class="op">&lt;=</span> <span class="bu">set</span>(steps.CONSTANTS)</span>
+<span id="cb31-222"><a href="#cb31-222" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-223"><a href="#cb31-223" aria-hidden="true" tabindex="-1"></a>pd.Series(</span>
+<span id="cb31-224"><a href="#cb31-224" aria-hidden="true" tabindex="-1"></a>    {c: const_use.get(c, <span class="dv">0</span>) <span class="cf">for</span> c <span class="kw">in</span> steps.CONSTANTS},</span>
+<span id="cb31-225"><a href="#cb31-225" aria-hidden="true" tabindex="-1"></a>    name<span class="op">=</span><span class="st">"uses (train + dev)"</span></span>
+<span id="cb31-226"><a href="#cb31-226" aria-hidden="true" tabindex="-1"></a>).to_frame().T</span>
+<span id="cb31-227"><a href="#cb31-227" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-228"><a href="#cb31-228" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-229"><a href="#cb31-229" aria-hidden="true" tabindex="-1"></a>The list has <span class="in">`{python} len(steps.CONSTANTS)`</span> constants.</span>
+<span id="cb31-230"><a href="#cb31-230" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-231"><a href="#cb31-231" aria-hidden="true" tabindex="-1"></a>They are mostly scale factors and counts: <span class="in">`const_100`</span> turns a ratio into a percentage,</span>
+<span id="cb31-232"><a href="#cb31-232" aria-hidden="true" tabindex="-1"></a><span class="in">`const_1000`</span> and <span class="in">`const_1000000`</span> convert units, and small integers such as <span class="in">`const_3`</span> count years for an</span>
+<span id="cb31-233"><a href="#cb31-233" aria-hidden="true" tabindex="-1"></a>average (the Type II example above ends with <span class="in">`divide(#1, const_3)`</span>). The rule is by convention, not</span>
+<span id="cb31-234"><a href="#cb31-234" aria-hidden="true" tabindex="-1"></a>by whether the digits occur on the page: a number the question needs but does not read from the</span>
+<span id="cb31-235"><a href="#cb31-235" aria-hidden="true" tabindex="-1"></a>document is a constant, and the same digits read off the page are a literal.</span>
+<span id="cb31-236"><a href="#cb31-236" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-237"><a href="#cb31-237" aria-hidden="true" tabindex="-1"></a><span class="fu">### Percentages and the executor</span></span>
+<span id="cb31-238"><a href="#cb31-238" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-239"><a href="#cb31-239" aria-hidden="true" tabindex="-1"></a>The official executor (<span class="in">`str_to_num`</span> in the authors' <span class="in">`general_utils.py`</span>) strips commas and tries to</span>
+<span id="cb31-240"><a href="#cb31-240" aria-hidden="true" tabindex="-1"></a>read a float. If that fails and the string contains <span class="in">`%`</span>, it removes the sign and divides by 100, so</span>
+<span id="cb31-241"><a href="#cb31-241" aria-hidden="true" tabindex="-1"></a><span class="in">`19%`</span> is evaluated as 0.19. A <span class="in">`const_`</span> token is replaced by its number (<span class="in">`const_m1`</span> is -1). The</span>
+<span id="cb31-242"><a href="#cb31-242" aria-hidden="true" tabindex="-1"></a>executor never looks at the page: whether a program may use <span class="in">`19%`</span> at all is decided elsewhere.</span>
+<span id="cb31-243"><a href="#cb31-243" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-244"><a href="#cb31-244" aria-hidden="true" tabindex="-1"></a><span class="fu">### What the paper's decoder may write</span></span>
+<span id="cb31-245"><a href="#cb31-245" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-246"><a href="#cb31-246" aria-hidden="true" tabindex="-1"></a>FinQANet's generator <span class="co">[</span><span class="ot">@chen2022convfinqa</span><span class="co">]</span> is restricted: at each step it can emit an operator, a</span>
+<span id="cb31-247"><a href="#cb31-247" aria-hidden="true" tabindex="-1"></a>constant from the list, a step reference, or a number **copied from its input**. Its input is the</span>
+<span id="cb31-248"><a href="#cb31-248" aria-hidden="true" tabindex="-1"></a>question plus the context it is given (supporting text and table rows), split on spaces, and a token counts as a copyable number if, after</span>
+<span id="cb31-249"><a href="#cb31-249" aria-hidden="true" tabindex="-1"></a>removing commas, it parses as a number *or ends with `%`*. This is the rule, implemented in</span>
+<span id="cb31-250"><a href="#cb31-250" aria-hidden="true" tabindex="-1"></a><span class="in">`steps.copyable_numbers`</span>:</span>
+<span id="cb31-251"><a href="#cb31-251" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-254"><a href="#cb31-254" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-255"><a href="#cb31-255" aria-hidden="true" tabindex="-1"></a>row <span class="op">=</span> <span class="st">" "</span>.join(conv_I[<span class="st">"table"</span>][<span class="op">-</span><span class="dv">1</span>])</span>
+<span id="cb31-256"><a href="#cb31-256" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(row)</span>
+<span id="cb31-257"><a href="#cb31-257" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(steps.copyable_numbers(row))</span>
+<span id="cb31-258"><a href="#cb31-258" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-259"><a href="#cb31-259" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-260"><a href="#cb31-260" aria-hidden="true" tabindex="-1"></a>This works because the page text is pre-tokenized: punctuation and symbols are separated from the</span>
+<span id="cb31-261"><a href="#cb31-261" aria-hidden="true" tabindex="-1"></a>surrounding text by spaces (<span class="in">`$ 103102`</span>, <span class="in">`june 30 , 2009`</span>, <span class="in">`( 2913 )`</span>), so numbers can be extracted</span>
+<span id="cb31-262"><a href="#cb31-262" aria-hidden="true" tabindex="-1"></a>cleanly. The exception is <span class="in">`%`</span>, which the data keeps attached to its number in the first form</span>
+<span id="cb31-263"><a href="#cb31-263" aria-hidden="true" tabindex="-1"></a>(<span class="in">`28%`</span>) and also writes as a separate token in the parenthesised form (<span class="in">`( 28 % )`</span>). The attached</span>
+<span id="cb31-264"><a href="#cb31-264" aria-hidden="true" tabindex="-1"></a><span class="in">`28%`</span> is a candidate. In the spaced form, <span class="in">`28`</span> is a candidate and the lone <span class="in">`%`</span> also passes the rule,</span>
+<span id="cb31-265"><a href="#cb31-265" aria-hidden="true" tabindex="-1"></a>which looks like an accidental quirk of the check.</span>
+<span id="cb31-266"><a href="#cb31-266" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-267"><a href="#cb31-267" aria-hidden="true" tabindex="-1"></a>Whether our own models should be restricted this way is a separate question, taken up in the</span>
+<span id="cb31-268"><a href="#cb31-268" aria-hidden="true" tabindex="-1"></a>constrained-decoding chapter.</span>
+<span id="cb31-269"><a href="#cb31-269" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-270"><a href="#cb31-270" aria-hidden="true" tabindex="-1"></a><span class="fu">## How big is it?</span></span>
+<span id="cb31-271"><a href="#cb31-271" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-274"><a href="#cb31-274" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-275"><a href="#cb31-275" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> []</span>
+<span id="cb31-276"><a href="#cb31-276" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> split <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>]:</span>
+<span id="cb31-277"><a href="#cb31-277" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> splits[split]:</span>
+<span id="cb31-278"><a href="#cb31-278" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> t <span class="kw">in</span> data.turns(c):</span>
+<span id="cb31-279"><a href="#cb31-279" aria-hidden="true" tabindex="-1"></a>            rows.append({</span>
+<span id="cb31-280"><a href="#cb31-280" aria-hidden="true" tabindex="-1"></a>                <span class="st">"split"</span>: split,</span>
+<span id="cb31-281"><a href="#cb31-281" aria-hidden="true" tabindex="-1"></a>                <span class="st">"id"</span>: c[<span class="st">"id"</span>],</span>
+<span id="cb31-282"><a href="#cb31-282" aria-hidden="true" tabindex="-1"></a>                <span class="st">"type"</span>: data.conversation_type(c),</span>
+<span id="cb31-283"><a href="#cb31-283" aria-hidden="true" tabindex="-1"></a>                <span class="st">"turn"</span>: t.index <span class="op">+</span> <span class="dv">1</span>,</span>
+<span id="cb31-284"><a href="#cb31-284" aria-hidden="true" tabindex="-1"></a>                <span class="st">"number_turn"</span>: steps.is_number_turn(t.program),</span>
+<span id="cb31-285"><a href="#cb31-285" aria-hidden="true" tabindex="-1"></a>                <span class="st">"program"</span>: t.program</span>
+<span id="cb31-286"><a href="#cb31-286" aria-hidden="true" tabindex="-1"></a>            })</span>
+<span id="cb31-287"><a href="#cb31-287" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> pd.DataFrame(rows)</span>
+<span id="cb31-288"><a href="#cb31-288" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-289"><a href="#cb31-289" aria-hidden="true" tabindex="-1"></a>per_conv <span class="op">=</span> df.groupby([<span class="st">"split"</span>, <span class="st">"id"</span>, <span class="st">"type"</span>]).size()<span class="op">\</span></span>
+<span id="cb31-290"><a href="#cb31-290" aria-hidden="true" tabindex="-1"></a>    .rename(<span class="st">"turns"</span>).reset_index()</span>
+<span id="cb31-291"><a href="#cb31-291" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-292"><a href="#cb31-292" aria-hidden="true" tabindex="-1"></a>summary <span class="op">=</span> per_conv.groupby(<span class="st">"split"</span>).agg(</span>
+<span id="cb31-293"><a href="#cb31-293" aria-hidden="true" tabindex="-1"></a>    conversations<span class="op">=</span>(<span class="st">"id"</span>, <span class="st">"count"</span>),</span>
+<span id="cb31-294"><a href="#cb31-294" aria-hidden="true" tabindex="-1"></a>    turns<span class="op">=</span>(<span class="st">"turns"</span>, <span class="st">"sum"</span>),</span>
+<span id="cb31-295"><a href="#cb31-295" aria-hidden="true" tabindex="-1"></a>    mean_turns<span class="op">=</span>(<span class="st">"turns"</span>, <span class="st">"mean"</span>)</span>
+<span id="cb31-296"><a href="#cb31-296" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-297"><a href="#cb31-297" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-298"><a href="#cb31-298" aria-hidden="true" tabindex="-1"></a>summary[<span class="st">"type II share"</span>] <span class="op">=</span> per_conv.assign(ii<span class="op">=</span>per_conv.<span class="bu">type</span> <span class="op">==</span> <span class="st">"II"</span>)<span class="op">\</span></span>
+<span id="cb31-299"><a href="#cb31-299" aria-hidden="true" tabindex="-1"></a>    .groupby(<span class="st">"split"</span>).ii.mean()</span>
+<span id="cb31-300"><a href="#cb31-300" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-301"><a href="#cb31-301" aria-hidden="true" tabindex="-1"></a>summary.<span class="bu">round</span>(<span class="dv">2</span>)</span>
+<span id="cb31-302"><a href="#cb31-302" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-303"><a href="#cb31-303" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-306"><a href="#cb31-306" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-307"><a href="#cb31-307" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "Turns per conversation (train + dev) and the share of number-selection vs. program turns."</span></span>
+<span id="cb31-308"><a href="#cb31-308" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(<span class="dv">1</span>, <span class="dv">2</span>, figsize<span class="op">=</span>(<span class="dv">9</span>, <span class="fl">3.2</span>))</span>
+<span id="cb31-309"><a href="#cb31-309" aria-hidden="true" tabindex="-1"></a>pivot <span class="op">=</span> per_conv.groupby([<span class="st">"turns"</span>, <span class="st">"type"</span>]).size().unstack(fill_value<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb31-310"><a href="#cb31-310" aria-hidden="true" tabindex="-1"></a>pivot.plot.bar(stacked<span class="op">=</span><span class="va">True</span>, ax<span class="op">=</span>ax[<span class="dv">0</span>], rot<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb31-311"><a href="#cb31-311" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-312"><a href="#cb31-312" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">0</span>].<span class="bu">set</span>(</span>
+<span id="cb31-313"><a href="#cb31-313" aria-hidden="true" tabindex="-1"></a>    xlabel<span class="op">=</span><span class="st">"turns in conversation"</span>,</span>
+<span id="cb31-314"><a href="#cb31-314" aria-hidden="true" tabindex="-1"></a>    ylabel<span class="op">=</span><span class="st">"conversations"</span>,</span>
+<span id="cb31-315"><a href="#cb31-315" aria-hidden="true" tabindex="-1"></a>    title<span class="op">=</span><span class="st">"Conversation length"</span></span>
+<span id="cb31-316"><a href="#cb31-316" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-317"><a href="#cb31-317" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-318"><a href="#cb31-318" aria-hidden="true" tabindex="-1"></a>share <span class="op">=</span> df.groupby(<span class="st">"split"</span>).number_turn.mean()</span>
+<span id="cb31-319"><a href="#cb31-319" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-320"><a href="#cb31-320" aria-hidden="true" tabindex="-1"></a>share.rename(<span class="st">"number-selection"</span>).to_frame().assign(program<span class="op">=</span><span class="dv">1</span> <span class="op">-</span> share)<span class="op">\</span></span>
+<span id="cb31-321"><a href="#cb31-321" aria-hidden="true" tabindex="-1"></a>    .plot.bar(stacked<span class="op">=</span><span class="va">True</span>, ax<span class="op">=</span>ax[<span class="dv">1</span>], rot<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb31-322"><a href="#cb31-322" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-323"><a href="#cb31-323" aria-hidden="true" tabindex="-1"></a>ax[<span class="dv">1</span>].<span class="bu">set</span>(ylabel<span class="op">=</span><span class="st">"share of turns"</span>, title<span class="op">=</span><span class="st">"Turn kind"</span>)</span>
+<span id="cb31-324"><a href="#cb31-324" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb31-325"><a href="#cb31-325" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-326"><a href="#cb31-326" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-327"><a href="#cb31-327" aria-hidden="true" tabindex="-1"></a>The DSL operations are counted from the **new step each turn adds**: the last step of its program,</span>
+<span id="cb31-328"><a href="#cb31-328" aria-hidden="true" tabindex="-1"></a>since each program repeats the earlier steps.</span>
+<span id="cb31-329"><a href="#cb31-329" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-332"><a href="#cb31-332" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-333"><a href="#cb31-333" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "How often each DSL operation is the new step of a turn (train)."</span></span>
+<span id="cb31-334"><a href="#cb31-334" aria-hidden="true" tabindex="-1"></a>ops <span class="op">=</span> Counter()</span>
+<span id="cb31-335"><a href="#cb31-335" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> p <span class="kw">in</span> df[(df.split <span class="op">==</span> <span class="st">"train"</span>) <span class="op">&amp;</span> <span class="op">~</span>df.number_turn].program:</span>
+<span id="cb31-336"><a href="#cb31-336" aria-hidden="true" tabindex="-1"></a>    ops[steps.split_steps(p)[<span class="op">-</span><span class="dv">1</span>].split(<span class="st">"("</span>)[<span class="dv">0</span>]] <span class="op">+=</span> <span class="dv">1</span></span>
+<span id="cb31-337"><a href="#cb31-337" aria-hidden="true" tabindex="-1"></a>pd.Series(ops).sort_values().plot.barh(figsize<span class="op">=</span>(<span class="dv">5</span>, <span class="fl">2.5</span>), xlabel<span class="op">=</span><span class="st">"turns"</span>)</span>
+<span id="cb31-338"><a href="#cb31-338" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb31-339"><a href="#cb31-339" aria-hidden="true" tabindex="-1"></a>ops</span>
+<span id="cb31-340"><a href="#cb31-340" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-341"><a href="#cb31-341" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-342"><a href="#cb31-342" aria-hidden="true" tabindex="-1"></a><span class="fu">## How long is a conversation in tokens?</span></span>
+<span id="cb31-343"><a href="#cb31-343" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-344"><a href="#cb31-344" aria-hidden="true" tabindex="-1"></a>Training uses one sequence per **full conversation**: the system prompt, the page, and every question and</span>
+<span id="cb31-345"><a href="#cb31-345" aria-hidden="true" tabindex="-1"></a>answer. So the longest conversations set the memory we need. Turning a data row into token ids takes</span>
+<span id="cb31-346"><a href="#cb31-346" aria-hidden="true" tabindex="-1"></a>three steps:</span>
+<span id="cb31-347"><a href="#cb31-347" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-348"><a href="#cb31-348" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>**Row to messages.** Our own choice, in <span class="in">`conversation_messages`</span> (<span class="in">`src/convfinqa/formatting.py`</span>): a</span>
+<span id="cb31-349"><a href="#cb31-349" aria-hidden="true" tabindex="-1"></a>   system prompt, then the page and the first question as the first user message, then the gold</span>
+<span id="cb31-350"><a href="#cb31-350" aria-hidden="true" tabindex="-1"></a>   program as the assistant's reply, and so on for every turn. The experiments part extends this</span>
+<span id="cb31-351"><a href="#cb31-351" aria-hidden="true" tabindex="-1"></a>   module for training.</span>
+<span id="cb31-352"><a href="#cb31-352" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>**Messages to one string.** The model's own **[chat template](901_glossary.qmd#gloss-chat-template)**, which ships with its tokenizer. It</span>
+<span id="cb31-353"><a href="#cb31-353" aria-hidden="true" tabindex="-1"></a>   wraps each message in the special markers that the model was trained with.</span>
+<span id="cb31-354"><a href="#cb31-354" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>**String to token ids.** The tokenizer itself.</span>
+<span id="cb31-355"><a href="#cb31-355" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-356"><a href="#cb31-356" aria-hidden="true" tabindex="-1"></a>Here is step 2 for the clean Type I conversation from above. The page text and table are cut out</span>
+<span id="cb31-357"><a href="#cb31-357" aria-hidden="true" tabindex="-1"></a>so the structure is visible.</span>
+<span id="cb31-358"><a href="#cb31-358" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-361"><a href="#cb31-361" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-362"><a href="#cb31-362" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> transformers <span class="im">import</span> AutoTokenizer</span>
+<span id="cb31-363"><a href="#cb31-363" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-364"><a href="#cb31-364" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.formatting <span class="im">import</span> conversation_messages</span>
+<span id="cb31-365"><a href="#cb31-365" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-366"><a href="#cb31-366" aria-hidden="true" tabindex="-1"></a>tok <span class="op">=</span> AutoTokenizer.from_pretrained(<span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span>)</span>
+<span id="cb31-367"><a href="#cb31-367" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-368"><a href="#cb31-368" aria-hidden="true" tabindex="-1"></a>text <span class="op">=</span> tok.apply_chat_template(conversation_messages(conv_I), tokenize<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb31-369"><a href="#cb31-369" aria-hidden="true" tabindex="-1"></a>cut <span class="op">=</span> text.index(<span class="st">"</span><span class="ch">\n\n</span><span class="st">Question:"</span>)</span>
+<span id="cb31-370"><a href="#cb31-370" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(text[:<span class="dv">260</span>] <span class="op">+</span> <span class="st">"</span><span class="ch">\n</span><span class="st">[... page text and table omitted ...]"</span> <span class="op">+</span> text[cut:])</span>
+<span id="cb31-371"><a href="#cb31-371" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-372"><a href="#cb31-372" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-373"><a href="#cb31-373" aria-hidden="true" tabindex="-1"></a>The <span class="in">`&lt;|im_start|&gt;`</span> and <span class="in">`&lt;|im_end|&gt;`</span> markers delimit each message and carry its role. The model learns</span>
+<span id="cb31-374"><a href="#cb31-374" aria-hidden="true" tabindex="-1"></a>to end every answer with <span class="in">`&lt;|im_end|&gt;`</span>, and that token is part of what we train on.</span>
+<span id="cb31-375"><a href="#cb31-375" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-376"><a href="#cb31-376" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Which tokenizer, and why it matters"}</span>
+<span id="cb31-377"><a href="#cb31-377" aria-hidden="true" tabindex="-1"></a>The ConvFinQA paper doesn't prescribe a tokenizer; it predates our model. We use the tokenizer and</span>
+<span id="cb31-378"><a href="#cb31-378" aria-hidden="true" tabindex="-1"></a>chat template of the model we will fine-tune, <span class="in">`Qwen/Qwen3-4B-Instruct-2507`</span>, so that the lengths</span>
+<span id="cb31-379"><a href="#cb31-379" aria-hidden="true" tabindex="-1"></a>below are what training will see. The numbers, and the <span class="in">`max_length`</span> we derive from them, belong to</span>
+<span id="cb31-380"><a href="#cb31-380" aria-hidden="true" tabindex="-1"></a>this tokenizer and to our formatting. A different base model would give slightly different counts, so</span>
+<span id="cb31-381"><a href="#cb31-381" aria-hidden="true" tabindex="-1"></a>check them again before reusing the value.</span>
+<span id="cb31-382"><a href="#cb31-382" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb31-383"><a href="#cb31-383" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-384"><a href="#cb31-384" aria-hidden="true" tabindex="-1"></a>Now we count tokens for every conversation of <span class="in">`train`</span> and <span class="in">`dev`</span> (step 3). The count is made by</span>
+<span id="cb31-385"><a href="#cb31-385" aria-hidden="true" tabindex="-1"></a><span class="in">`convfinqa.lengths`</span>, with <span class="in">`add_special_tokens=False`</span> because the template has already written the special</span>
+<span id="cb31-386"><a href="#cb31-386" aria-hidden="true" tabindex="-1"></a>tokens into the string. It is the artifact <span class="in">`conversation_lengths`</span>, so that the chapters that need the longest</span>
+<span id="cb31-387"><a href="#cb31-387" aria-hidden="true" tabindex="-1"></a>conversation read it from there, and a rebuild from a clean checkout makes it again.</span>
+<span id="cb31-388"><a href="#cb31-388" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-391"><a href="#cb31-391" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-392"><a href="#cb31-392" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb31-393"><a href="#cb31-393" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-394"><a href="#cb31-394" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.artifacts <span class="im">import</span> artifact, get</span>
+<span id="cb31-395"><a href="#cb31-395" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-396"><a href="#cb31-396" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-397"><a href="#cb31-397" aria-hidden="true" tabindex="-1"></a><span class="at">@artifact</span>(<span class="st">"conversation_lengths"</span>)</span>
+<span id="cb31-398"><a href="#cb31-398" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_conversation_lengths(out, deps):</span>
+<span id="cb31-399"><a href="#cb31-399" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> json</span>
+<span id="cb31-400"><a href="#cb31-400" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-401"><a href="#cb31-401" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> transformers <span class="im">import</span> AutoTokenizer</span>
+<span id="cb31-402"><a href="#cb31-402" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-403"><a href="#cb31-403" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa <span class="im">import</span> data</span>
+<span id="cb31-404"><a href="#cb31-404" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.lengths <span class="im">import</span> conversation_lengths, max_length_for</span>
+<span id="cb31-405"><a href="#cb31-405" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-406"><a href="#cb31-406" aria-hidden="true" tabindex="-1"></a>    tok <span class="op">=</span> AutoTokenizer.from_pretrained(<span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span>)</span>
+<span id="cb31-407"><a href="#cb31-407" aria-hidden="true" tabindex="-1"></a>    rows <span class="op">=</span> conversation_lengths(</span>
+<span id="cb31-408"><a href="#cb31-408" aria-hidden="true" tabindex="-1"></a>        tok, {name: data.load_split(name) <span class="cf">for</span> name <span class="kw">in</span> [<span class="st">"train"</span>, <span class="st">"dev"</span>]}</span>
+<span id="cb31-409"><a href="#cb31-409" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb31-410"><a href="#cb31-410" aria-hidden="true" tabindex="-1"></a>    longest <span class="op">=</span> <span class="bu">max</span>(r[<span class="st">"tokens"</span>] <span class="cf">for</span> r <span class="kw">in</span> rows)</span>
+<span id="cb31-411"><a href="#cb31-411" aria-hidden="true" tabindex="-1"></a>    (out <span class="op">/</span> <span class="st">"lengths.jsonl"</span>).write_text(</span>
+<span id="cb31-412"><a href="#cb31-412" aria-hidden="true" tabindex="-1"></a>        <span class="st">""</span>.join(json.dumps(r) <span class="op">+</span> <span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="cf">for</span> r <span class="kw">in</span> rows)</span>
+<span id="cb31-413"><a href="#cb31-413" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb31-414"><a href="#cb31-414" aria-hidden="true" tabindex="-1"></a>    (out <span class="op">/</span> <span class="st">"lengths.json"</span>).write_text(json.dumps(</span>
+<span id="cb31-415"><a href="#cb31-415" aria-hidden="true" tabindex="-1"></a>        {<span class="st">"longest"</span>: longest, <span class="st">"max_length"</span>: max_length_for(longest)}</span>
+<span id="cb31-416"><a href="#cb31-416" aria-hidden="true" tabindex="-1"></a>    ))</span>
+<span id="cb31-417"><a href="#cb31-417" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-418"><a href="#cb31-418" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-419"><a href="#cb31-419" aria-hidden="true" tabindex="-1"></a>lengths <span class="op">=</span> pd.DataFrame(get(<span class="st">"conversation_lengths"</span>).jsonl(<span class="st">"lengths.jsonl"</span>))</span>
+<span id="cb31-420"><a href="#cb31-420" aria-hidden="true" tabindex="-1"></a>lengths.groupby(<span class="st">"split"</span>).tokens.describe(percentiles<span class="op">=</span>[<span class="fl">0.5</span>, <span class="fl">0.9</span>, <span class="fl">0.99</span>, <span class="fl">0.999</span>])<span class="op">\</span></span>
+<span id="cb31-421"><a href="#cb31-421" aria-hidden="true" tabindex="-1"></a>    .<span class="bu">round</span>(<span class="dv">0</span>)</span>
+<span id="cb31-422"><a href="#cb31-422" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-423"><a href="#cb31-423" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-426"><a href="#cb31-426" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-427"><a href="#cb31-427" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "Tokens per full conversation."</span></span>
+<span id="cb31-428"><a href="#cb31-428" aria-hidden="true" tabindex="-1"></a>lengths.groupby(<span class="st">"split"</span>).tokens.plot.hist(</span>
+<span id="cb31-429"><a href="#cb31-429" aria-hidden="true" tabindex="-1"></a>    bins<span class="op">=</span><span class="dv">60</span>, alpha<span class="op">=</span><span class="fl">0.6</span>, legend<span class="op">=</span><span class="va">True</span>, figsize<span class="op">=</span>(<span class="dv">6</span>, <span class="dv">3</span>)</span>
+<span id="cb31-430"><a href="#cb31-430" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-431"><a href="#cb31-431" aria-hidden="true" tabindex="-1"></a>plt.xlabel(<span class="st">"tokens in conversation"</span>)</span>
+<span id="cb31-432"><a href="#cb31-432" aria-hidden="true" tabindex="-1"></a>plt.tight_layout()</span>
+<span id="cb31-433"><a href="#cb31-433" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-434"><a href="#cb31-434" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-435"><a href="#cb31-435" aria-hidden="true" tabindex="-1"></a>We pick <span class="in">`max_length`</span> as the longest conversation rounded up to a multiple of 256, so that no training</span>
+<span id="cb31-436"><a href="#cb31-436" aria-hidden="true" tabindex="-1"></a>conversation is truncated. Truncating would cut off assistant tokens, which are exactly what the loss</span>
+<span id="cb31-437"><a href="#cb31-437" aria-hidden="true" tabindex="-1"></a>is computed on. The value is saved in the same artifact for later chapters, since stages pass data through files.</span>
+<span id="cb31-438"><a href="#cb31-438" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-441"><a href="#cb31-441" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb31-442"><a href="#cb31-442" aria-hidden="true" tabindex="-1"></a>chosen <span class="op">=</span> get(<span class="st">"conversation_lengths"</span>).json(<span class="st">"lengths.json"</span>)</span>
+<span id="cb31-443"><a href="#cb31-443" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb31-444"><a href="#cb31-444" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"longest conversation: </span><span class="sc">{</span>chosen[<span class="st">'longest'</span>]<span class="sc">}</span><span class="ss"> tokens"</span></span>
+<span id="cb31-445"><a href="#cb31-445" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f" -&gt; max_length = </span><span class="sc">{</span>chosen[<span class="st">'max_length'</span>]<span class="sc">}</span><span class="ss">"</span></span>
+<span id="cb31-446"><a href="#cb31-446" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb31-447"><a href="#cb31-447" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb31-448"><a href="#cb31-448" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-449"><a href="#cb31-449" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Under the hood"}</span>
+<span id="cb31-450"><a href="#cb31-450" aria-hidden="true" tabindex="-1"></a>Notice how numbers like <span class="in">`206588`</span> cost one token per digit in this tokenizer. The foundations part looks at</span>
+<span id="cb31-451"><a href="#cb31-451" aria-hidden="true" tabindex="-1"></a>tokenization properly. It is one reason the model writes a program and a Python executor does the</span>
+<span id="cb31-452"><a href="#cb31-452" aria-hidden="true" tabindex="-1"></a>arithmetic.</span>
+<span id="cb31-453"><a href="#cb31-453" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb31-454"><a href="#cb31-454" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-455"><a href="#cb31-455" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Further reading"}</span>
+<span id="cb31-456"><a href="#cb31-456" aria-hidden="true" tabindex="-1"></a>The ConvFinQA paper <span class="co">[</span><span class="ot">@chen2022convfinqa</span><span class="co">]</span> describes how the conversations were built and</span>
+<span id="cb31-457"><a href="#cb31-457" aria-hidden="true" tabindex="-1"></a>annotated. The dataset repository is at <span class="ot">&lt;https://github.com/czyssrs/ConvFinQA&gt;</span>.</span>
+<span id="cb31-458"><a href="#cb31-458" aria-hidden="true" tabindex="-1"></a>:::</span>
+</code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

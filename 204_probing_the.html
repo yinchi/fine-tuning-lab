@@ -1,0 +1,1705 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>7&nbsp; Probing the untuned model on ConvFinQA – Fine-tuning lab: LLMs on ConvFinQA</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./205_how_fine_tuning.html" rel="next">
+<link href="./203_from_base.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-825aa897e66f6637425967c223a89f82.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./201_from_text.html">Foundations</a></li><li class="breadcrumb-item"><a href="./204_probing_the.html"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Fine-tuning lab: LLMs on ConvFinQA</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Setup &amp; data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./101_environment_setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Environment setup</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./102_what_convfinqa.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./103_the_dsl.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">The DSL and its executor</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./201_from_text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">From text to tokens to next-token probabilities</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./202_anatomy_of.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Anatomy of Qwen3-4B</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./203_from_base.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./204_probing_the.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./205_how_fine_tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">How fine-tuning works</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./206_lora_in.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Experiments</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./301_formatting_conversations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Formatting conversations for training</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./302_the_untuned.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The untuned baseline</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./303_training_with.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Training with LoRA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./304_evaluating_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Evaluating the fine-tuned model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./305_dsl_vs.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">DSL or Python?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./306_constrained_decoding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Constrained decoding</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Beyond</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./402_the_final.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./403_rank_sweep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">How much rank does the task need?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./404_summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Summary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./901_glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./902_references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">References</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#the-validation-split" id="toc-the-validation-split" class="nav-link active" data-scroll-target="#the-validation-split"><span class="header-section-number">7.1</span> The validation split</a></li>
+  <li><a href="#asking-the-untuned-model" id="toc-asking-the-untuned-model" class="nav-link" data-scroll-target="#asking-the-untuned-model"><span class="header-section-number">7.2</span> Asking the untuned model</a>
+  <ul class="collapse">
+  <li><a href="#what-the-failures-look-like" id="toc-what-the-failures-look-like" class="nav-link" data-scroll-target="#what-the-failures-look-like"><span class="header-section-number">7.2.1</span> What the failures look like</a></li>
+  </ul></li>
+  <li><a href="#how-surprised-is-the-model-by-the-gold-program" id="toc-how-surprised-is-the-model-by-the-gold-program" class="nav-link" data-scroll-target="#how-surprised-is-the-model-by-the-gold-program"><span class="header-section-number">7.3</span> How surprised is the model by the gold program?</a></li>
+  <li><a href="#the-number-fine-tuning-starts-from" id="toc-the-number-fine-tuning-starts-from" class="nav-link" data-scroll-target="#the-number-fine-tuning-starts-from"><span class="header-section-number">7.4</span> The number fine-tuning starts from</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./201_from_text.html">Foundations</a></li><li class="breadcrumb-item"><a href="./204_probing_the.html"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></a></li></ol></nav>
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><span id="sec-probing" class="quarto-section-identifier"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></span></h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><strong>You will learn:</strong></p>
+<ul>
+<li>how the untuned model fails when asked for a DSL program, with and without examples in the prompt;</li>
+<li>how to read a model’s surprise at each token of the gold answer, and what that has to do with the loss;</li>
+<li>the number fine-tuning starts from: the model’s mean loss on the gold programs of the validation split.</li>
+</ul>
+<p>The earlier chapters used one conversation. Here we look at a sample of them. The model is <code>Qwen3-4B-Instruct-2507</code>, untuned, and every example comes from the <strong>validation split</strong>, never from dev.</p>
+<section id="the-validation-split" class="level2" data-number="7.1">
+<h2 data-number="7.1" class="anchored" data-anchor-id="the-validation-split"><span class="header-section-number">7.1</span> The validation split</h2>
+<p><code>train.json</code> is the training file. We hold out a tenth of its conversations for tuning decisions (which prompt, which checkpoint) and train on the rest. The split is made <strong>by report page</strong>: several conversations are written from the same page, and if one were in training and its sibling in validation, the model could be graded on a page it had been trained on. Dev stays untouched, for the final numbers.</p>
+<div id="ffe09617" class="cell" data-execution_count="1">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa <span class="im">import</span> data</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.artifacts <span class="im">import</span> get, artifact</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>split <span class="op">=</span> get(<span class="st">"train_val_split"</span>)</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>fit <span class="op">=</span> <span class="bu">list</span>(split.jsonl(<span class="st">"train_fit.jsonl"</span>))</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>val <span class="op">=</span> <span class="bu">list</span>(split.jsonl(<span class="st">"val.jsonl"</span>))</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>pages <span class="op">=</span> <span class="kw">lambda</span> convs: {data.page_group(c[<span class="st">"id"</span>]) <span class="cf">for</span> c <span class="kw">in</span> convs}</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>n_turns <span class="op">=</span> <span class="kw">lambda</span> convs: <span class="bu">sum</span>(<span class="bu">len</span>(c[<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>]) <span class="cf">for</span> c <span class="kw">in</span> convs)</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"train-fit: </span><span class="sc">{</span><span class="bu">len</span>(fit)<span class="sc">:,}</span><span class="ss"> conversations, </span><span class="sc">{</span>n_turns(fit)<span class="sc">:,}</span><span class="ss"> turns, "</span></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(pages(fit))<span class="sc">:,}</span><span class="ss"> pages"</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"val:       </span><span class="sc">{</span><span class="bu">len</span>(val)<span class="sc">:,}</span><span class="ss"> conversations, </span><span class="sc">{</span>n_turns(val)<span class="sc">:,}</span><span class="ss"> turns, "</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(pages(val))<span class="sc">:,}</span><span class="ss"> pages"</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> pages(fit) <span class="op">&amp;</span> pages(val)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>train-fit: 2,731 conversations, 9,979 turns, 1,429 pages
+val:       306 conversations, 1,125 turns, 159 pages</code></pre>
+</div>
+</div>
+<p>Together that is 3,037 conversations, the whole of <code>train.json</code>.</p>
+<p>The split is deterministic (pages are drawn with seed 0), and it is saved as the artifact <code>train_val_split</code>, so later chapters read exactly these files.</p>
+</section>
+<section id="asking-the-untuned-model" class="level2" data-number="7.2">
+<h2 data-number="7.2" class="anchored" data-anchor-id="asking-the-untuned-model"><span class="header-section-number">7.2</span> Asking the untuned model</h2>
+<p>We take a small random sample of validation conversations and ask the model for every turn. Each turn is a separate request with the <strong>gold history</strong> (the earlier answers are the dataset’s programs), so the requests are independent and each one measures a single turn. Decoding is greedy and the answer is judged exactly as generated: no cleaning, and an answer the executor rejects is wrong. That is the rule the headline evaluation will use.</p>
+<p>We try two prompts. <strong>Zero-shot</strong> is the system prompt <code>Answer with a program in the ConvFinQA DSL.</code>, the page and the question, and nothing else. <strong><a href="./901_glossary.html#gloss-few-shot">Few-shot</a></strong> puts two complete conversations, with their gold programs, in front of the same request, drawn from train-fit.</p>
+<p>These runs take a few minutes (they load the 4B model and generate every answer twice), so they are an artifact: built once in a subprocess, and loaded here. The same artifact holds the gold programs’ token probabilities that we read in the next section.</p>
+<div id="10aa40ae" class="cell" data-execution_count="2">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="at">@artifact</span>(<span class="st">"probe_val_sample"</span>, deps<span class="op">=</span>[<span class="st">"train_val_split"</span>], heavy<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_probe_val_sample(out, deps):</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> json</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> random</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> torch</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> transformers <span class="im">import</span> AutoModelForCausalLM, AutoTokenizer</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.probing <span class="im">import</span> probe_sample</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    tok <span class="op">=</span> AutoTokenizer.from_pretrained(name)</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> AutoModelForCausalLM.from_pretrained(</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>        name, dtype<span class="op">=</span>torch.bfloat16, device_map<span class="op">=</span><span class="st">"cuda"</span></span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    ).<span class="bu">eval</span>()</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    fit <span class="op">=</span> <span class="bu">list</span>(deps[<span class="st">"train_val_split"</span>].jsonl(<span class="st">"train_fit.jsonl"</span>))</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    val <span class="op">=</span> <span class="bu">list</span>(deps[<span class="st">"train_val_split"</span>].jsonl(<span class="st">"val.jsonl"</span>))</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>    rng <span class="op">=</span> random.Random(<span class="dv">0</span>)</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    sample <span class="op">=</span> rng.sample(val, <span class="dv">20</span>)</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>    shots <span class="op">=</span> rng.sample(fit, <span class="dv">2</span>)</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> probe_sample(model, tok, sample, shots)</span>
+<span id="cb3-23"><a href="#cb3-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> key, rows <span class="kw">in</span> result.items():</span>
+<span id="cb3-24"><a href="#cb3-24" aria-hidden="true" tabindex="-1"></a>        (out <span class="op">/</span> <span class="ss">f"</span><span class="sc">{</span>key<span class="sc">}</span><span class="ss">.jsonl"</span>).write_text(</span>
+<span id="cb3-25"><a href="#cb3-25" aria-hidden="true" tabindex="-1"></a>            <span class="st">""</span>.join(json.dumps(r) <span class="op">+</span> <span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="cf">for</span> r <span class="kw">in</span> rows)</span>
+<span id="cb3-26"><a href="#cb3-26" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb3-27"><a href="#cb3-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-28"><a href="#cb3-28" aria-hidden="true" tabindex="-1"></a>probe <span class="op">=</span> get(<span class="st">"probe_val_sample"</span>)</span>
+<span id="cb3-29"><a href="#cb3-29" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> pd.DataFrame(probe.jsonl(<span class="st">"answers.jsonl"</span>))</span>
+<span id="cb3-30"><a href="#cb3-30" aria-hidden="true" tabindex="-1"></a>surprisal <span class="op">=</span> <span class="bu">list</span>(probe.jsonl(<span class="st">"surprisal.jsonl"</span>))</span>
+<span id="cb3-31"><a href="#cb3-31" aria-hidden="true" tabindex="-1"></a>outputs <span class="op">=</span> results.setting.unique()</span>
+<span id="cb3-32"><a href="#cb3-32" aria-hidden="true" tabindex="-1"></a>by_id <span class="op">=</span> {c[<span class="st">"id"</span>]: c <span class="cf">for</span> c <span class="kw">in</span> val}</span>
+<span id="cb3-33"><a href="#cb3-33" aria-hidden="true" tabindex="-1"></a>sample <span class="op">=</span> [by_id[s[<span class="st">"id"</span>]] <span class="cf">for</span> s <span class="kw">in</span> surprisal]</span>
+<span id="cb3-34"><a href="#cb3-34" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(results) <span class="op">//</span> <span class="bu">len</span>(outputs)<span class="sc">}</span><span class="ss"> turns from </span><span class="sc">{</span><span class="bu">len</span>(sample)<span class="sc">}</span><span class="ss"> conversations"</span>)</span>
+<span id="cb3-35"><a href="#cb3-35" aria-hidden="true" tabindex="-1"></a>results.groupby(<span class="st">"setting"</span>).kind.value_counts().unstack(<span class="dv">0</span>)<span class="op">\</span></span>
+<span id="cb3-36"><a href="#cb3-36" aria-hidden="true" tabindex="-1"></a>    .fillna(<span class="dv">0</span>).astype(<span class="bu">int</span>).sort_values(<span class="st">"few-shot"</span>, ascending<span class="op">=</span><span class="va">False</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>68 turns from 20 conversations</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="2">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th">setting</th>
+<th data-quarto-table-cell-role="th">few-shot</th>
+<th data-quarto-table-cell-role="th">zero-shot</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">kind</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">correct</th>
+<td>46</td>
+<td>16</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">wrong_answer</th>
+<td>6</td>
+<td>4</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">wrong_numbers</th>
+<td>6</td>
+<td>0</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">syntax</th>
+<td>4</td>
+<td>16</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">wrong_operations</th>
+<td>3</td>
+<td>4</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">bad_number</th>
+<td>2</td>
+<td>11</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">unknown_operator</th>
+<td>1</td>
+<td>1</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">code_fence</th>
+<td>0</td>
+<td>16</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>With twenty conversations these counts are rough: a few turns move a row by several points. The real measurement is the baseline chapter’s, on many more. What we want here is to <strong>read the failures</strong>.</p>
+<div id="de154c6e" class="cell" data-execution_count="3">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>accuracy <span class="op">=</span> results.assign(ok<span class="op">=</span>results.kind <span class="op">==</span> <span class="st">"correct"</span>)<span class="op">\</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    .groupby(<span class="st">"setting"</span>).ok.mean()</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(accuracy.<span class="bu">map</span>(<span class="st">"</span><span class="sc">{:.0%}</span><span class="st">"</span>.<span class="bu">format</span>).to_string())</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>setting
+few-shot     68%
+zero-shot    24%</code></pre>
+</div>
+</div>
+<section id="what-the-failures-look-like" class="level3" data-number="7.2.1">
+<h3 data-number="7.2.1" class="anchored" data-anchor-id="what-the-failures-look-like"><span class="header-section-number">7.2.1</span> What the failures look like</h3>
+<p>Each kind of failure, with one real output per setting. The gold program is on the right.</p>
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> show(setting, kind):</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> results[(results.setting <span class="op">==</span> setting) <span class="op">&amp;</span> (results.kind <span class="op">==</span> kind)]</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> r.empty:</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> r.iloc[<span class="dv">0</span>]</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"- **</span><span class="sc">{</span>setting<span class="sc">}</span><span class="ss">, `</span><span class="sc">{</span>kind<span class="sc">}</span><span class="ss">`**, turn </span><span class="sc">{</span>r<span class="sc">.</span>turn <span class="op">+</span> <span class="dv">1</span><span class="sc">}</span><span class="ss"> of `</span><span class="sc">{</span>r<span class="sc">.</span><span class="bu">id</span><span class="sc">}</span><span class="ss">`</span><span class="ch">\n</span><span class="ss">"</span>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"  ````</span><span class="ch">\n</span><span class="ss">  "</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> r.output.strip().replace(<span class="st">"</span><span class="ch">\n</span><span class="st">"</span>, <span class="st">"</span><span class="ch">\n</span><span class="st">  "</span>)[:<span class="dv">400</span>]</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> <span class="st">"</span><span class="ch">\n</span><span class="st">  ````</span><span class="ch">\n</span><span class="st">"</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  gold: `</span><span class="sc">{</span>r<span class="sc">.</span>gold<span class="sc">}</span><span class="ss">`</span><span class="ch">\n</span><span class="ss">"</span>)</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> kind <span class="kw">in</span> results.kind.unique():</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> kind <span class="op">!=</span> <span class="st">"correct"</span>:</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> setting <span class="kw">in</span> outputs:</span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a>            show(setting, kind)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<ul>
+<li><p><strong>zero-shot, <code>code_fence</code></strong>, turn 1 of <code>Single_KIM/2008/page_126.pdf-1</code></p>
+<pre><code>To find the difference in income from investment in the retail store leases between 2006 and 2007:
+
+- Income in 2006: $1.3 million  
+- Income in 2007: $1.2 million  
+
+Difference = $1.3 million - $1.2 million = **$0.1 million**
+
+```convfinqa
+0.1
+```</code></pre>
+<p>gold: <code>subtract(1.2, 1.3)</code></p></li>
+<li><p><strong>zero-shot, <code>syntax</code></strong>, turn 3 of <code>Single_ECL/2017/page_96.pdf-3</code></p>
+<pre><code>The net difference between R&amp;D costs in 2016 and 2015 is:
+
+$191 million (2015) - $189 million (2016) = **$2 million**
+
+So, the net difference is **$2 million**.</code></pre>
+<p>gold: <code>subtract(189, 191)</code></p></li>
+<li><p><strong>few-shot, <code>syntax</code></strong>, turn 5 of <code>Single_ECL/2017/page_96.pdf-3</code></p>
+<pre><code>divide(191 - 189, 189) * 100</code></pre>
+<p>gold: <code>subtract(189, 191), divide(#0, 191)</code></p></li>
+<li><p><strong>zero-shot, <code>wrong_answer</code></strong>, turn 1 of <code>Single_LMT/2014/page_46.pdf-3</code></p>
+<pre><code>699</code></pre>
+<p>gold: <code>759</code></p></li>
+<li><p><strong>few-shot, <code>wrong_answer</code></strong>, turn 3 of <code>Single_ECL/2017/page_96.pdf-3</code></p>
+<pre><code>subtract(191, 189)</code></pre>
+<p>gold: <code>subtract(189, 191)</code></p></li>
+<li><p><strong>zero-shot, <code>bad_number</code></strong>, turn 3 of <code>Single_LMT/2014/page_46.pdf-3</code></p>
+<pre><code>The operating profit in 2013 was $759 million, and in 2012 it was $808 million.  
+
+The change over the year was a decrease of $49 million, or approximately 6%.</code></pre>
+<p>gold: <code>subtract(759, 808)</code></p></li>
+<li><p><strong>few-shot, <code>bad_number</code></strong>, turn 2 of <code>Single_KIM/2008/page_126.pdf-1</code></p>
+<pre><code>divide(1.2 - 1.3, 1.3)</code></pre>
+<p>gold: <code>subtract(1.2, 1.3), divide(#0, 1.3)</code></p></li>
+<li><p><strong>zero-shot, <code>wrong_operations</code></strong>, turn 3 of <code>Single_ETR/2008/page_313.pdf-1</code></p>
+<pre><code>-32.1</code></pre>
+<p>gold: <code>subtract(959.2, 991.1)</code></p></li>
+<li><p><strong>few-shot, <code>wrong_operations</code></strong>, turn 3 of <code>Double_AES/2018/page_168.pdf</code></p>
+<pre><code>340</code></pre>
+<p>gold: <code>divide(340, 17%)</code></p></li>
+<li><p><strong>zero-shot, <code>unknown_operator</code></strong>, turn 2 of <code>Single_MRO/2008/page_99.pdf-2</code></p>
+<pre><code>average(20000, 15000)</code></pre>
+<p>gold: <code>add(20000, 15000), divide(#0, const_2)</code></p></li>
+<li><p><strong>few-shot, <code>unknown_operator</code></strong>, turn 2 of <code>Single_MRO/2008/page_99.pdf-2</code></p>
+<pre><code>average(20000, 15000)</code></pre>
+<p>gold: <code>add(20000, 15000), divide(#0, const_2)</code></p></li>
+<li><p><strong>few-shot, <code>wrong_numbers</code></strong>, turn 2 of <code>Double_AES/2018/page_168.pdf</code></p>
+<pre><code>subtract(348, 352), divide(#0, 364)</code></pre>
+<p>gold: <code>subtract(348, 352), divide(#0, 352)</code></p></li>
+</ul>
+<p>The kinds, as <code>probing.classify_output</code> defines them:</p>
+<ul>
+<li><code>code_fence</code>: the answer is wrapped in a markdown fence, usually with invented syntax inside.</li>
+<li><code>syntax</code>, <code>bad_number</code>, <code>unknown_operator</code>: the executor could not read it. These are <strong>format failures</strong>: the model answered in some language, but not the DSL.</li>
+<li><code>wrong_operations</code>, <code>wrong_numbers</code>, <code>wrong_answer</code>: a valid program with the wrong answer. These are <strong>reasoning or reading failures</strong>: a different list of operations, different numbers picked from the page, or the right shape with the wrong value.</li>
+</ul>
+<p>Examples shift the balance from the first group to the second: the model learns the format from two conversations, but picking the right cells and the right operation is a different skill. Fine-tuning has to teach both, and the invalid rate it removes is the easy part.</p>
+</section>
+</section>
+<section id="how-surprised-is-the-model-by-the-gold-program" class="level2" data-number="7.3">
+<h2 data-number="7.3" class="anchored" data-anchor-id="how-surprised-is-the-model-by-the-gold-program"><span class="header-section-number">7.3</span> How surprised is the model by the gold program?</h2>
+<p>Generation shows what the model does. We can also ask how likely it finds <strong>the gold answer</strong>. One forward pass over the whole conversation gives, for every token, the probability the model assigned to it given everything before it. The negative log of that probability is the token’s <strong><a href="./901_glossary.html#gloss-surprisal">surprisal</a></strong>, in nats (natural log). It is the surprisal of the <strong>gold</strong> token given the <strong>gold</strong> tokens before it (teacher forcing), with no comparison to what the model would have chosen. The cross-entropy loss fine-tuning minimizes is the mean surprisal over the answer tokens.</p>
+<div id="e9f1ad0a" class="cell" data-execution_count="5">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> IPython.display <span class="im">import</span> HTML</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> math <span class="im">import</span> exp</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> inspect <span class="im">import</span> signature</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.book.viz <span class="im">import</span> surprisal_html</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a><span class="co"># the surprisal (nats) at which the red is darkest</span></span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a>full <span class="op">=</span> signature(surprisal_html).parameters[<span class="st">"full"</span>].default</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>row <span class="op">=</span> <span class="bu">next</span>(</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a>    r <span class="cf">for</span> r <span class="kw">in</span> surprisal</span>
+<span id="cb20-13"><a href="#cb20-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span>(by_id[r[<span class="st">"id"</span>]][<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>]) <span class="op">&gt;=</span> <span class="dv">4</span></span>
+<span id="cb20-14"><a href="#cb20-14" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-15"><a href="#cb20-15" aria-hidden="true" tabindex="-1"></a>conv <span class="op">=</span> by_id[row[<span class="st">"id"</span>]]</span>
+<span id="cb20-16"><a href="#cb20-16" aria-hidden="true" tabindex="-1"></a>pieces, logp <span class="op">=</span> row[<span class="st">"tokens"</span>], row[<span class="st">"logprobs"</span>]</span>
+<span id="cb20-17"><a href="#cb20-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-18"><a href="#cb20-18" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> k, t <span class="kw">in</span> <span class="bu">enumerate</span>(data.turns(conv)):</span>
+<span id="cb20-19"><a href="#cb20-19" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"turn </span><span class="sc">{</span>k <span class="op">+</span> <span class="dv">1</span><span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>t<span class="sc">.</span>question<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb20-20"><a href="#cb20-20" aria-hidden="true" tabindex="-1"></a>HTML(surprisal_html(pieces, logp))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>turn 1: what were the r&amp;d costs in 2016?
+turn 2: what were the r&amp;d costs in 2015?
+turn 3: what is the net difference?
+turn 4: what were the r&amp;d costs in 2015?
+turn 5: what was the percent change?</code></pre>
+</div>
+<div class="cell-output cell-output-display" data-execution_count="5">
+<div style="font-family:monospace; white-space:pre-wrap; line-height:1.9; margin:0.4em 0"><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">1</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000">8</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">9</span><span style="background:hsla(0, 85%, 50%, 0.39)" title="p = 0.060">&lt;|im_end|&gt;</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">9</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000">&lt;|im_end|&gt;</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">subtract</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">(</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">8</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">9</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000">,</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000"> </span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">9</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000">)</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">&lt;|im_end|&gt;</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">9</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000">&lt;|im_end|&gt;</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">subtract</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">(</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, 0.21)" title="p = 0.223">8</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">9</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">,</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000"> </span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">9</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">),</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 0.993"> divide</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">(#</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.003">0</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000">,</span><span style="background:hsla(0, 85%, 50%, 0.00)" title="p = 1.000"> </span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">9</span><span style="background:hsla(0, 85%, 50%, -0.00)" title="p = 1.000">1</span><span style="background:hsla(0, 85%, 50%, 0.32)" title="p = 0.095">)</span><span style="background:hsla(0, 85%, 50%, 0.55)" title="p = 0.000">&lt;|im_end|&gt;</span></div>
+</div>
+</div>
+<p>Hover over a token for its probability. The answers are printed one after the other, each ending with <code>&lt;|im_end|&gt;</code>, the token that closes the turn. The red deepens with the token’s surprisal and is darkest for a token the model gave a probability of 1.8% or less.</p>
+<p>The red is not where we might expect. The numbers, which the model has to find on the page, are mostly pale, because it copies them well. The surprise is in the <strong>DSL’s own words</strong>: the operator that opens a program, the <code>),</code> between two steps, the <code>(#</code> of a reference to an earlier step. We can measure it across the sample, by kind of token:</p>
+<div id="0d670f35" class="cell" data-execution_count="6">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> token_class(piece):</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    text <span class="op">=</span> piece.strip()</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> piece <span class="op">==</span> <span class="st">"&lt;|im_end|&gt;"</span>:</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"end of turn"</span></span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="st">"#"</span> <span class="kw">in</span> text:</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"#k reference"</span></span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> text.startswith(<span class="st">")"</span>) <span class="kw">and</span> <span class="st">","</span> <span class="kw">in</span> text:</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"step separator"</span></span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> text.replace(<span class="st">"_"</span>, <span class="st">""</span>).isalpha():</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"operator / constant name"</span></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> text <span class="kw">and</span> <span class="bu">all</span>(ch.isdigit() <span class="kw">or</span> ch <span class="kw">in</span> <span class="st">".%,-"</span> <span class="cf">for</span> ch <span class="kw">in</span> text):</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"number"</span></span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">"bracket / other"</span></span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>records <span class="op">=</span> []</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> row <span class="kw">in</span> surprisal:</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    turn <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> piece, lp <span class="kw">in</span> <span class="bu">zip</span>(row[<span class="st">"tokens"</span>], row[<span class="st">"logprobs"</span>]):</span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a>        records.append({</span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>            <span class="st">"class"</span>: token_class(piece),</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>            <span class="st">"turn"</span>: <span class="bu">min</span>(turn, <span class="dv">4</span>) <span class="op">+</span> <span class="dv">1</span>,</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>            <span class="st">"surprisal"</span>: <span class="op">-</span>lp</span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a>        })</span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a>        turn <span class="op">+=</span> piece <span class="op">==</span> <span class="st">"&lt;|im_end|&gt;"</span></span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a>tokens <span class="op">=</span> pd.DataFrame(records)</span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a>by_class <span class="op">=</span> tokens.groupby(<span class="st">"class"</span>).surprisal.agg([<span class="st">"count"</span>, <span class="st">"mean"</span>, <span class="st">"sum"</span>])</span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a>by_class[<span class="st">"share of total"</span>] <span class="op">=</span> by_class[<span class="st">"sum"</span>] <span class="op">/</span> by_class[<span class="st">"sum"</span>].<span class="bu">sum</span>()</span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>by_class.drop(columns<span class="op">=</span><span class="st">"sum"</span>).sort_values(<span class="st">"share of total"</span>, ascending<span class="op">=</span><span class="va">False</span>)<span class="op">\</span></span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a>    .<span class="bu">round</span>(<span class="dv">3</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="6">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">count</th>
+<th data-quarto-table-cell-role="th">mean</th>
+<th data-quarto-table-cell-role="th">share of total</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">class</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">operator / constant name</th>
+<td>85</td>
+<td>8.341</td>
+<td>0.330</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">number</th>
+<td>613</td>
+<td>0.711</td>
+<td>0.203</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">step separator</th>
+<td>23</td>
+<td>11.655</td>
+<td>0.125</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">end of turn</th>
+<td>68</td>
+<td>3.760</td>
+<td>0.119</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">bracket / other</th>
+<td>163</td>
+<td>1.480</td>
+<td>0.112</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">#k reference</th>
+<td>21</td>
+<td>11.269</td>
+<td>0.110</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<div id="e41d6ba8" class="cell" data-execution_count="7">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>tokens.groupby(<span class="st">"turn"</span>).surprisal.agg([<span class="st">"count"</span>, <span class="st">"mean"</span>])<span class="op">\</span></span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    .rename_axis(<span class="st">"turn (5 = 5 or later)"</span>).<span class="bu">round</span>(<span class="dv">2</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="7">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">count</th>
+<th data-quarto-table-cell-role="th">mean</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">turn (5 = 5 or later)</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">1</th>
+<td>203</td>
+<td>2.62</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">2</th>
+<td>249</td>
+<td>2.87</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">3</th>
+<td>192</td>
+<td>2.68</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">4</th>
+<td>157</td>
+<td>1.73</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">5</th>
+<td>172</td>
+<td>0.66</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>Most of the loss comes from a few token kinds that a trained model would predict with near certainty: which operator comes first, whether the program goes on (<code>),</code>) or stops (<code>&lt;|im_end|&gt;</code>), and whether the next argument is a reference (<code>(#</code>). The mean surprisal also falls from turn to turn as earlier answers in the chat show the format, but only a little at first: the model does not pick the format up from one or two answers. Numbers cost little, and what is left for fine-tuning is the <strong>reasoning</strong> that decides the operator and the arguments.</p>
+</section>
+<section id="the-number-fine-tuning-starts-from" class="level2" data-number="7.4">
+<h2 data-number="7.4" class="anchored" data-anchor-id="the-number-fine-tuning-starts-from"><span class="header-section-number">7.4</span> The number fine-tuning starts from</h2>
+<p>For the whole validation split we compute the mean surprisal of the gold tokens: one forward pass per conversation, token-weighted. This is a model run over the whole split, so it is built once as an artifact, in a subprocess.</p>
+<div id="5207cbc6" class="cell" data-execution_count="8">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb24"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb24-2"><a href="#cb24-2" aria-hidden="true" tabindex="-1"></a><span class="at">@artifact</span>(<span class="st">"val_gold_nll"</span>, deps<span class="op">=</span>[<span class="st">"train_val_split"</span>], heavy<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb24-3"><a href="#cb24-3" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_val_gold_nll(out, deps):</span>
+<span id="cb24-4"><a href="#cb24-4" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> json</span>
+<span id="cb24-5"><a href="#cb24-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-6"><a href="#cb24-6" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> torch</span>
+<span id="cb24-7"><a href="#cb24-7" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> transformers <span class="im">import</span> AutoModelForCausalLM, AutoTokenizer</span>
+<span id="cb24-8"><a href="#cb24-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-9"><a href="#cb24-9" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.formatting <span class="im">import</span> conversation_messages</span>
+<span id="cb24-10"><a href="#cb24-10" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.probing <span class="im">import</span> mean_gold_nll</span>
+<span id="cb24-11"><a href="#cb24-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-12"><a href="#cb24-12" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span></span>
+<span id="cb24-13"><a href="#cb24-13" aria-hidden="true" tabindex="-1"></a>    tok <span class="op">=</span> AutoTokenizer.from_pretrained(name)</span>
+<span id="cb24-14"><a href="#cb24-14" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> AutoModelForCausalLM.from_pretrained(</span>
+<span id="cb24-15"><a href="#cb24-15" aria-hidden="true" tabindex="-1"></a>        name, dtype<span class="op">=</span>torch.bfloat16, device_map<span class="op">=</span><span class="st">"cuda"</span></span>
+<span id="cb24-16"><a href="#cb24-16" aria-hidden="true" tabindex="-1"></a>    ).<span class="bu">eval</span>()</span>
+<span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>    chats <span class="op">=</span> [</span>
+<span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>        conversation_messages(c)</span>
+<span id="cb24-19"><a href="#cb24-19" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> c <span class="kw">in</span> deps[<span class="st">"train_val_split"</span>].jsonl(<span class="st">"val.jsonl"</span>)</span>
+<span id="cb24-20"><a href="#cb24-20" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb24-21"><a href="#cb24-21" aria-hidden="true" tabindex="-1"></a>    (out <span class="op">/</span> <span class="st">"nll.json"</span>).write_text(json.dumps(mean_gold_nll(model, tok, chats)))</span>
+<span id="cb24-22"><a href="#cb24-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-23"><a href="#cb24-23" aria-hidden="true" tabindex="-1"></a>val_nll <span class="op">=</span> get(<span class="st">"val_gold_nll"</span>).json(<span class="st">"nll.json"</span>)</span>
+<span id="cb24-24"><a href="#cb24-24" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb24-25"><a href="#cb24-25" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"val: </span><span class="sc">{</span>val_nll[<span class="st">'conversations'</span>]<span class="sc">}</span><span class="ss"> conversations, "</span></span>
+<span id="cb24-26"><a href="#cb24-26" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>val_nll[<span class="st">'tokens'</span>]<span class="sc">:,}</span><span class="ss"> answer tokens"</span></span>
+<span id="cb24-27"><a href="#cb24-27" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-28"><a href="#cb24-28" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb24-29"><a href="#cb24-29" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"mean gold-program negative log-likelihood: "</span></span>
+<span id="cb24-30"><a href="#cb24-30" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>val_nll[<span class="st">'nll'</span>]<span class="sc">:.4f}</span><span class="ss"> nats per token"</span></span>
+<span id="cb24-31"><a href="#cb24-31" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb24-32"><a href="#cb24-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb24-33"><a href="#cb24-33" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> math <span class="im">import</span> exp</span>
+<span id="cb24-34"><a href="#cb24-34" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"perplexity: </span><span class="sc">{</span>exp(val_nll[<span class="st">'nll'</span>])<span class="sc">:.3f}</span><span class="ss">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>val: 306 conversations, 16,417 answer tokens
+mean gold-program negative log-likelihood: 2.2062 nats per token
+perplexity: 9.081</code></pre>
+</div>
+</div>
+<p>The <strong><a href="./901_glossary.html#gloss-perplexity">perplexity</a></strong> is the exponential of this mean: the model is as uncertain, on average, as if it were choosing uniformly among that many tokens at each gold position. A perplexity of 1 would mean every gold token had probability 1. It is an average of a lopsided distribution (the earlier table shows a few very costly tokens among many nearly free ones), it is per token, so it depends on the tokenizer, and it covers the answer tokens only. It carries the same information as the loss; we report both because the training logs show the loss and the perplexity is easier to picture.</p>
+<p>The mean <a href="./901_glossary.html#gloss-nll">negative log-likelihood</a> is the loss of the untuned model on the validation split, with the data in exactly the format the training will use. <a href="303_training_with.html" class="quarto-xref"><span>Chapter 12</span></a> uses the same format, so its <strong>step-0 validation loss</strong> should agree with it within a few percent: if it doesn’t, the formatting or the label mask differs between the two, and we look there first. After training we expect the loss to fall, and the same heatmap to be much paler.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Under the hood">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Under the hood
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The loss is a mean over tokens, not over conversations or turns, so long conversations weigh more. <code>probing.gold_logprobs</code> scores token <code>t</code> with the logits at position <code>t - 1</code>, which is how the model’s own <code>labels=</code> loss is defined; <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a> shows the two agree. Attention maps from a copied number back to table cells are a natural next probe, but they are only suggestive: a head that attends to a cell is not thereby the reason for the answer <span class="citation" data-cites="vaswani2017attention">(<a href="902_references.html#ref-vaswani2017attention" role="doc-biblioref">Vaswani et al. 2017</a>)</span>. We leave them out.</p>
+</div>
+</div>
+<div class="callout callout-style-default callout-tip callout-titled" title="Further reading">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Tip</span>Further reading
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<ul>
+<li>The ConvFinQA paper measured GPT-3 with the same DSL and found the unfamiliar syntax hurt it <span class="citation" data-cites="chen2022convfinqa">(<a href="902_references.html#ref-chen2022convfinqa" role="doc-biblioref">Chen et al. 2022</a>)</span>.</li>
+</ul>
+</div>
+</div>
+
+
+<!-- -->
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-chen2022convfinqa" class="csl-entry" role="listitem">
+Chen, Zhiyu, Shiyang Li, Charese Smiley, Zhiqiang Ma, Sameena Shah, and William Yang Wang. 2022. <span>“<span>ConvFinQA</span>: Exploring the Chain of Numerical Reasoning in Conversational Finance Question Answering.”</span> <em>Proceedings of EMNLP</em>.
+</div>
+<div id="ref-vaswani2017attention" class="csl-entry" role="listitem">
+Vaswani, Ashish, Noam Shazeer, Niki Parmar, et al. 2017. <span>“Attention Is All You Need.”</span> <em>Advances in Neural Information Processing Systems</em> 30.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const cellDetails = window.document.querySelectorAll(".cell details.code-fold");
+        for (let i=0; i<cellDetails.length; i++) {
+          const details = cellDetails[i];
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell div.sourceCode.cell-code");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./203_from_base.html" class="pagination-link" aria-label="From base model to instruct model">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./205_how_fine_tuning.html" class="pagination-link" aria-label="How fine-tuning works">
+        <span class="nav-page-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">How fine-tuning works</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb26" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu"># Probing the untuned model on ConvFinQA {#sec-probing}</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a>**You will learn:**</span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>how the untuned model fails when asked for a DSL program, with and without examples in the prompt;</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>how to read a model's surprise at each token of the gold answer, and what that has to do with the loss;</span>
+<span id="cb26-7"><a href="#cb26-7" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>the number fine-tuning starts from: the model's mean loss on the gold programs of the validation split.</span>
+<span id="cb26-8"><a href="#cb26-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-9"><a href="#cb26-9" aria-hidden="true" tabindex="-1"></a>The earlier chapters used one conversation. Here we look at a sample of them. The model is</span>
+<span id="cb26-10"><a href="#cb26-10" aria-hidden="true" tabindex="-1"></a><span class="in">`Qwen3-4B-Instruct-2507`</span>, untuned, and every example comes from the **validation split**, never from dev.</span>
+<span id="cb26-11"><a href="#cb26-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-12"><a href="#cb26-12" aria-hidden="true" tabindex="-1"></a><span class="fu">## The validation split</span></span>
+<span id="cb26-13"><a href="#cb26-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-14"><a href="#cb26-14" aria-hidden="true" tabindex="-1"></a><span class="in">`train.json`</span> is the training file. We hold out a tenth of its conversations for tuning decisions (which prompt, which</span>
+<span id="cb26-15"><a href="#cb26-15" aria-hidden="true" tabindex="-1"></a>checkpoint) and train on the rest. The split is made **by report page**: several conversations are written</span>
+<span id="cb26-16"><a href="#cb26-16" aria-hidden="true" tabindex="-1"></a>from the same page, and if one were in training and its sibling in validation, the model could be graded on</span>
+<span id="cb26-17"><a href="#cb26-17" aria-hidden="true" tabindex="-1"></a>a page it had been trained on. Dev stays untouched, for the final numbers.</span>
+<span id="cb26-18"><a href="#cb26-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-21"><a href="#cb26-21" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-22"><a href="#cb26-22" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb26-23"><a href="#cb26-23" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-24"><a href="#cb26-24" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa <span class="im">import</span> data</span>
+<span id="cb26-25"><a href="#cb26-25" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.artifacts <span class="im">import</span> get, artifact</span>
+<span id="cb26-26"><a href="#cb26-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-27"><a href="#cb26-27" aria-hidden="true" tabindex="-1"></a>split <span class="op">=</span> get(<span class="st">"train_val_split"</span>)</span>
+<span id="cb26-28"><a href="#cb26-28" aria-hidden="true" tabindex="-1"></a>fit <span class="op">=</span> <span class="bu">list</span>(split.jsonl(<span class="st">"train_fit.jsonl"</span>))</span>
+<span id="cb26-29"><a href="#cb26-29" aria-hidden="true" tabindex="-1"></a>val <span class="op">=</span> <span class="bu">list</span>(split.jsonl(<span class="st">"val.jsonl"</span>))</span>
+<span id="cb26-30"><a href="#cb26-30" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-31"><a href="#cb26-31" aria-hidden="true" tabindex="-1"></a>pages <span class="op">=</span> <span class="kw">lambda</span> convs: {data.page_group(c[<span class="st">"id"</span>]) <span class="cf">for</span> c <span class="kw">in</span> convs}</span>
+<span id="cb26-32"><a href="#cb26-32" aria-hidden="true" tabindex="-1"></a>n_turns <span class="op">=</span> <span class="kw">lambda</span> convs: <span class="bu">sum</span>(<span class="bu">len</span>(c[<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>]) <span class="cf">for</span> c <span class="kw">in</span> convs)</span>
+<span id="cb26-33"><a href="#cb26-33" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb26-34"><a href="#cb26-34" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"train-fit: </span><span class="sc">{</span><span class="bu">len</span>(fit)<span class="sc">:,}</span><span class="ss"> conversations, </span><span class="sc">{</span>n_turns(fit)<span class="sc">:,}</span><span class="ss"> turns, "</span></span>
+<span id="cb26-35"><a href="#cb26-35" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(pages(fit))<span class="sc">:,}</span><span class="ss"> pages"</span></span>
+<span id="cb26-36"><a href="#cb26-36" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-37"><a href="#cb26-37" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb26-38"><a href="#cb26-38" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"val:       </span><span class="sc">{</span><span class="bu">len</span>(val)<span class="sc">:,}</span><span class="ss"> conversations, </span><span class="sc">{</span>n_turns(val)<span class="sc">:,}</span><span class="ss"> turns, "</span></span>
+<span id="cb26-39"><a href="#cb26-39" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(pages(val))<span class="sc">:,}</span><span class="ss"> pages"</span></span>
+<span id="cb26-40"><a href="#cb26-40" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-41"><a href="#cb26-41" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> pages(fit) <span class="op">&amp;</span> pages(val)</span>
+<span id="cb26-42"><a href="#cb26-42" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-43"><a href="#cb26-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-44"><a href="#cb26-44" aria-hidden="true" tabindex="-1"></a>Together that is <span class="in">`{python} f"{len(fit) + len(val):,}"`</span> conversations, the whole of <span class="in">`train.json`</span>.</span>
+<span id="cb26-45"><a href="#cb26-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-46"><a href="#cb26-46" aria-hidden="true" tabindex="-1"></a>The split is deterministic (pages are drawn with seed 0), and it is saved as the artifact</span>
+<span id="cb26-47"><a href="#cb26-47" aria-hidden="true" tabindex="-1"></a><span class="in">`train_val_split`</span>, so later chapters read exactly these files.</span>
+<span id="cb26-48"><a href="#cb26-48" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-49"><a href="#cb26-49" aria-hidden="true" tabindex="-1"></a><span class="fu">## Asking the untuned model</span></span>
+<span id="cb26-50"><a href="#cb26-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-51"><a href="#cb26-51" aria-hidden="true" tabindex="-1"></a>We take a small random sample of validation conversations and ask the model for every turn. Each turn is a separate</span>
+<span id="cb26-52"><a href="#cb26-52" aria-hidden="true" tabindex="-1"></a>request with the **gold history** (the earlier answers are the dataset's programs), so the requests are</span>
+<span id="cb26-53"><a href="#cb26-53" aria-hidden="true" tabindex="-1"></a>independent and each one measures a single turn. Decoding is greedy and the answer is judged exactly as</span>
+<span id="cb26-54"><a href="#cb26-54" aria-hidden="true" tabindex="-1"></a>generated: no cleaning, and an answer the executor rejects is wrong. That is the rule the headline</span>
+<span id="cb26-55"><a href="#cb26-55" aria-hidden="true" tabindex="-1"></a>evaluation will use.</span>
+<span id="cb26-56"><a href="#cb26-56" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-57"><a href="#cb26-57" aria-hidden="true" tabindex="-1"></a>We try two prompts. **Zero-shot** is the system prompt <span class="in">`Answer with a program in the ConvFinQA DSL.`</span>,</span>
+<span id="cb26-58"><a href="#cb26-58" aria-hidden="true" tabindex="-1"></a>the page and the question, and nothing else. **[Few-shot](901_glossary.qmd#gloss-few-shot)** puts two complete conversations, with their</span>
+<span id="cb26-59"><a href="#cb26-59" aria-hidden="true" tabindex="-1"></a>gold programs, in front of the same request, drawn from train-fit.</span>
+<span id="cb26-60"><a href="#cb26-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-61"><a href="#cb26-61" aria-hidden="true" tabindex="-1"></a>These runs take a few minutes (they load the 4B model and generate every answer twice), so they are an</span>
+<span id="cb26-62"><a href="#cb26-62" aria-hidden="true" tabindex="-1"></a>artifact: built once in a subprocess, and loaded here. The same artifact holds the gold programs'</span>
+<span id="cb26-63"><a href="#cb26-63" aria-hidden="true" tabindex="-1"></a>token probabilities that we read in the next section.</span>
+<span id="cb26-64"><a href="#cb26-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-67"><a href="#cb26-67" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-68"><a href="#cb26-68" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb26-69"><a href="#cb26-69" aria-hidden="true" tabindex="-1"></a><span class="at">@artifact</span>(<span class="st">"probe_val_sample"</span>, deps<span class="op">=</span>[<span class="st">"train_val_split"</span>], heavy<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb26-70"><a href="#cb26-70" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_probe_val_sample(out, deps):</span>
+<span id="cb26-71"><a href="#cb26-71" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> json</span>
+<span id="cb26-72"><a href="#cb26-72" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> random</span>
+<span id="cb26-73"><a href="#cb26-73" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-74"><a href="#cb26-74" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> torch</span>
+<span id="cb26-75"><a href="#cb26-75" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> transformers <span class="im">import</span> AutoModelForCausalLM, AutoTokenizer</span>
+<span id="cb26-76"><a href="#cb26-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-77"><a href="#cb26-77" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.probing <span class="im">import</span> probe_sample</span>
+<span id="cb26-78"><a href="#cb26-78" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-79"><a href="#cb26-79" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span></span>
+<span id="cb26-80"><a href="#cb26-80" aria-hidden="true" tabindex="-1"></a>    tok <span class="op">=</span> AutoTokenizer.from_pretrained(name)</span>
+<span id="cb26-81"><a href="#cb26-81" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> AutoModelForCausalLM.from_pretrained(</span>
+<span id="cb26-82"><a href="#cb26-82" aria-hidden="true" tabindex="-1"></a>        name, dtype<span class="op">=</span>torch.bfloat16, device_map<span class="op">=</span><span class="st">"cuda"</span></span>
+<span id="cb26-83"><a href="#cb26-83" aria-hidden="true" tabindex="-1"></a>    ).<span class="bu">eval</span>()</span>
+<span id="cb26-84"><a href="#cb26-84" aria-hidden="true" tabindex="-1"></a>    fit <span class="op">=</span> <span class="bu">list</span>(deps[<span class="st">"train_val_split"</span>].jsonl(<span class="st">"train_fit.jsonl"</span>))</span>
+<span id="cb26-85"><a href="#cb26-85" aria-hidden="true" tabindex="-1"></a>    val <span class="op">=</span> <span class="bu">list</span>(deps[<span class="st">"train_val_split"</span>].jsonl(<span class="st">"val.jsonl"</span>))</span>
+<span id="cb26-86"><a href="#cb26-86" aria-hidden="true" tabindex="-1"></a>    rng <span class="op">=</span> random.Random(<span class="dv">0</span>)</span>
+<span id="cb26-87"><a href="#cb26-87" aria-hidden="true" tabindex="-1"></a>    sample <span class="op">=</span> rng.sample(val, <span class="dv">20</span>)</span>
+<span id="cb26-88"><a href="#cb26-88" aria-hidden="true" tabindex="-1"></a>    shots <span class="op">=</span> rng.sample(fit, <span class="dv">2</span>)</span>
+<span id="cb26-89"><a href="#cb26-89" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> probe_sample(model, tok, sample, shots)</span>
+<span id="cb26-90"><a href="#cb26-90" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> key, rows <span class="kw">in</span> result.items():</span>
+<span id="cb26-91"><a href="#cb26-91" aria-hidden="true" tabindex="-1"></a>        (out <span class="op">/</span> <span class="ss">f"</span><span class="sc">{</span>key<span class="sc">}</span><span class="ss">.jsonl"</span>).write_text(</span>
+<span id="cb26-92"><a href="#cb26-92" aria-hidden="true" tabindex="-1"></a>            <span class="st">""</span>.join(json.dumps(r) <span class="op">+</span> <span class="st">"</span><span class="ch">\n</span><span class="st">"</span> <span class="cf">for</span> r <span class="kw">in</span> rows)</span>
+<span id="cb26-93"><a href="#cb26-93" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb26-94"><a href="#cb26-94" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-95"><a href="#cb26-95" aria-hidden="true" tabindex="-1"></a>probe <span class="op">=</span> get(<span class="st">"probe_val_sample"</span>)</span>
+<span id="cb26-96"><a href="#cb26-96" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> pd.DataFrame(probe.jsonl(<span class="st">"answers.jsonl"</span>))</span>
+<span id="cb26-97"><a href="#cb26-97" aria-hidden="true" tabindex="-1"></a>surprisal <span class="op">=</span> <span class="bu">list</span>(probe.jsonl(<span class="st">"surprisal.jsonl"</span>))</span>
+<span id="cb26-98"><a href="#cb26-98" aria-hidden="true" tabindex="-1"></a>outputs <span class="op">=</span> results.setting.unique()</span>
+<span id="cb26-99"><a href="#cb26-99" aria-hidden="true" tabindex="-1"></a>by_id <span class="op">=</span> {c[<span class="st">"id"</span>]: c <span class="cf">for</span> c <span class="kw">in</span> val}</span>
+<span id="cb26-100"><a href="#cb26-100" aria-hidden="true" tabindex="-1"></a>sample <span class="op">=</span> [by_id[s[<span class="st">"id"</span>]] <span class="cf">for</span> s <span class="kw">in</span> surprisal]</span>
+<span id="cb26-101"><a href="#cb26-101" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"</span><span class="sc">{</span><span class="bu">len</span>(results) <span class="op">//</span> <span class="bu">len</span>(outputs)<span class="sc">}</span><span class="ss"> turns from </span><span class="sc">{</span><span class="bu">len</span>(sample)<span class="sc">}</span><span class="ss"> conversations"</span>)</span>
+<span id="cb26-102"><a href="#cb26-102" aria-hidden="true" tabindex="-1"></a>results.groupby(<span class="st">"setting"</span>).kind.value_counts().unstack(<span class="dv">0</span>)<span class="op">\</span></span>
+<span id="cb26-103"><a href="#cb26-103" aria-hidden="true" tabindex="-1"></a>    .fillna(<span class="dv">0</span>).astype(<span class="bu">int</span>).sort_values(<span class="st">"few-shot"</span>, ascending<span class="op">=</span><span class="va">False</span>)</span>
+<span id="cb26-104"><a href="#cb26-104" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-105"><a href="#cb26-105" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-106"><a href="#cb26-106" aria-hidden="true" tabindex="-1"></a>With twenty conversations these counts are rough: a few turns move a row by several points. The</span>
+<span id="cb26-107"><a href="#cb26-107" aria-hidden="true" tabindex="-1"></a>real measurement is the baseline chapter's, on many more. What we want here is to **read the failures**.</span>
+<span id="cb26-108"><a href="#cb26-108" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-111"><a href="#cb26-111" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-112"><a href="#cb26-112" aria-hidden="true" tabindex="-1"></a>accuracy <span class="op">=</span> results.assign(ok<span class="op">=</span>results.kind <span class="op">==</span> <span class="st">"correct"</span>)<span class="op">\</span></span>
+<span id="cb26-113"><a href="#cb26-113" aria-hidden="true" tabindex="-1"></a>    .groupby(<span class="st">"setting"</span>).ok.mean()</span>
+<span id="cb26-114"><a href="#cb26-114" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(accuracy.<span class="bu">map</span>(<span class="st">"</span><span class="sc">{:.0%}</span><span class="st">"</span>.<span class="bu">format</span>).to_string())</span>
+<span id="cb26-115"><a href="#cb26-115" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-116"><a href="#cb26-116" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-117"><a href="#cb26-117" aria-hidden="true" tabindex="-1"></a><span class="fu">### What the failures look like</span></span>
+<span id="cb26-118"><a href="#cb26-118" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-119"><a href="#cb26-119" aria-hidden="true" tabindex="-1"></a>Each kind of failure, with one real output per setting. The gold program is on the right.</span>
+<span id="cb26-120"><a href="#cb26-120" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-123"><a href="#cb26-123" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-124"><a href="#cb26-124" aria-hidden="true" tabindex="-1"></a><span class="co">#| output: asis</span></span>
+<span id="cb26-125"><a href="#cb26-125" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> show(setting, kind):</span>
+<span id="cb26-126"><a href="#cb26-126" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> results[(results.setting <span class="op">==</span> setting) <span class="op">&amp;</span> (results.kind <span class="op">==</span> kind)]</span>
+<span id="cb26-127"><a href="#cb26-127" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> r.empty:</span>
+<span id="cb26-128"><a href="#cb26-128" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span></span>
+<span id="cb26-129"><a href="#cb26-129" aria-hidden="true" tabindex="-1"></a>    r <span class="op">=</span> r.iloc[<span class="dv">0</span>]</span>
+<span id="cb26-130"><a href="#cb26-130" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"- **</span><span class="sc">{</span>setting<span class="sc">}</span><span class="ss">, `</span><span class="sc">{</span>kind<span class="sc">}</span><span class="ss">`**, turn </span><span class="sc">{</span>r<span class="sc">.</span>turn <span class="op">+</span> <span class="dv">1</span><span class="sc">}</span><span class="ss"> of `</span><span class="sc">{</span>r<span class="sc">.</span><span class="bu">id</span><span class="sc">}</span><span class="ss">`</span><span class="ch">\n</span><span class="ss">"</span>)</span>
+<span id="cb26-131"><a href="#cb26-131" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(</span>
+<span id="cb26-132"><a href="#cb26-132" aria-hidden="true" tabindex="-1"></a>        <span class="ss">f"  ````</span><span class="ch">\n</span><span class="ss">  "</span></span>
+<span id="cb26-133"><a href="#cb26-133" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> r.output.strip().replace(<span class="st">"</span><span class="ch">\n</span><span class="st">"</span>, <span class="st">"</span><span class="ch">\n</span><span class="st">  "</span>)[:<span class="dv">400</span>]</span>
+<span id="cb26-134"><a href="#cb26-134" aria-hidden="true" tabindex="-1"></a>        <span class="op">+</span> <span class="st">"</span><span class="ch">\n</span><span class="st">  ````</span><span class="ch">\n</span><span class="st">"</span></span>
+<span id="cb26-135"><a href="#cb26-135" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb26-136"><a href="#cb26-136" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"  gold: `</span><span class="sc">{</span>r<span class="sc">.</span>gold<span class="sc">}</span><span class="ss">`</span><span class="ch">\n</span><span class="ss">"</span>)</span>
+<span id="cb26-137"><a href="#cb26-137" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-138"><a href="#cb26-138" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> kind <span class="kw">in</span> results.kind.unique():</span>
+<span id="cb26-139"><a href="#cb26-139" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> kind <span class="op">!=</span> <span class="st">"correct"</span>:</span>
+<span id="cb26-140"><a href="#cb26-140" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> setting <span class="kw">in</span> outputs:</span>
+<span id="cb26-141"><a href="#cb26-141" aria-hidden="true" tabindex="-1"></a>            show(setting, kind)</span>
+<span id="cb26-142"><a href="#cb26-142" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-143"><a href="#cb26-143" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-144"><a href="#cb26-144" aria-hidden="true" tabindex="-1"></a>The kinds, as <span class="in">`probing.classify_output`</span> defines them:</span>
+<span id="cb26-145"><a href="#cb26-145" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-146"><a href="#cb26-146" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`code_fence`</span>: the answer is wrapped in a markdown fence, usually with invented syntax inside.</span>
+<span id="cb26-147"><a href="#cb26-147" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`syntax`</span>, <span class="in">`bad_number`</span>, <span class="in">`unknown_operator`</span>: the executor could not read it. These are **format failures**:</span>
+<span id="cb26-148"><a href="#cb26-148" aria-hidden="true" tabindex="-1"></a>  the model answered in some language, but not the DSL.</span>
+<span id="cb26-149"><a href="#cb26-149" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span><span class="in">`wrong_operations`</span>, <span class="in">`wrong_numbers`</span>, <span class="in">`wrong_answer`</span>: a valid program with the wrong answer. These are</span>
+<span id="cb26-150"><a href="#cb26-150" aria-hidden="true" tabindex="-1"></a>  **reasoning or reading failures**: a different list of operations, different numbers picked from the</span>
+<span id="cb26-151"><a href="#cb26-151" aria-hidden="true" tabindex="-1"></a>  page, or the right shape with the wrong value.</span>
+<span id="cb26-152"><a href="#cb26-152" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-153"><a href="#cb26-153" aria-hidden="true" tabindex="-1"></a>Examples shift the balance from the first group to the second: the model learns the format from two</span>
+<span id="cb26-154"><a href="#cb26-154" aria-hidden="true" tabindex="-1"></a>conversations, but picking the right cells and the right operation is a different skill.</span>
+<span id="cb26-155"><a href="#cb26-155" aria-hidden="true" tabindex="-1"></a>Fine-tuning has to teach both, and the invalid rate it removes is the easy part.</span>
+<span id="cb26-156"><a href="#cb26-156" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-157"><a href="#cb26-157" aria-hidden="true" tabindex="-1"></a><span class="fu">## How surprised is the model by the gold program?</span></span>
+<span id="cb26-158"><a href="#cb26-158" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-159"><a href="#cb26-159" aria-hidden="true" tabindex="-1"></a>Generation shows what the model does. We can also ask how likely it finds **the gold answer**. One forward</span>
+<span id="cb26-160"><a href="#cb26-160" aria-hidden="true" tabindex="-1"></a>pass over the whole conversation gives, for every token, the probability the model assigned to it given</span>
+<span id="cb26-161"><a href="#cb26-161" aria-hidden="true" tabindex="-1"></a>everything before it. The negative log of that probability is the token's **[surprisal](901_glossary.qmd#gloss-surprisal)**, in nats (natural log). It is</span>
+<span id="cb26-162"><a href="#cb26-162" aria-hidden="true" tabindex="-1"></a>the surprisal of the **gold** token given the **gold** tokens before it (teacher forcing), with no</span>
+<span id="cb26-163"><a href="#cb26-163" aria-hidden="true" tabindex="-1"></a>comparison to what the model would have chosen. The cross-entropy loss fine-tuning minimizes is the mean</span>
+<span id="cb26-164"><a href="#cb26-164" aria-hidden="true" tabindex="-1"></a>surprisal over the answer tokens.</span>
+<span id="cb26-165"><a href="#cb26-165" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-168"><a href="#cb26-168" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-169"><a href="#cb26-169" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> IPython.display <span class="im">import</span> HTML</span>
+<span id="cb26-170"><a href="#cb26-170" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-171"><a href="#cb26-171" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> math <span class="im">import</span> exp</span>
+<span id="cb26-172"><a href="#cb26-172" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> inspect <span class="im">import</span> signature</span>
+<span id="cb26-173"><a href="#cb26-173" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-174"><a href="#cb26-174" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.book.viz <span class="im">import</span> surprisal_html</span>
+<span id="cb26-175"><a href="#cb26-175" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-176"><a href="#cb26-176" aria-hidden="true" tabindex="-1"></a><span class="co"># the surprisal (nats) at which the red is darkest</span></span>
+<span id="cb26-177"><a href="#cb26-177" aria-hidden="true" tabindex="-1"></a>full <span class="op">=</span> signature(surprisal_html).parameters[<span class="st">"full"</span>].default</span>
+<span id="cb26-178"><a href="#cb26-178" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-179"><a href="#cb26-179" aria-hidden="true" tabindex="-1"></a>row <span class="op">=</span> <span class="bu">next</span>(</span>
+<span id="cb26-180"><a href="#cb26-180" aria-hidden="true" tabindex="-1"></a>    r <span class="cf">for</span> r <span class="kw">in</span> surprisal</span>
+<span id="cb26-181"><a href="#cb26-181" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="bu">len</span>(by_id[r[<span class="st">"id"</span>]][<span class="st">"annotation"</span>][<span class="st">"dialogue_break"</span>]) <span class="op">&gt;=</span> <span class="dv">4</span></span>
+<span id="cb26-182"><a href="#cb26-182" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-183"><a href="#cb26-183" aria-hidden="true" tabindex="-1"></a>conv <span class="op">=</span> by_id[row[<span class="st">"id"</span>]]</span>
+<span id="cb26-184"><a href="#cb26-184" aria-hidden="true" tabindex="-1"></a>pieces, logp <span class="op">=</span> row[<span class="st">"tokens"</span>], row[<span class="st">"logprobs"</span>]</span>
+<span id="cb26-185"><a href="#cb26-185" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-186"><a href="#cb26-186" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> k, t <span class="kw">in</span> <span class="bu">enumerate</span>(data.turns(conv)):</span>
+<span id="cb26-187"><a href="#cb26-187" aria-hidden="true" tabindex="-1"></a>    <span class="bu">print</span>(<span class="ss">f"turn </span><span class="sc">{</span>k <span class="op">+</span> <span class="dv">1</span><span class="sc">}</span><span class="ss">: </span><span class="sc">{</span>t<span class="sc">.</span>question<span class="sc">}</span><span class="ss">"</span>)</span>
+<span id="cb26-188"><a href="#cb26-188" aria-hidden="true" tabindex="-1"></a>HTML(surprisal_html(pieces, logp))</span>
+<span id="cb26-189"><a href="#cb26-189" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-190"><a href="#cb26-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-191"><a href="#cb26-191" aria-hidden="true" tabindex="-1"></a>Hover over a token for its probability. The answers are printed one after the other, each ending with</span>
+<span id="cb26-192"><a href="#cb26-192" aria-hidden="true" tabindex="-1"></a><span class="in">`&lt;|im_end|&gt;`</span>, the token that closes the turn. The red deepens with the token's surprisal and is darkest for a token the</span>
+<span id="cb26-193"><a href="#cb26-193" aria-hidden="true" tabindex="-1"></a>model gave a probability of <span class="in">`{python} f"{exp(-full):.1%}"`</span> or less.</span>
+<span id="cb26-194"><a href="#cb26-194" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-195"><a href="#cb26-195" aria-hidden="true" tabindex="-1"></a>The red is not where we might expect. The numbers, which the model has to find on the page, are mostly</span>
+<span id="cb26-196"><a href="#cb26-196" aria-hidden="true" tabindex="-1"></a>pale, because it copies them well. The surprise is in the **DSL's own words**: the operator that opens a</span>
+<span id="cb26-197"><a href="#cb26-197" aria-hidden="true" tabindex="-1"></a>program, the <span class="in">`),`</span> between two steps, the <span class="in">`(#`</span> of a reference to an earlier step. We can measure it across</span>
+<span id="cb26-198"><a href="#cb26-198" aria-hidden="true" tabindex="-1"></a>the sample, by kind of token:</span>
+<span id="cb26-199"><a href="#cb26-199" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-202"><a href="#cb26-202" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-203"><a href="#cb26-203" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> token_class(piece):</span>
+<span id="cb26-204"><a href="#cb26-204" aria-hidden="true" tabindex="-1"></a>    text <span class="op">=</span> piece.strip()</span>
+<span id="cb26-205"><a href="#cb26-205" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> piece <span class="op">==</span> <span class="st">"&lt;|im_end|&gt;"</span>:</span>
+<span id="cb26-206"><a href="#cb26-206" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"end of turn"</span></span>
+<span id="cb26-207"><a href="#cb26-207" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="st">"#"</span> <span class="kw">in</span> text:</span>
+<span id="cb26-208"><a href="#cb26-208" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"#k reference"</span></span>
+<span id="cb26-209"><a href="#cb26-209" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> text.startswith(<span class="st">")"</span>) <span class="kw">and</span> <span class="st">","</span> <span class="kw">in</span> text:</span>
+<span id="cb26-210"><a href="#cb26-210" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"step separator"</span></span>
+<span id="cb26-211"><a href="#cb26-211" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> text.replace(<span class="st">"_"</span>, <span class="st">""</span>).isalpha():</span>
+<span id="cb26-212"><a href="#cb26-212" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"operator / constant name"</span></span>
+<span id="cb26-213"><a href="#cb26-213" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> text <span class="kw">and</span> <span class="bu">all</span>(ch.isdigit() <span class="kw">or</span> ch <span class="kw">in</span> <span class="st">".%,-"</span> <span class="cf">for</span> ch <span class="kw">in</span> text):</span>
+<span id="cb26-214"><a href="#cb26-214" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"number"</span></span>
+<span id="cb26-215"><a href="#cb26-215" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">"bracket / other"</span></span>
+<span id="cb26-216"><a href="#cb26-216" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-217"><a href="#cb26-217" aria-hidden="true" tabindex="-1"></a>records <span class="op">=</span> []</span>
+<span id="cb26-218"><a href="#cb26-218" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> row <span class="kw">in</span> surprisal:</span>
+<span id="cb26-219"><a href="#cb26-219" aria-hidden="true" tabindex="-1"></a>    turn <span class="op">=</span> <span class="dv">0</span></span>
+<span id="cb26-220"><a href="#cb26-220" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> piece, lp <span class="kw">in</span> <span class="bu">zip</span>(row[<span class="st">"tokens"</span>], row[<span class="st">"logprobs"</span>]):</span>
+<span id="cb26-221"><a href="#cb26-221" aria-hidden="true" tabindex="-1"></a>        records.append({</span>
+<span id="cb26-222"><a href="#cb26-222" aria-hidden="true" tabindex="-1"></a>            <span class="st">"class"</span>: token_class(piece),</span>
+<span id="cb26-223"><a href="#cb26-223" aria-hidden="true" tabindex="-1"></a>            <span class="st">"turn"</span>: <span class="bu">min</span>(turn, <span class="dv">4</span>) <span class="op">+</span> <span class="dv">1</span>,</span>
+<span id="cb26-224"><a href="#cb26-224" aria-hidden="true" tabindex="-1"></a>            <span class="st">"surprisal"</span>: <span class="op">-</span>lp</span>
+<span id="cb26-225"><a href="#cb26-225" aria-hidden="true" tabindex="-1"></a>        })</span>
+<span id="cb26-226"><a href="#cb26-226" aria-hidden="true" tabindex="-1"></a>        turn <span class="op">+=</span> piece <span class="op">==</span> <span class="st">"&lt;|im_end|&gt;"</span></span>
+<span id="cb26-227"><a href="#cb26-227" aria-hidden="true" tabindex="-1"></a>tokens <span class="op">=</span> pd.DataFrame(records)</span>
+<span id="cb26-228"><a href="#cb26-228" aria-hidden="true" tabindex="-1"></a>by_class <span class="op">=</span> tokens.groupby(<span class="st">"class"</span>).surprisal.agg([<span class="st">"count"</span>, <span class="st">"mean"</span>, <span class="st">"sum"</span>])</span>
+<span id="cb26-229"><a href="#cb26-229" aria-hidden="true" tabindex="-1"></a>by_class[<span class="st">"share of total"</span>] <span class="op">=</span> by_class[<span class="st">"sum"</span>] <span class="op">/</span> by_class[<span class="st">"sum"</span>].<span class="bu">sum</span>()</span>
+<span id="cb26-230"><a href="#cb26-230" aria-hidden="true" tabindex="-1"></a>by_class.drop(columns<span class="op">=</span><span class="st">"sum"</span>).sort_values(<span class="st">"share of total"</span>, ascending<span class="op">=</span><span class="va">False</span>)<span class="op">\</span></span>
+<span id="cb26-231"><a href="#cb26-231" aria-hidden="true" tabindex="-1"></a>    .<span class="bu">round</span>(<span class="dv">3</span>)</span>
+<span id="cb26-232"><a href="#cb26-232" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-233"><a href="#cb26-233" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-236"><a href="#cb26-236" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-237"><a href="#cb26-237" aria-hidden="true" tabindex="-1"></a>tokens.groupby(<span class="st">"turn"</span>).surprisal.agg([<span class="st">"count"</span>, <span class="st">"mean"</span>])<span class="op">\</span></span>
+<span id="cb26-238"><a href="#cb26-238" aria-hidden="true" tabindex="-1"></a>    .rename_axis(<span class="st">"turn (5 = 5 or later)"</span>).<span class="bu">round</span>(<span class="dv">2</span>)</span>
+<span id="cb26-239"><a href="#cb26-239" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-240"><a href="#cb26-240" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-241"><a href="#cb26-241" aria-hidden="true" tabindex="-1"></a>Most of the loss comes from a few token kinds that a trained model would predict with near certainty:</span>
+<span id="cb26-242"><a href="#cb26-242" aria-hidden="true" tabindex="-1"></a>which operator comes first, whether the program goes on (<span class="in">`),`</span>) or stops (<span class="in">`&lt;|im_end|&gt;`</span>), and whether the</span>
+<span id="cb26-243"><a href="#cb26-243" aria-hidden="true" tabindex="-1"></a>next argument is a reference (<span class="in">`(#`</span>). The mean surprisal also falls from turn to turn as earlier answers</span>
+<span id="cb26-244"><a href="#cb26-244" aria-hidden="true" tabindex="-1"></a>in the chat show the format, but only a little at first: the model does not pick the format up from one</span>
+<span id="cb26-245"><a href="#cb26-245" aria-hidden="true" tabindex="-1"></a>or two answers. Numbers cost little, and what is left for fine-tuning is the **reasoning** that decides</span>
+<span id="cb26-246"><a href="#cb26-246" aria-hidden="true" tabindex="-1"></a>the operator and the arguments.</span>
+<span id="cb26-247"><a href="#cb26-247" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-248"><a href="#cb26-248" aria-hidden="true" tabindex="-1"></a><span class="fu">## The number fine-tuning starts from</span></span>
+<span id="cb26-249"><a href="#cb26-249" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-250"><a href="#cb26-250" aria-hidden="true" tabindex="-1"></a>For the whole validation split we compute the mean surprisal of the gold tokens: one forward pass per</span>
+<span id="cb26-251"><a href="#cb26-251" aria-hidden="true" tabindex="-1"></a>conversation, token-weighted. This is a model run over the whole split, so it is built once as an</span>
+<span id="cb26-252"><a href="#cb26-252" aria-hidden="true" tabindex="-1"></a>artifact, in a subprocess.</span>
+<span id="cb26-253"><a href="#cb26-253" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-256"><a href="#cb26-256" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb26-257"><a href="#cb26-257" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb26-258"><a href="#cb26-258" aria-hidden="true" tabindex="-1"></a><span class="at">@artifact</span>(<span class="st">"val_gold_nll"</span>, deps<span class="op">=</span>[<span class="st">"train_val_split"</span>], heavy<span class="op">=</span><span class="va">True</span>)</span>
+<span id="cb26-259"><a href="#cb26-259" aria-hidden="true" tabindex="-1"></a><span class="kw">def</span> build_val_gold_nll(out, deps):</span>
+<span id="cb26-260"><a href="#cb26-260" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> json</span>
+<span id="cb26-261"><a href="#cb26-261" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-262"><a href="#cb26-262" aria-hidden="true" tabindex="-1"></a>    <span class="im">import</span> torch</span>
+<span id="cb26-263"><a href="#cb26-263" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> transformers <span class="im">import</span> AutoModelForCausalLM, AutoTokenizer</span>
+<span id="cb26-264"><a href="#cb26-264" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-265"><a href="#cb26-265" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.formatting <span class="im">import</span> conversation_messages</span>
+<span id="cb26-266"><a href="#cb26-266" aria-hidden="true" tabindex="-1"></a>    <span class="im">from</span> convfinqa.probing <span class="im">import</span> mean_gold_nll</span>
+<span id="cb26-267"><a href="#cb26-267" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-268"><a href="#cb26-268" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"Qwen/Qwen3-4B-Instruct-2507"</span></span>
+<span id="cb26-269"><a href="#cb26-269" aria-hidden="true" tabindex="-1"></a>    tok <span class="op">=</span> AutoTokenizer.from_pretrained(name)</span>
+<span id="cb26-270"><a href="#cb26-270" aria-hidden="true" tabindex="-1"></a>    model <span class="op">=</span> AutoModelForCausalLM.from_pretrained(</span>
+<span id="cb26-271"><a href="#cb26-271" aria-hidden="true" tabindex="-1"></a>        name, dtype<span class="op">=</span>torch.bfloat16, device_map<span class="op">=</span><span class="st">"cuda"</span></span>
+<span id="cb26-272"><a href="#cb26-272" aria-hidden="true" tabindex="-1"></a>    ).<span class="bu">eval</span>()</span>
+<span id="cb26-273"><a href="#cb26-273" aria-hidden="true" tabindex="-1"></a>    chats <span class="op">=</span> [</span>
+<span id="cb26-274"><a href="#cb26-274" aria-hidden="true" tabindex="-1"></a>        conversation_messages(c)</span>
+<span id="cb26-275"><a href="#cb26-275" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> c <span class="kw">in</span> deps[<span class="st">"train_val_split"</span>].jsonl(<span class="st">"val.jsonl"</span>)</span>
+<span id="cb26-276"><a href="#cb26-276" aria-hidden="true" tabindex="-1"></a>    ]</span>
+<span id="cb26-277"><a href="#cb26-277" aria-hidden="true" tabindex="-1"></a>    (out <span class="op">/</span> <span class="st">"nll.json"</span>).write_text(json.dumps(mean_gold_nll(model, tok, chats)))</span>
+<span id="cb26-278"><a href="#cb26-278" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-279"><a href="#cb26-279" aria-hidden="true" tabindex="-1"></a>val_nll <span class="op">=</span> get(<span class="st">"val_gold_nll"</span>).json(<span class="st">"nll.json"</span>)</span>
+<span id="cb26-280"><a href="#cb26-280" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb26-281"><a href="#cb26-281" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"val: </span><span class="sc">{</span>val_nll[<span class="st">'conversations'</span>]<span class="sc">}</span><span class="ss"> conversations, "</span></span>
+<span id="cb26-282"><a href="#cb26-282" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>val_nll[<span class="st">'tokens'</span>]<span class="sc">:,}</span><span class="ss"> answer tokens"</span></span>
+<span id="cb26-283"><a href="#cb26-283" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-284"><a href="#cb26-284" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(</span>
+<span id="cb26-285"><a href="#cb26-285" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"mean gold-program negative log-likelihood: "</span></span>
+<span id="cb26-286"><a href="#cb26-286" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>val_nll[<span class="st">'nll'</span>]<span class="sc">:.4f}</span><span class="ss"> nats per token"</span></span>
+<span id="cb26-287"><a href="#cb26-287" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb26-288"><a href="#cb26-288" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-289"><a href="#cb26-289" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> math <span class="im">import</span> exp</span>
+<span id="cb26-290"><a href="#cb26-290" aria-hidden="true" tabindex="-1"></a><span class="bu">print</span>(<span class="ss">f"perplexity: </span><span class="sc">{</span>exp(val_nll[<span class="st">'nll'</span>])<span class="sc">:.3f}</span><span class="ss">"</span>)</span>
+<span id="cb26-291"><a href="#cb26-291" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb26-292"><a href="#cb26-292" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-293"><a href="#cb26-293" aria-hidden="true" tabindex="-1"></a>The **[perplexity](901_glossary.qmd#gloss-perplexity)** is the exponential of this mean: the model is as uncertain, on average, as if it</span>
+<span id="cb26-294"><a href="#cb26-294" aria-hidden="true" tabindex="-1"></a>were choosing uniformly among that many tokens at each gold position. A perplexity of 1 would mean every</span>
+<span id="cb26-295"><a href="#cb26-295" aria-hidden="true" tabindex="-1"></a>gold token had probability 1. It is an average of a lopsided distribution (the earlier table shows a few</span>
+<span id="cb26-296"><a href="#cb26-296" aria-hidden="true" tabindex="-1"></a>very costly tokens among many nearly free ones), it is per token, so it depends on the tokenizer, and it</span>
+<span id="cb26-297"><a href="#cb26-297" aria-hidden="true" tabindex="-1"></a>covers the answer tokens only. It carries the same information as the loss; we report both because the</span>
+<span id="cb26-298"><a href="#cb26-298" aria-hidden="true" tabindex="-1"></a>training logs show the loss and the perplexity is easier to picture.</span>
+<span id="cb26-299"><a href="#cb26-299" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-300"><a href="#cb26-300" aria-hidden="true" tabindex="-1"></a>The mean <span class="co">[</span><span class="ot">negative log-likelihood</span><span class="co">](901_glossary.qmd#gloss-nll)</span> is the loss of the untuned model on the validation split, with the data</span>
+<span id="cb26-301"><a href="#cb26-301" aria-hidden="true" tabindex="-1"></a>in exactly the format the training will use. @sec-training uses the same format, so its **step-0</span>
+<span id="cb26-302"><a href="#cb26-302" aria-hidden="true" tabindex="-1"></a>validation loss** should agree with it within a few percent: if it doesn't, the formatting or the label mask differs between</span>
+<span id="cb26-303"><a href="#cb26-303" aria-hidden="true" tabindex="-1"></a>the two, and we look there first. After training we expect the loss to fall, and the same</span>
+<span id="cb26-304"><a href="#cb26-304" aria-hidden="true" tabindex="-1"></a>heatmap to be much paler.</span>
+<span id="cb26-305"><a href="#cb26-305" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-306"><a href="#cb26-306" aria-hidden="true" tabindex="-1"></a>::: {.callout-note title="Under the hood"}</span>
+<span id="cb26-307"><a href="#cb26-307" aria-hidden="true" tabindex="-1"></a>The loss is a mean over tokens, not over conversations or turns, so long conversations weigh more.</span>
+<span id="cb26-308"><a href="#cb26-308" aria-hidden="true" tabindex="-1"></a><span class="in">`probing.gold_logprobs`</span> scores token <span class="in">`t`</span> with the logits at position <span class="in">`t - 1`</span>, which is how the model's own</span>
+<span id="cb26-309"><a href="#cb26-309" aria-hidden="true" tabindex="-1"></a><span class="in">`labels=`</span> loss is defined; @sec-fine-tuning shows the two agree.</span>
+<span id="cb26-310"><a href="#cb26-310" aria-hidden="true" tabindex="-1"></a>Attention maps from a copied number back to table cells are a natural next probe, but they are only</span>
+<span id="cb26-311"><a href="#cb26-311" aria-hidden="true" tabindex="-1"></a>suggestive: a head that attends to a cell is not thereby the reason for the answer</span>
+<span id="cb26-312"><a href="#cb26-312" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">@vaswani2017attention</span><span class="co">]</span>. We leave them out.</span>
+<span id="cb26-313"><a href="#cb26-313" aria-hidden="true" tabindex="-1"></a>:::</span>
+<span id="cb26-314"><a href="#cb26-314" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-315"><a href="#cb26-315" aria-hidden="true" tabindex="-1"></a>::: {.callout-tip title="Further reading"}</span>
+<span id="cb26-316"><a href="#cb26-316" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>The ConvFinQA paper measured GPT-3 with the same DSL and found the unfamiliar syntax hurt it</span>
+<span id="cb26-317"><a href="#cb26-317" aria-hidden="true" tabindex="-1"></a>  <span class="co">[</span><span class="ot">@chen2022convfinqa</span><span class="co">]</span>.</span>
+<span id="cb26-318"><a href="#cb26-318" aria-hidden="true" tabindex="-1"></a>:::</span>
+</code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

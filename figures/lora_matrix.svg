@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="312" viewBox="0 0 900 312">
+<rect width="900" height="312" fill="white"/>
+<text x="20" y="28" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" text-anchor="start" fill="#2b2b2b"><tspan x="20" dy="0">As matrices (what merging produces)</tspan></text>
+<text x="500" y="28" font-family="Helvetica, Arial, sans-serif" font-size="13" font-weight="bold" text-anchor="start" fill="#2b2b2b"><tspan x="500" dy="0">As computation (what training runs)</tspan></text>
+<rect x="30" y="70" width="60" height="150" rx="8" fill="#ffffff" stroke="#444444" stroke-width="1.5"/>
+<text x="60" y="151" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="60" dy="0">W′</tspan></text>
+<rect x="130" y="70" width="60" height="150" rx="8" fill="#eeeeee" stroke="#999999" stroke-width="1.5"/>
+<text x="160" y="143" font-family="Helvetica, Arial, sans-serif" font-size="16" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="160" dy="0">W</tspan></text>
+<text x="160" y="161" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#555555"><tspan x="160" dy="0">frozen</tspan></text>
+<rect x="284" y="70" width="16" height="150" rx="4" fill="#d5e8d4" stroke="#82b366" stroke-width="1.5"/>
+<text x="292" y="62" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="292" dy="0">B</tspan></text>
+<rect x="332" y="137" width="60" height="16" rx="4" fill="#d5e8d4" stroke="#82b366" stroke-width="1.5"/>
+<text x="362" y="129" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="362" dy="0">A</tspan></text>
+<text x="110" y="151" font-family="Helvetica, Arial, sans-serif" font-size="20" text-anchor="middle" fill="#2b2b2b"><tspan x="110" dy="0">=</tspan></text>
+<text x="212" y="151" font-family="Helvetica, Arial, sans-serif" font-size="20" text-anchor="middle" fill="#2b2b2b"><tspan x="212" dy="0">+</tspan></text>
+<text x="316" y="151" font-family="Helvetica, Arial, sans-serif" font-size="20" text-anchor="middle" fill="#2b2b2b"><tspan x="316" dy="0">·</tspan></text>
+<text x="252" y="150" font-family="Helvetica, Arial, sans-serif" font-size="12.5" text-anchor="middle" fill="#2b2b2b"><tspan x="252" dy="0">(α/r)</tspan></text>
+<text x="60" y="242" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#2b2b2b"><tspan x="60" dy="0">9,728 × 2,560</tspan></text>
+<text x="160" y="242" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#2b2b2b"><tspan x="160" dy="0">9,728 × 2,560</tspan></text>
+<text x="292" y="242" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#2b2b2b"><tspan x="292" dy="0">9,728 × r</tspan></text>
+<text x="362" y="242" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#2b2b2b"><tspan x="362" dy="0">r × 2,560</tspan></text>
+<text x="60" y="262" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#555555"><tspan x="60" dy="0">same shape</tspan><tspan x="60" dy="13">as W</tspan></text>
+<text x="160" y="262" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#555555"><tspan x="160" dy="0">24.9 M weights,</tspan><tspan x="160" dy="13">not trained</tspan></text>
+<text x="335" y="262" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#555555"><tspan x="335" dy="0">r = 16: 196,608</tspan><tspan x="335" dy="13">weights, trained</tspan></text>
+<text x="498" y="150" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="498" dy="0">x</tspan></text>
+<path d="M 508 145 L 535 145" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<circle cx="535" cy="145" r="3" fill="#2b2b2b"/>
+<rect x="580" y="85" width="120" height="40" rx="8" fill="#eeeeee" stroke="#999999" stroke-width="1.5"/>
+<text x="640" y="103" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="640" dy="0">W</tspan></text>
+<text x="640" y="118" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555555"><tspan x="640" dy="0">frozen, 2,560 → 9,728</tspan></text>
+<rect x="560" y="185" width="90" height="40" rx="8" fill="#d5e8d4" stroke="#82b366" stroke-width="1.5"/>
+<text x="605" y="203" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="605" dy="0">A</tspan></text>
+<text x="605" y="218" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555555"><tspan x="605" dy="0">2,560 → r</tspan></text>
+<rect x="690" y="185" width="90" height="40" rx="8" fill="#d5e8d4" stroke="#82b366" stroke-width="1.5"/>
+<text x="735" y="203" font-family="Helvetica, Arial, sans-serif" font-size="14" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="735" dy="0">B</tspan></text>
+<text x="735" y="218" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555555"><tspan x="735" dy="0">r → 9,728</tspan></text>
+<circle cx="840" cy="145" r="11" fill="white" stroke="#2b2b2b" stroke-width="1.5"/>
+<text x="840" y="150" font-family="Helvetica, Arial, sans-serif" font-size="16" text-anchor="middle" fill="#2b2b2b"><tspan x="840" dy="0">+</tspan></text>
+<text x="882" y="150" font-family="Helvetica, Arial, sans-serif" font-size="15" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="882" dy="0">y</tspan></text>
+<path d="M 535 145 L 535.00 115.00 Q 535 105 545.00 105.00 L 571 105" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="580.00,105.00 571.00,100.50 571.00,109.50" fill="#2b2b2b"/>
+<path d="M 535 145 L 535.00 197.00 Q 535 205 543.00 205.00 L 551 205" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="560.00,205.00 551.00,200.50 551.00,209.50" fill="#2b2b2b"/>
+<path d="M 700 105 L 830.00 105.00 Q 840 105 840.00 115.00 L 840 125" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="840.00,134.00 844.50,125.00 835.50,125.00" fill="#2b2b2b"/>
+<path d="M 650 205 L 681 205" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="690.00,205.00 681.00,200.50 681.00,209.50" fill="#2b2b2b"/>
+<path d="M 780 205 L 830.00 205.00 Q 840 205 840.00 195.00 L 840 165" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<polygon points="840.00,156.00 835.50,165.00 844.50,165.00" fill="#2b2b2b"/>
+<path d="M 851 145 L 869 145" fill="none" stroke="#2b2b2b" stroke-width="1.5" stroke-linejoin="round"/>
+<text x="670" y="242" font-family="Helvetica, Arial, sans-serif" font-size="10" text-anchor="middle" fill="#555555"><tspan x="670" dy="0">r = 16 numbers</tspan></text>
+<text x="826" y="224" font-family="Helvetica, Arial, sans-serif" font-size="10.5" text-anchor="middle" fill="#555555"><tspan x="826" dy="0">scaled by α/r</tspan></text>
+<rect x="548" y="172" width="244" height="80" rx="10" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="6 4"/>
+<text x="670" y="276" font-family="Helvetica, Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="670" dy="0">the 9,728 × 2,560 product B·A</tspan></text>
+<text x="670" y="292" font-family="Helvetica, Arial, sans-serif" font-size="11" font-weight="bold" text-anchor="middle" fill="#2b2b2b"><tspan x="670" dy="0">is never built while training</tspan></text>
+</svg>

@@ -1,0 +1,1954 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>16&nbsp; The final results – Fine-tuning lab: LLMs on ConvFinQA</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+/* CSS for citations */
+div.csl-bib-body { }
+div.csl-entry {
+  clear: both;
+}
+.hanging-indent div.csl-entry {
+  margin-left:2em;
+  text-indent:-2em;
+}
+div.csl-left-margin {
+  min-width:2em;
+  float:left;
+}
+div.csl-right-inline {
+  margin-left:2em;
+  padding-left:1em;
+}
+div.csl-indent {
+  margin-left: 2em;
+}</style>
+
+
+<script src="https://cdn.jsdelivr.net/npm/jquery@3.5.1/dist/jquery.min.js" integrity="sha384-ZvpUoO/+PpLXR1lu4jmpXWu80pZlYUAfxl5NsBMWOEPSjUn/6Z/hRTt8+pR6L4N2" crossorigin="anonymous"></script><script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./403_rank_sweep.html" rel="next">
+<link href="./306_constrained_decoding.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-825aa897e66f6637425967c223a89f82.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+<script src="https://cdn.jsdelivr.net/npm/requirejs@2.3.6/require.min.js" integrity="sha384-c9c+LnTbwQ3aujuU7ULEPVvgLs+Fn6fJUvIGTsuu1ZcCf11fiEubah0ttpca4ntM sha384-6V1/AdqZRWk1KAlWbKBlGhN7VG4iE/yAZcO6NZPMF8od0vukrvr0tg4qY6NSrItx" crossorigin="anonymous"></script>
+
+<script type="application/javascript">define('jquery', [],function() {return window.jQuery;})</script>
+
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./402_the_final.html">Beyond</a></li><li class="breadcrumb-item"><a href="./402_the_final.html"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Fine-tuning lab: LLMs on ConvFinQA</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Setup &amp; data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./101_environment_setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Environment setup</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./102_what_convfinqa.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./103_the_dsl.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">The DSL and its executor</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./201_from_text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">From text to tokens to next-token probabilities</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./202_anatomy_of.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Anatomy of Qwen3-4B</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./203_from_base.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./204_probing_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./205_how_fine_tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">How fine-tuning works</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./206_lora_in.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Experiments</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./301_formatting_conversations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Formatting conversations for training</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./302_the_untuned.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The untuned baseline</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./303_training_with.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Training with LoRA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./304_evaluating_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Evaluating the fine-tuned model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./305_dsl_vs.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">DSL or Python?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./306_constrained_decoding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Constrained decoding</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Beyond</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./402_the_final.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./403_rank_sweep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">How much rank does the task need?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./404_summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Summary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./901_glossary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./902_references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">References</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+        <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#what-was-fixed-first" id="toc-what-was-fixed-first" class="nav-link active" data-scroll-target="#what-was-fixed-first"><span class="header-section-number">16.1</span> What was fixed first</a></li>
+  <li><a href="#the-rule-for-more-seeds" id="toc-the-rule-for-more-seeds" class="nav-link" data-scroll-target="#the-rule-for-more-seeds"><span class="header-section-number">16.2</span> The rule for more seeds</a></li>
+  <li><a href="#results-on-the-development-split" id="toc-results-on-the-development-split" class="nav-link" data-scroll-target="#results-on-the-development-split"><span class="header-section-number">16.3</span> Results on the development split</a></li>
+  <li><a href="#how-much-of-the-gap-does-a-prompt-close" id="toc-how-much-of-the-gap-does-a-prompt-close" class="nav-link" data-scroll-target="#how-much-of-the-gap-does-a-prompt-close"><span class="header-section-number">16.4</span> How much of the gap does a prompt close?</a></li>
+  <li><a href="#next-to-published-results" id="toc-next-to-published-results" class="nav-link" data-scroll-target="#next-to-published-results"><span class="header-section-number">16.5</span> Next to published results</a></li>
+  <li><a href="#were-the-validation-numbers-optimistic" id="toc-were-the-validation-numbers-optimistic" class="nav-link" data-scroll-target="#were-the-validation-numbers-optimistic"><span class="header-section-number">16.6</span> Were the validation numbers optimistic?</a></li>
+  <li><a href="#what-this-chapter-does-not-report" id="toc-what-this-chapter-does-not-report" class="nav-link" data-scroll-target="#what-this-chapter-does-not-report"><span class="header-section-number">16.7</span> What this chapter does not report</a></li>
+  </ul>
+</nav>
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./402_the_final.html">Beyond</a></li><li class="breadcrumb-item"><a href="./402_the_final.html"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></a></li></ol></nav>
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title"><span id="sec-final" class="quarto-section-identifier"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></span></h1><button type="button" class="btn code-tools-button dropdown-toggle" id="quarto-code-tools-menu" data-bs-toggle="dropdown" aria-expanded="false"><i class="bi"></i> Code</button><ul class="dropdown-menu dropdown-menu-end" aria-labelelledby="quarto-code-tools-menu"><li><a id="quarto-show-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Show All Code</a></li><li><a id="quarto-hide-all-code" class="dropdown-item" href="javascript:void(0)" role="button">Hide All Code</a></li><li><hr class="dropdown-divider"></li><li><a id="quarto-view-source" class="dropdown-item" href="javascript:void(0)" role="button">View Source</a></li></ul></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p><strong>You will learn:</strong></p>
+<ul>
+<li>what was fixed before the development split was touched, and why it matters that nothing was changed afterwards;</li>
+<li>how the fine-tuned model compares with the untuned one on conversations that no choice of the book was made on;</li>
+<li>how much of the difference a good prompt makes up, and how much is left for fine-tuning;</li>
+<li>whether the validation numbers of the earlier chapters were optimistic;</li>
+<li>where the result sits among published numbers, and why that comparison is loose;</li>
+<li>which comparisons of the book are validation results only.</li>
+</ul>
+<p>Every chapter so far reported the <strong>validation</strong> split, the one the book’s choices were made on. This chapter is the only one that uses the <strong>development</strong> split. Its conversations were set aside at the start (<a href="102_what_convfinqa.html" class="quarto-xref"><span>Chapter 2</span></a>), and its gold programs were used only to test code that has no model in it. A model’s outputs on them were not scored, and not read, until the decisions below were written down.</p>
+<section id="what-was-fixed-first" class="level2" data-number="16.1">
+<h2 data-number="16.1" class="anchored" data-anchor-id="what-was-fixed-first"><span class="header-section-number">16.1</span> What was fixed first</h2>
+<p>Before any output was scored on the development split, the decisions of the book were written into the project’s plan (<code>PLAN.md</code>), with the commit they were made at, and a file was created whose existence is what lets the development evaluations run (the builders refuse the split until it exists, and a test fails if any chapter before this one asks for it). From then on the rule was that nothing changes because of a development number, except a bug, and a disappointing result is reported and not fixed. The decisions were:</p>
+<ul>
+<li><strong>The model and its training.</strong> The adapter of <a href="303_training_with.html" class="quarto-xref"><span>Chapter 12</span></a>: rank 16, trained for two epochs on the train-fit conversations, with the checkpoint of the lowest validation loss, and seed 0. The rank sweep of <a href="403_rank_sweep.html" class="quarto-xref"><span>Chapter 17</span></a> is a validation experiment and chose nothing.</li>
+<li><strong>The untuned model’s prompt.</strong> The variant that the rule of <a href="302_the_untuned.html#sec-baseline-rule" class="quarto-xref"><span>Section 11.4.2</span></a> chose on validation, <code>e3p</code> (a plain system message and three examples, example set 0), and <code>e0p</code>, the prompt the fine-tuned model is trained with.</li>
+<li><strong>The output format.</strong> The DSL of <a href="103_the_dsl.html" class="quarto-xref"><span>Chapter 3</span></a>, with greedy decoding, no grammar, and one attempt per turn; an invalid output counts as wrong (<a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>).</li>
+<li><strong>The measures.</strong> Execution accuracy in both histories, with the predicted history as the headline; program accuracy next to it; a paired bootstrap that resamples whole report pages.</li>
+</ul>
+<p>Six generation runs were then made, each once: the fine-tuned model, the untuned model with <code>e3p</code> and the untuned model with <code>e0p</code>, each with the predicted history and with the gold history. The scores below are computed from them.</p>
+</section>
+<section id="the-rule-for-more-seeds" class="level2" data-number="16.2">
+<h2 data-number="16.2" class="anchored" data-anchor-id="the-rule-for-more-seeds"><span class="header-section-number">16.2</span> The rule for more seeds</h2>
+<p>The fine-tuned model was trained once. Greedy decoding is deterministic, so the only noise that a second run would add is the training’s: the initialisation, the order of the data, the dropout. The book fixed in advance when that noise would be measured: if the paired interval of the fine-tuned model against either untuned system includes zero, in either history, two more training seeds are trained and scored on the same split, and the results are reported as a mean and a spread. The rule is checked below, after the table.</p>
+</section>
+<section id="results-on-the-development-split" class="level2" data-number="16.3">
+<h2 data-number="16.3" class="anchored" data-anchor-id="results-on-the-development-split"><span class="header-section-number">16.3</span> Results on the development split</h2>
+<div id="a9c5ec1b" class="cell" data-execution_count="1">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.artifacts <span class="im">import</span> get</span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.data.splits <span class="im">import</span> page_group</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.stats <span class="im">import</span> bootstrap_accuracy, paired_difference</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>RUNS_DEV <span class="op">=</span> {</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"predicted"</span>): <span class="st">"scores_untuned_dev_e0p_0_pred"</span>,</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"gold"</span>): <span class="st">"scores_untuned_dev_e0p_0_gold"</span>,</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"predicted"</span>): <span class="st">"scores_untuned_dev_e3p_0_pred"</span>,</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"gold"</span>): <span class="st">"scores_untuned_dev_e3p_0_gold"</span>,</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>): <span class="st">"scores_tuned_dev_main_0_pred"</span>,</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>): <span class="st">"scores_tuned_dev_main_0_gold"</span>,</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>SCORES <span class="op">=</span> {</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_untuned_dev_e0p_0_pred"</span>),</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_untuned_dev_e0p_0_gold"</span>),</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_untuned_dev_e3p_0_pred"</span>),</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_untuned_dev_e3p_0_gold"</span>),</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_tuned_dev_main_0_pred"</span>),</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_tuned_dev_main_0_gold"</span>),</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>dev <span class="op">=</span> {k: <span class="bu">list</span>(h.jsonl(<span class="st">"scores.jsonl"</span>)) <span class="cf">for</span> k, h <span class="kw">in</span> SCORES.items()}</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>dev_summary <span class="op">=</span> {k: h.json(<span class="st">"summary.json"</span>) <span class="cf">for</span> k, h <span class="kw">in</span> SCORES.items()}</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>program <span class="op">=</span> {</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    k: [{<span class="op">**</span>s, <span class="st">"correct"</span>: s[<span class="st">"program_correct"</span>]} <span class="cf">for</span> s <span class="kw">in</span> v]</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> k, v <span class="kw">in</span> dev.items()</span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>ci <span class="op">=</span> {k: bootstrap_accuracy(v) <span class="cf">for</span> k, v <span class="kw">in</span> dev.items()}</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>ci_program <span class="op">=</span> {k: bootstrap_accuracy(v) <span class="cf">for</span> k, v <span class="kw">in</span> program.items()}</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>n_turns <span class="op">=</span> {<span class="bu">len</span>(v) <span class="cf">for</span> v <span class="kw">in</span> dev.values()}</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>dev_ids <span class="op">=</span> {s[<span class="st">"id"</span>] <span class="cf">for</span> s <span class="kw">in</span> dev[(<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>)]}</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>n_conversations <span class="op">=</span> <span class="bu">len</span>(dev_ids)</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a>n_pages <span class="op">=</span> <span class="bu">len</span>({page_group(i) <span class="cf">for</span> i <span class="kw">in</span> dev_ids})</span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="co"># all six runs cover the same turns, every turn of the split</span></span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(n_turns) <span class="op">==</span> <span class="dv">1</span></span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>        <span class="st">"history"</span>: [h <span class="cf">for</span> _, h <span class="kw">in</span> dev],</span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>        <span class="st">"execution accuracy"</span>: [</span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>ci[k][<span class="st">'accuracy'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>        <span class="st">"95</span><span class="sc">% i</span><span class="st">nterval"</span>: [</span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"[</span><span class="sc">{</span>ci[k][<span class="st">'low'</span>]<span class="sc">:.1%}</span><span class="ss">, </span><span class="sc">{</span>ci[k][<span class="st">'high'</span>]<span class="sc">:.1%}</span><span class="ss">]"</span> <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a>        <span class="st">"program accuracy"</span>: [</span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>ci_program[k][<span class="st">'accuracy'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a>        <span class="st">"invalid outputs"</span>: [</span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>dev_summary[k][<span class="st">'invalid_rate'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>pd.Index([s <span class="cf">for</span> s, _ <span class="kw">in</span> dev], name<span class="op">=</span><span class="st">"system"</span>),</span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">history</th>
+<th data-quarto-table-cell-role="th">execution accuracy</th>
+<th data-quarto-table-cell-role="th">95% interval</th>
+<th data-quarto-table-cell-role="th">program accuracy</th>
+<th data-quarto-table-cell-role="th">invalid outputs</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">system</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">untuned, e0p</th>
+<td>predicted</td>
+<td>1.1%</td>
+<td>[0.3%, 2.2%]</td>
+<td>1.0%</td>
+<td>98.6%</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">untuned, e0p</th>
+<td>gold</td>
+<td>25.1%</td>
+<td>[23.2%, 27.0%]</td>
+<td>22.5%</td>
+<td>68.1%</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">untuned, e3p</th>
+<td>predicted</td>
+<td>56.8%</td>
+<td>[53.5%, 60.1%]</td>
+<td>47.7%</td>
+<td>17.6%</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">untuned, e3p</th>
+<td>gold</td>
+<td>63.6%</td>
+<td>[61.1%, 66.1%]</td>
+<td>55.4%</td>
+<td>14.3%</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">fine-tuned</th>
+<td>predicted</td>
+<td>81.3%</td>
+<td>[77.4%, 85.1%]</td>
+<td>78.9%</td>
+<td>0.1%</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">fine-tuned</th>
+<td>gold</td>
+<td>90.3%</td>
+<td>[88.3%, 92.1%]</td>
+<td>88.9%</td>
+<td>0.0%</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>The split holds 421 conversations, written from 218 report pages, and 1490 turns. In each row the interval comes from resampling whole report pages 10,000 times (<a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>); it covers the choice of pages, and not the training seed, which is the matter of the rule above.</p>
+<div id="468a5861" class="cell" data-execution_count="2">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>contrasts <span class="op">=</span> {}</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> history <span class="kw">in</span> (<span class="st">"predicted"</span>, <span class="st">"gold"</span>):</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> other <span class="kw">in</span> (<span class="st">"untuned, e3p"</span>, <span class="st">"untuned, e0p"</span>):</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>        contrasts[(other, history)] <span class="op">=</span> paired_difference(</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>            dev[(<span class="st">"fine-tuned"</span>, history)], dev[(other, history)]</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a><span class="co"># the fine-tuned model is ahead of both untuned systems, in both</span></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a><span class="co"># histories, by more than the resampling noise: the seed rule does not fire</span></span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(c[<span class="st">"low"</span>] <span class="op">&gt;</span> <span class="dv">0</span> <span class="cf">for</span> c <span class="kw">in</span> contrasts.values())</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a><span class="co"># and the gold history is ahead of the predicted one</span></span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>gap_hist <span class="op">=</span> paired_difference(</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>    dev[(<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>)], dev[(<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>)]</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gap_hist[<span class="st">"low"</span>] <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>        <span class="st">"difference"</span>: [</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> c[<span class="st">'difference'</span>]<span class="sc">:+.1f}</span><span class="ss">"</span> <span class="cf">for</span> c <span class="kw">in</span> contrasts.values()</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>        <span class="st">"95</span><span class="sc">% i</span><span class="st">nterval"</span>: [</span>
+<span id="cb2-24"><a href="#cb2-24" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"[</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> c[<span class="st">'low'</span>]<span class="sc">:+.1f}</span><span class="ss">, </span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> c[<span class="st">'high'</span>]<span class="sc">:+.1f}</span><span class="ss">]"</span></span>
+<span id="cb2-25"><a href="#cb2-25" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> c <span class="kw">in</span> contrasts.values()</span>
+<span id="cb2-26"><a href="#cb2-26" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb2-27"><a href="#cb2-27" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb2-28"><a href="#cb2-28" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>pd.MultiIndex.from_tuples(</span>
+<span id="cb2-29"><a href="#cb2-29" aria-hidden="true" tabindex="-1"></a>        [(<span class="ss">f"fine-tuned minus </span><span class="sc">{</span>o<span class="sc">}</span><span class="ss">"</span>, h) <span class="cf">for</span> (o, h) <span class="kw">in</span> contrasts],</span>
+<span id="cb2-30"><a href="#cb2-30" aria-hidden="true" tabindex="-1"></a>        names<span class="op">=</span>[<span class="st">"comparison"</span>, <span class="st">"history"</span>],</span>
+<span id="cb2-31"><a href="#cb2-31" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb2-32"><a href="#cb2-32" aria-hidden="true" tabindex="-1"></a>).rename_axis(columns<span class="op">=</span><span class="st">"points of execution accuracy"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="2">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">points of execution accuracy</th>
+<th data-quarto-table-cell-role="th">difference</th>
+<th data-quarto-table-cell-role="th">95% interval</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">comparison</th>
+<th data-quarto-table-cell-role="th">history</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">fine-tuned minus untuned, e3p</th>
+<th data-quarto-table-cell-role="th">predicted</th>
+<td>+24.5</td>
+<td>[+21.0, +28.0]</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">fine-tuned minus untuned, e0p</th>
+<th data-quarto-table-cell-role="th">predicted</th>
+<td>+80.2</td>
+<td>[+76.1, +84.1]</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">fine-tuned minus untuned, e3p</th>
+<th data-quarto-table-cell-role="th">gold</th>
+<td>+26.6</td>
+<td>[+24.6, +28.7]</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">fine-tuned minus untuned, e0p</th>
+<th data-quarto-table-cell-role="th">gold</th>
+<td>+65.2</td>
+<td>[+63.1, +67.2]</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>With the predicted history, the headline mode, the fine-tuned model answers 81.3% of the turns correctly. The untuned model with the best prompt answers 56.8%, and with the prompt the fine-tuned model is trained with 1.1%. The paired interval of the fine-tuned model against the first is [+21.0, +28.0] points, and against the second [+76.1, +84.1]. The other two intervals, with the gold history, are in the table. <strong>All four are far from zero, so the rule for more seeds did not fire, and the fine-tuned model of the book is the one seed.</strong> The gold history lifts the fine-tuned model to 90.3%, +8.9 points over its predicted-history score (paired interval [+6.6, +11.3]): what the model loses to its own earlier mistakes, as on validation.</p>
+<p>Program accuracy is lower than execution accuracy for every system, since it asks for the gold program and not only for its answer (<a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>). The failures are of different kinds before and after fine-tuning:</p>
+<div id="cdbd55d0" class="cell" data-execution_count="3">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.final_results <span class="im">import</span> outcome_counts</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>outcomes <span class="op">=</span> pd.DataFrame({</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>s<span class="sc">}</span><span class="ss">, </span><span class="sc">{</span>h<span class="sc">}</span><span class="ss">"</span>: outcome_counts(dev_summary[(s, h)])</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (s, h) <span class="kw">in</span> dev</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>outcomes_pred <span class="op">=</span> {s: outcome_counts(dev_summary[(s, <span class="st">"predicted"</span>)]) <span class="cf">for</span> s, _ <span class="kw">in</span> dev}</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>tuned <span class="op">=</span> outcomes_pred[<span class="st">"fine-tuned"</span>]</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>wrong_tuned <span class="op">=</span> <span class="bu">sum</span>(tuned.values()) <span class="op">-</span> tuned[<span class="st">"correct"</span>]</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="co"># the untuned model loses most turns to the format of its answer; what is</span></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="co"># left after fine-tuning is mostly valid programs that are wrong</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> outcomes_pred[<span class="st">"untuned, e0p"</span>][<span class="st">"invalid output"</span>] <span class="op">\</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    <span class="op">&gt;</span> outcomes_pred[<span class="st">"untuned, e0p"</span>][<span class="st">"correct"</span>]</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> tuned[<span class="st">"invalid output"</span>] <span class="op">&lt;=</span> <span class="fl">0.05</span> <span class="op">*</span> wrong_tuned</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> tuned[<span class="st">"wrong numbers"</span>] <span class="op">==</span> <span class="bu">max</span>(</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>    tuned[k] <span class="cf">for</span> k <span class="kw">in</span> (</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a>        <span class="st">"wrong operations"</span>, <span class="st">"wrong numbers"</span>, <span class="st">"wrong answer, right shape"</span></span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb3-21"><a href="#cb3-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb3-22"><a href="#cb3-22" aria-hidden="true" tabindex="-1"></a>outcomes</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="3">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">untuned, e0p, predicted</th>
+<th data-quarto-table-cell-role="th">untuned, e0p, gold</th>
+<th data-quarto-table-cell-role="th">untuned, e3p, predicted</th>
+<th data-quarto-table-cell-role="th">untuned, e3p, gold</th>
+<th data-quarto-table-cell-role="th">fine-tuned, predicted</th>
+<th data-quarto-table-cell-role="th">fine-tuned, gold</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">correct</th>
+<td>17</td>
+<td>374</td>
+<td>847</td>
+<td>948</td>
+<td>1212</td>
+<td>1345</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">invalid output</th>
+<td>1469</td>
+<td>1015</td>
+<td>262</td>
+<td>213</td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">wrong operations</th>
+<td>0</td>
+<td>56</td>
+<td>201</td>
+<td>171</td>
+<td>82</td>
+<td>48</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">wrong numbers</th>
+<td>0</td>
+<td>15</td>
+<td>66</td>
+<td>50</td>
+<td>119</td>
+<td>50</td>
+</tr>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">wrong answer, right shape</th>
+<td>4</td>
+<td>30</td>
+<td>114</td>
+<td>108</td>
+<td>76</td>
+<td>47</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>With the prompt it is trained on, the untuned model writes a program that runs in 21 of its 1490 turns, so most of its mistakes are the format of the answer. After fine-tuning, 1 of the 278 wrong turns are not a program, and the largest group is valid programs with other numbers (119). As on validation, what fine-tuning leaves behind is a reading and reasoning failure, not a writing failure. The book does not label these dev errors one by one: the error analysis of <a href="304_evaluating_the.html#sec-evaluating-errors" class="quarto-xref"><span>Section 13.6.2</span></a> was done on validation, so that no development failure was read before the freeze.</p>
+</section>
+<section id="how-much-of-the-gap-does-a-prompt-close" class="level2" data-number="16.4">
+<h2 data-number="16.4" class="anchored" data-anchor-id="how-much-of-the-gap-does-a-prompt-close"><span class="header-section-number">16.4</span> How much of the gap does a prompt close?</h2>
+<p>The untuned model with <code>e0p</code> and the fine-tuned model see the same input, so the distance between them is what fine-tuning adds. The untuned model with <code>e3p</code> has the best prompt that validation found. How much of that distance has the prompt already covered?</p>
+<div id="7be0bc71" class="cell" data-execution_count="4">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.final_results <span class="im">import</span> share_of_gap_closed</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>closed <span class="op">=</span> {</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    h: share_of_gap_closed(</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>        dev[(<span class="st">"untuned, e0p"</span>, h)], dev[(<span class="st">"untuned, e3p"</span>, h)], dev[(<span class="st">"fine-tuned"</span>, h)]</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> h <span class="kw">in</span> (<span class="st">"predicted"</span>, <span class="st">"gold"</span>)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="co"># the prompt closes a large part of the distance, but not all of it:</span></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a><span class="co"># the interval stays between 1/2 and 1 in both histories</span></span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(<span class="fl">0.5</span> <span class="op">&lt;</span> c[<span class="st">"low"</span>] <span class="kw">and</span> c[<span class="st">"high"</span>] <span class="op">&lt;</span> <span class="dv">1</span> <span class="cf">for</span> c <span class="kw">in</span> closed.values())</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>        <span class="st">"gap, fine-tuned minus e0p"</span>: [</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> c[<span class="st">'gap'</span>]<span class="sc">:.1f}</span><span class="ss"> points"</span> <span class="cf">for</span> c <span class="kw">in</span> closed.values()</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>        <span class="st">"covered by the e3p prompt"</span>: [</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>c[<span class="st">'share'</span>]<span class="sc">:.0%}</span><span class="ss">"</span> <span class="cf">for</span> c <span class="kw">in</span> closed.values()</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>        <span class="st">"95</span><span class="sc">% i</span><span class="st">nterval"</span>: [</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"[</span><span class="sc">{</span>c[<span class="st">'low'</span>]<span class="sc">:.0%}</span><span class="ss">, </span><span class="sc">{</span>c[<span class="st">'high'</span>]<span class="sc">:.0%}</span><span class="ss">]"</span> <span class="cf">for</span> c <span class="kw">in</span> closed.values()</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>pd.Index(<span class="bu">list</span>(closed), name<span class="op">=</span><span class="st">"history"</span>),</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="4">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">gap, fine-tuned minus e0p</th>
+<th data-quarto-table-cell-role="th">covered by the e3p prompt</th>
+<th data-quarto-table-cell-role="th">95% interval</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">history</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th data-quarto-table-cell-role="th">predicted</th>
+<td>80.2 points</td>
+<td>69%</td>
+<td>[66%, 73%]</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">gold</th>
+<td>65.2 points</td>
+<td>59%</td>
+<td>[56%, 62%]</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>With the predicted history the prompt covers 69% of the distance, and with the gold history 59%. Most of what fine-tuning adds can be had from a good prompt with three examples, and the rest, the part that the prompt cannot reach, is 24.5 points with the predicted history. Two things limit how far to read this. The prompt was developed on validation over several variants, while the fine-tuning configuration was fixed in advance, which favours the prompt. And the prompt is limited to describing the language: it does not teach the annotation conventions that the fine-tuning data show (<a href="302_the_untuned.html" class="quarto-xref"><span>Chapter 11</span></a>), which a longer prompt could. The two routes also cost different amounts at inference: the examples make the prompt longer than the fine-tuned model’s (<a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a> measures it on validation).</p>
+</section>
+<section id="next-to-published-results" class="level2" data-number="16.5">
+<h2 data-number="16.5" class="anchored" data-anchor-id="next-to-published-results"><span class="header-section-number">16.5</span> Next to published results</h2>
+<p>The published numbers come from different set-ups, so this is a loose comparison. FinQANet <span class="citation" data-cites="chen2022convfinqa">(<a href="902_references.html#ref-chen2022convfinqa" role="doc-biblioref">Chen et al. 2022</a>)</span> is given facts retrieved from the page, and its gold-facts variant and the few-shot GPT-3 of the same paper are given the facts that the annotators marked; ours reads the whole page. Our predicted history is the closest to how a published system would be used, and the gold history is an upper bound. Fin-R1 uses its own protocol (below). Nothing here is a leaderboard.</p>
+<div id="cell-fig-published" class="cell" data-execution_count="5">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.final_results <span class="im">import</span> PUBLISHED</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>ours <span class="op">=</span> [</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>        <span class="st">"this book, fine-tuned, predicted history"</span>,</span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>        (<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>), <span class="st">"#b85450"</span>, <span class="st">"o"</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>        <span class="st">"this book, fine-tuned, gold history (upper bound)"</span>,</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>        (<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>), <span class="st">"#3b6ea5"</span>, <span class="st">"o"</span></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>        <span class="st">"this book, untuned, e3p, predicted history"</span>,</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>        (<span class="st">"untuned, e3p"</span>, <span class="st">"predicted"</span>), <span class="st">"#b85450"</span>, <span class="st">"s"</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> [</span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a>    (<span class="ss">f"</span><span class="sc">{</span>p[<span class="st">'label'</span>]<span class="sc">}</span><span class="ss"> (</span><span class="sc">{</span>p[<span class="st">'split'</span>]<span class="sc">}</span><span class="ss">)"</span>, p[<span class="st">"accuracy"</span>], <span class="va">None</span>, <span class="va">None</span>, <span class="st">"#6b6b6b"</span>, <span class="st">"D"</span>)</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> p <span class="kw">in</span> PUBLISHED</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>] <span class="op">+</span> [</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb5-23"><a href="#cb5-23" aria-hidden="true" tabindex="-1"></a>        label, <span class="dv">100</span> <span class="op">*</span> ci[k][<span class="st">"accuracy"</span>], <span class="dv">100</span> <span class="op">*</span> ci[k][<span class="st">"low"</span>],</span>
+<span id="cb5-24"><a href="#cb5-24" aria-hidden="true" tabindex="-1"></a>        <span class="dv">100</span> <span class="op">*</span> ci[k][<span class="st">"high"</span>], colour, marker</span>
+<span id="cb5-25"><a href="#cb5-25" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb5-26"><a href="#cb5-26" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> label, k, colour, marker <span class="kw">in</span> ours</span>
+<span id="cb5-27"><a href="#cb5-27" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb5-28"><a href="#cb5-28" aria-hidden="true" tabindex="-1"></a>rows.sort(key<span class="op">=</span><span class="kw">lambda</span> r: r[<span class="dv">1</span>])</span>
+<span id="cb5-29"><a href="#cb5-29" aria-hidden="true" tabindex="-1"></a>ours_rank <span class="op">=</span> {</span>
+<span id="cb5-30"><a href="#cb5-30" aria-hidden="true" tabindex="-1"></a>    name: i <span class="cf">for</span> i, (name, <span class="op">*</span>_) <span class="kw">in</span> <span class="bu">enumerate</span>(rows) <span class="cf">if</span> name.startswith(<span class="st">"this book"</span>)</span>
+<span id="cb5-31"><a href="#cb5-31" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb5-32"><a href="#cb5-32" aria-hidden="true" tabindex="-1"></a>fine_tuned_rank <span class="op">=</span> ours_rank[<span class="st">"this book, fine-tuned, predicted history"</span>]</span>
+<span id="cb5-33"><a href="#cb5-33" aria-hidden="true" tabindex="-1"></a>published_above <span class="op">=</span> <span class="bu">sum</span>(</span>
+<span id="cb5-34"><a href="#cb5-34" aria-hidden="true" tabindex="-1"></a>    <span class="dv">1</span> <span class="cf">for</span> name, value, <span class="op">*</span>_ <span class="kw">in</span> rows</span>
+<span id="cb5-35"><a href="#cb5-35" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> name.startswith(<span class="st">"this book"</span>) <span class="kw">and</span> value <span class="op">&gt;</span> rows[fine_tuned_rank][<span class="dv">1</span>]</span>
+<span id="cb5-36"><a href="#cb5-36" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-37"><a href="#cb5-37" aria-hidden="true" tabindex="-1"></a>published_below <span class="op">=</span> <span class="bu">sum</span>(</span>
+<span id="cb5-38"><a href="#cb5-38" aria-hidden="true" tabindex="-1"></a>    <span class="dv">1</span> <span class="cf">for</span> name, value, <span class="op">*</span>_ <span class="kw">in</span> rows</span>
+<span id="cb5-39"><a href="#cb5-39" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> name.startswith(<span class="st">"this book"</span>) <span class="kw">and</span> value <span class="op">&lt;</span> rows[fine_tuned_rank][<span class="dv">1</span>]</span>
+<span id="cb5-40"><a href="#cb5-40" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-41"><a href="#cb5-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-42"><a href="#cb5-42" aria-hidden="true" tabindex="-1"></a><span class="co"># the fine-tuned model sits inside the published range, not at an end of it</span></span>
+<span id="cb5-43"><a href="#cb5-43" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> published_above <span class="op">&gt;</span> <span class="dv">0</span> <span class="kw">and</span> published_below <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb5-44"><a href="#cb5-44" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-45"><a href="#cb5-45" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="fl">7.5</span>, <span class="fl">4.6</span>))</span>
+<span id="cb5-46"><a href="#cb5-46" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i, (name, value, low, high, colour, marker) <span class="kw">in</span> <span class="bu">enumerate</span>(rows):</span>
+<span id="cb5-47"><a href="#cb5-47" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> low <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb5-48"><a href="#cb5-48" aria-hidden="true" tabindex="-1"></a>        ax.hlines(i, low, high, color<span class="op">=</span>colour, linewidth<span class="op">=</span><span class="dv">2</span>, zorder<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb5-49"><a href="#cb5-49" aria-hidden="true" tabindex="-1"></a>    ax.plot(</span>
+<span id="cb5-50"><a href="#cb5-50" aria-hidden="true" tabindex="-1"></a>        value, i, marker, color<span class="op">=</span>colour, markersize<span class="op">=</span><span class="dv">7</span>, zorder<span class="op">=</span><span class="dv">3</span>,</span>
+<span id="cb5-51"><a href="#cb5-51" aria-hidden="true" tabindex="-1"></a>        markerfacecolor<span class="op">=</span>(</span>
+<span id="cb5-52"><a href="#cb5-52" aria-hidden="true" tabindex="-1"></a>            <span class="st">"white"</span> <span class="cf">if</span> name.startswith(<span class="st">"this book, untuned"</span>)</span>
+<span id="cb5-53"><a href="#cb5-53" aria-hidden="true" tabindex="-1"></a>            <span class="cf">else</span> colour</span>
+<span id="cb5-54"><a href="#cb5-54" aria-hidden="true" tabindex="-1"></a>        ),</span>
+<span id="cb5-55"><a href="#cb5-55" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb5-56"><a href="#cb5-56" aria-hidden="true" tabindex="-1"></a>    ax.text(</span>
+<span id="cb5-57"><a href="#cb5-57" aria-hidden="true" tabindex="-1"></a>        value <span class="op">+</span> (<span class="fl">2.5</span> <span class="cf">if</span> low <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> (high <span class="op">-</span> value) <span class="op">+</span> <span class="fl">1.5</span>), i, <span class="ss">f"</span><span class="sc">{</span>value<span class="sc">:.1f}</span><span class="ss">"</span>,</span>
+<span id="cb5-58"><a href="#cb5-58" aria-hidden="true" tabindex="-1"></a>        va<span class="op">=</span><span class="st">"center"</span>, fontsize<span class="op">=</span><span class="dv">8</span>, color<span class="op">=</span><span class="st">"#444444"</span></span>
+<span id="cb5-59"><a href="#cb5-59" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb5-60"><a href="#cb5-60" aria-hidden="true" tabindex="-1"></a>ax.set_yticks(<span class="bu">range</span>(<span class="bu">len</span>(rows)), [r[<span class="dv">0</span>] <span class="cf">for</span> r <span class="kw">in</span> rows], fontsize<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb5-61"><a href="#cb5-61" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> tick, (name, <span class="op">*</span>_) <span class="kw">in</span> <span class="bu">zip</span>(ax.get_yticklabels(), rows):</span>
+<span id="cb5-62"><a href="#cb5-62" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> name.startswith(<span class="st">"this book"</span>):</span>
+<span id="cb5-63"><a href="#cb5-63" aria-hidden="true" tabindex="-1"></a>        tick.set_fontweight(<span class="st">"bold"</span>)</span>
+<span id="cb5-64"><a href="#cb5-64" aria-hidden="true" tabindex="-1"></a>ax.set_xlim(<span class="dv">0</span>, <span class="dv">100</span>)</span>
+<span id="cb5-65"><a href="#cb5-65" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"execution accuracy (%)"</span>)</span>
+<span id="cb5-66"><a href="#cb5-66" aria-hidden="true" tabindex="-1"></a>ax.grid(axis<span class="op">=</span><span class="st">"x"</span>, color<span class="op">=</span><span class="st">"#dddddd"</span>, linewidth<span class="op">=</span><span class="fl">0.6</span>)</span>
+<span id="cb5-67"><a href="#cb5-67" aria-hidden="true" tabindex="-1"></a>ax.set_axisbelow(<span class="va">True</span>)</span>
+<span id="cb5-68"><a href="#cb5-68" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> side <span class="kw">in</span> (<span class="st">"top"</span>, <span class="st">"right"</span>, <span class="st">"left"</span>):</span>
+<span id="cb5-69"><a href="#cb5-69" aria-hidden="true" tabindex="-1"></a>    ax.spines[side].set_visible(<span class="va">False</span>)</span>
+<span id="cb5-70"><a href="#cb5-70" aria-hidden="true" tabindex="-1"></a>ax.tick_params(axis<span class="op">=</span><span class="st">"y"</span>, length<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb5-71"><a href="#cb5-71" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb5-72"><a href="#cb5-72" aria-hidden="true" tabindex="-1"></a>plt.show()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display">
+<div id="fig-published" class="quarto-float quarto-figure quarto-figure-center anchored" alt="Dot chart of execution accuracy, one row per system, sorted from lowest to highest. Published results are grey diamonds, this book's systems are coloured with horizontal intervals. The fine-tuned model with predicted history sits between the published systems.">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-published-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="402_the_final_files/figure-html/fig-published-output-1.png" alt="Dot chart of execution accuracy, one row per system, sorted from lowest to highest. Published results are grey diamonds, this book's systems are coloured with horizontal intervals. The fine-tuned model with predicted history sits between the published systems." width="692" height="432" class="figure-img">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-published-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;16.1: Execution accuracy on ConvFinQA, published results (grey diamonds, with what each paper says about its evaluation set) and three systems of this book on the development split (circles and a square, with the 95% interval). The set-ups differ: the published results are not run on the same input.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<p>On development, with the predicted history, the fine-tuned model is ahead of 7 of the 9 published rows and behind 2; the gold-history point is an upper bound and is not comparable with them. The bold rows are ours. Two things keep the comparison loose: the inputs differ (above), and some rows do not say which split they use (FinQANet) or use a sample of 200 questions (the two human rows). <a href="#fig-published" class="quarto-xref">Figure&nbsp;<span>16.1</span></a> is a map of where the number sits and not a ranking: a difference of a couple of points between rows is not a finding.</p>
+<p>The ConvFinQA paper <span class="citation" data-cites="chen2022convfinqa">(<a href="902_references.html#ref-chen2022convfinqa" role="doc-biblioref">Chen et al. 2022</a>)</span> gives the crowd, GPT-3, FinQANet and human rows (GPT-3 from its Table 5, the others from its Table 3), <span class="citation" data-cites="li2023gpt">Li et al. (<a href="902_references.html#ref-li2023gpt" role="doc-biblioref">2023</a>)</span> the GPT-4 row, and <span class="citation" data-cites="khatuya2025finder">Khatuya et al. (<a href="902_references.html#ref-khatuya2025finder" role="doc-biblioref">2025</a>)</span> the PoT-GPT-4, ENCORE and FINDER rows. Fin-R1 <span class="citation" data-cites="liu2025finr1">(<a href="902_references.html#ref-liu2025finr1" role="doc-biblioref"><span class="nocase">Liu et al.</span> 2025</a>)</span> also reports a ConvFinQA figure, but its answers are judged by a language model on a random sample whose split it does not state, so it measures something else and is left out.</p>
+</section>
+<section id="were-the-validation-numbers-optimistic" class="level2" data-number="16.6">
+<h2 data-number="16.6" class="anchored" data-anchor-id="were-the-validation-numbers-optimistic"><span class="header-section-number">16.6</span> Were the validation numbers optimistic?</h2>
+<p>The choices of the book were made on validation: the prompt, the checkpoint, the grammar, the format. If a choice had fitted the validation conversations in a way that does not carry over, the development numbers would be lower. The check is the same three systems, both histories, on the two splits. The splits hold different pages, so each accuracy is resampled on its own, and the interval is for the difference of the two.</p>
+<div id="4f1cd5c5" class="cell" data-execution_count="6">
+<details open="" class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.final_results <span class="im">import</span> split_difference</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>VAL_SCORES <span class="op">=</span> {</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_untuned_val_e0p_0_pred"</span>),</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_untuned_val_e0p_0_gold"</span>),</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_untuned_val_e3p_0_pred"</span>),</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_untuned_val_e3p_0_gold"</span>),</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_tuned_val_main_0_pred"</span>),</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_tuned_val_main_0_gold"</span>),</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>val <span class="op">=</span> {k: <span class="bu">list</span>(h.jsonl(<span class="st">"scores.jsonl"</span>)) <span class="cf">for</span> k, h <span class="kw">in</span> VAL_SCORES.items()}</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>ci_val <span class="op">=</span> {k: bootstrap_accuracy(v) <span class="cf">for</span> k, v <span class="kw">in</span> val.items()}</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>moved <span class="op">=</span> {k: split_difference(dev[k], val[k]) <span class="cf">for</span> k <span class="kw">in</span> dev}</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>significant <span class="op">=</span> [k <span class="cf">for</span> k, m <span class="kw">in</span> moved.items() <span class="cf">if</span> m[<span class="st">"excludes_zero"</span>]]</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="co"># the sentence below names the exception: the untuned model with the training prompt, which does not move with the training</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> significant</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="co"># nothing that validation chose is significantly worse on dev: the two</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a><span class="co"># systems that went through the book's choices (the fine-tuned model and the</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a><span class="co"># prompt picked on validation) stay within the noise</span></span>
+<span id="cb6-22"><a href="#cb6-22" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> <span class="bu">any</span>(s <span class="kw">in</span> (<span class="st">"fine-tuned"</span>, <span class="st">"untuned, e3p"</span>) <span class="cf">for</span> s, _ <span class="kw">in</span> significant)</span>
+<span id="cb6-23"><a href="#cb6-23" aria-hidden="true" tabindex="-1"></a><span class="co"># and the fine-tuned model scores lower on dev than on val in both histories,</span></span>
+<span id="cb6-24"><a href="#cb6-24" aria-hidden="true" tabindex="-1"></a><span class="co"># as selection on val would make it, though not by more than the noise</span></span>
+<span id="cb6-25"><a href="#cb6-25" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(</span>
+<span id="cb6-26"><a href="#cb6-26" aria-hidden="true" tabindex="-1"></a>    moved[(<span class="st">"fine-tuned"</span>, h)][<span class="st">"difference"</span>] <span class="op">&lt;</span> <span class="dv">0</span> <span class="cf">for</span> h <span class="kw">in</span> (<span class="st">"predicted"</span>, <span class="st">"gold"</span>)</span>
+<span id="cb6-27"><a href="#cb6-27" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-28"><a href="#cb6-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-29"><a href="#cb6-29" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb6-30"><a href="#cb6-30" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb6-31"><a href="#cb6-31" aria-hidden="true" tabindex="-1"></a>        <span class="st">"validation"</span>: [<span class="ss">f"</span><span class="sc">{</span>ci_val[k][<span class="st">'accuracy'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev],</span>
+<span id="cb6-32"><a href="#cb6-32" aria-hidden="true" tabindex="-1"></a>        <span class="st">"development"</span>: [<span class="ss">f"</span><span class="sc">{</span>ci[k][<span class="st">'accuracy'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev],</span>
+<span id="cb6-33"><a href="#cb6-33" aria-hidden="true" tabindex="-1"></a>        <span class="st">"difference"</span>: [<span class="ss">f"</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> moved[k][<span class="st">'difference'</span>]<span class="sc">:+.1f}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev],</span>
+<span id="cb6-34"><a href="#cb6-34" aria-hidden="true" tabindex="-1"></a>        <span class="st">"95</span><span class="sc">% i</span><span class="st">nterval"</span>: [</span>
+<span id="cb6-35"><a href="#cb6-35" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"[</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> moved[k][<span class="st">'low'</span>]<span class="sc">:+.1f}</span><span class="ss">, </span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> moved[k][<span class="st">'high'</span>]<span class="sc">:+.1f}</span><span class="ss">]"</span></span>
+<span id="cb6-36"><a href="#cb6-36" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb6-37"><a href="#cb6-37" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb6-38"><a href="#cb6-38" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb6-39"><a href="#cb6-39" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>pd.MultiIndex.from_tuples(<span class="bu">list</span>(dev), names<span class="op">=</span>[<span class="st">"system"</span>, <span class="st">"history"</span>]),</span>
+<span id="cb6-40"><a href="#cb6-40" aria-hidden="true" tabindex="-1"></a>).rename_axis(columns<span class="op">=</span><span class="st">"execution accuracy, points for the last two"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-display" data-execution_count="6">
+<div>
+
+
+<table class="dataframe caption-top table table-sm table-striped small" data-border="1">
+<thead>
+<tr class="header">
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th">execution accuracy, points for the last two</th>
+<th data-quarto-table-cell-role="th">validation</th>
+<th data-quarto-table-cell-role="th">development</th>
+<th data-quarto-table-cell-role="th">difference</th>
+<th data-quarto-table-cell-role="th">95% interval</th>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">system</th>
+<th data-quarto-table-cell-role="th">history</th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+<th data-quarto-table-cell-role="th"></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<th rowspan="2" data-quarto-table-cell-role="th" data-valign="top">untuned, e0p</th>
+<th data-quarto-table-cell-role="th">predicted</th>
+<td>0.3%</td>
+<td>1.1%</td>
+<td>+0.9</td>
+<td>[-0.1, +2.0]</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">gold</th>
+<td>28.1%</td>
+<td>25.1%</td>
+<td>-3.0</td>
+<td>[-5.9, -0.2]</td>
+</tr>
+<tr class="odd">
+<th rowspan="2" data-quarto-table-cell-role="th" data-valign="top">untuned, e3p</th>
+<th data-quarto-table-cell-role="th">predicted</th>
+<td>57.2%</td>
+<td>56.8%</td>
+<td>-0.3</td>
+<td>[-5.5, +4.9]</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">gold</th>
+<td>66.0%</td>
+<td>63.6%</td>
+<td>-2.4</td>
+<td>[-6.2, +1.4]</td>
+</tr>
+<tr class="odd">
+<th rowspan="2" data-quarto-table-cell-role="th" data-valign="top">fine-tuned</th>
+<th data-quarto-table-cell-role="th">predicted</th>
+<td>83.7%</td>
+<td>81.3%</td>
+<td>-2.4</td>
+<td>[-7.8, +3.2]</td>
+</tr>
+<tr class="even">
+<th data-quarto-table-cell-role="th">gold</th>
+<td>90.6%</td>
+<td>90.3%</td>
+<td>-0.3</td>
+<td>[-3.2, +2.7]</td>
+</tr>
+</tbody>
+</table>
+
+</div>
+</div>
+</div>
+<p>The fine-tuned model is 2.4 points lower on development than on validation with the predicted history and 0.3 with the gold history, and the untuned model with <code>e3p</code> differs by -0.3 and -2.4. None of these four intervals excludes zero, so the data cannot tell a small optimism of selection from the difference between two samples of pages; they show that the validation numbers were not far off. 1 of the six differences has an interval that does exclude zero: untuned, e0p with the gold history. That is the untuned model with the prompt of the fine-tuned model, which no choice of the book depended on, and it is the floor of the comparison, so a few points of difference does not change what the chapter concludes.</p>
+</section>
+<section id="what-this-chapter-does-not-report" class="level2" data-number="16.7">
+<h2 data-number="16.7" class="anchored" data-anchor-id="what-this-chapter-does-not-report"><span class="header-section-number">16.7</span> What this chapter does not report</h2>
+<p>Only the comparison above is run on the development split. The other comparisons of the book are results on validation, reported where they are made, and the book does not claim them for the development split: the untuned prompt variants, the <code>e3p</code> prompt on the fine-tuned model and the extra-compute rows (<a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>); the DSL against Python, untuned and fine-tuned (<a href="305_dsl_vs.html" class="quarto-xref"><span>Chapter 14</span></a>); the grammar rows (<a href="306_constrained_decoding.html" class="quarto-xref"><span>Chapter 15</span></a>); the merged adapter; and the rank sweep (<a href="403_rank_sweep.html" class="quarto-xref"><span>Chapter 17</span></a>). The reason is the same for all: a result on the development split is a result that is reported, once, and the more comparisons are run on it, the more of its value as a check is spent.</p>
+<p>The result is also limited in three ways. It is one training seed, so the interval of a number is for the choice of pages and does not include the noise of training; the rule for more seeds did not call for them, but a second seed is what would measure it. The prompt of the untuned model had one example set. And the numbers are on one benchmark, with one model, so the contrast with published work is of a set-up and not of a method.</p>
+
+
+<!-- -->
+
+<div id="refs" class="references csl-bib-body hanging-indent" role="list" style="display: none">
+<div id="ref-chen2022convfinqa" class="csl-entry" role="listitem">
+Chen, Zhiyu, Shiyang Li, Charese Smiley, Zhiqiang Ma, Sameena Shah, and William Yang Wang. 2022. <span>“<span>ConvFinQA</span>: Exploring the Chain of Numerical Reasoning in Conversational Finance Question Answering.”</span> <em>Proceedings of EMNLP</em>.
+</div>
+<div id="ref-khatuya2025finder" class="csl-entry" role="listitem">
+Khatuya, Subhendu, Shashwat Naidu, Pawan Goyal, and Niloy Ganguly. 2025. <span>“Program of Thoughts for Financial Reasoning: Leveraging Dynamic in-Context Examples and Generative Retrieval.”</span> <em>Proceedings of EMNLP</em>.
+</div>
+<div id="ref-li2023gpt" class="csl-entry" role="listitem">
+Li, Xianzhi, Samuel Chan, Xiaodan Zhu, et al. 2023. <span>“Are <span>ChatGPT</span> and <span>GPT-4</span> General-Purpose Solvers for Financial Text Analytics? A Study on Several Typical Tasks.”</span> <em>Proceedings of EMNLP: Industry Track</em>.
+</div>
+<div id="ref-liu2025finr1" class="csl-entry" role="listitem">
+<span class="nocase">Liu, Zhaowei et al.</span> 2025. <span>“<span>Fin-R1</span>: A Large Language Model for Financial Reasoning Through Reinforcement Learning.”</span> <em>arXiv Preprint arXiv:2503.16252</em>.
+</div>
+</div>
+</section>
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const cellDetails = window.document.querySelectorAll(".cell details.code-fold");
+        for (let i=0; i<cellDetails.length; i++) {
+          const details = cellDetails[i];
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell div.sourceCode.cell-code");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./306_constrained_decoding.html" class="pagination-link" aria-label="Constrained decoding">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Constrained decoding</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./403_rank_sweep.html" class="pagination-link" aria-label="How much rank does the task need?">
+        <span class="nav-page-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">How much rank does the task need?</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb7" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu"># The final results {#sec-final}</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>**You will learn:**</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>what was fixed before the development split was touched, and why it matters that nothing was changed afterwards;</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>how the fine-tuned model compares with the untuned one on conversations that no choice of the book was made on;</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>how much of the difference a good prompt makes up, and how much is left for fine-tuning;</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>whether the validation numbers of the earlier chapters were optimistic;</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>where the result sits among published numbers, and why that comparison is loose;</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>which comparisons of the book are validation results only.</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a>Every chapter so far reported the **validation** split, the one the book's choices were made on. This chapter is the</span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a>only one that uses the **development** split. Its conversations were set aside at the start (@sec-convfinqa), and its</span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a>gold programs were used only to test code that has no model in it. A model's outputs on them were not scored, and not read, until</span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a>the decisions below were written down.</span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a><span class="fu">## What was fixed first</span></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a>Before any output was scored on the development split, the decisions of the book were written into the project's plan</span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a>(<span class="in">`PLAN.md`</span>), with the commit they were made at, and a file was created whose existence is what lets the development evaluations run (the</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a>builders refuse the split until it exists, and a test fails if any chapter before this one asks for it). From then on</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>the rule was that nothing changes because of a development number, except a bug, and a disappointing result is</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>reported and not fixed. The decisions were:</span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**The model and its training.** The adapter of @sec-training: rank 16, trained for two epochs on the train-fit</span>
+<span id="cb7-26"><a href="#cb7-26" aria-hidden="true" tabindex="-1"></a>  conversations, with the checkpoint of the lowest validation loss, and seed 0. The rank sweep of @sec-rank-sweep</span>
+<span id="cb7-27"><a href="#cb7-27" aria-hidden="true" tabindex="-1"></a>  is a validation experiment and chose nothing.</span>
+<span id="cb7-28"><a href="#cb7-28" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**The untuned model's prompt.** The variant that the rule of @sec-baseline-rule chose on validation, <span class="in">`e3p`</span> (a</span>
+<span id="cb7-29"><a href="#cb7-29" aria-hidden="true" tabindex="-1"></a>  plain system message and three examples, example set 0), and <span class="in">`e0p`</span>, the prompt the fine-tuned model is trained with.</span>
+<span id="cb7-30"><a href="#cb7-30" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**The output format.** The DSL of @sec-dsl, with greedy decoding, no grammar, and one attempt per turn; an invalid</span>
+<span id="cb7-31"><a href="#cb7-31" aria-hidden="true" tabindex="-1"></a>  output counts as wrong (@sec-evaluating).</span>
+<span id="cb7-32"><a href="#cb7-32" aria-hidden="true" tabindex="-1"></a><span class="ss">- </span>**The measures.** Execution accuracy in both histories, with the predicted history as the headline; program</span>
+<span id="cb7-33"><a href="#cb7-33" aria-hidden="true" tabindex="-1"></a>  accuracy next to it; a paired bootstrap that resamples whole report pages.</span>
+<span id="cb7-34"><a href="#cb7-34" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-35"><a href="#cb7-35" aria-hidden="true" tabindex="-1"></a>Six generation runs were then made, each once: the fine-tuned model, the untuned model with <span class="in">`e3p`</span> and the untuned model</span>
+<span id="cb7-36"><a href="#cb7-36" aria-hidden="true" tabindex="-1"></a>with <span class="in">`e0p`</span>, each with the predicted history and with the gold history. The scores below are computed from them.</span>
+<span id="cb7-37"><a href="#cb7-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-38"><a href="#cb7-38" aria-hidden="true" tabindex="-1"></a><span class="fu">## The rule for more seeds</span></span>
+<span id="cb7-39"><a href="#cb7-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-40"><a href="#cb7-40" aria-hidden="true" tabindex="-1"></a>The fine-tuned model was trained once. Greedy decoding is deterministic, so the only noise that a second run would</span>
+<span id="cb7-41"><a href="#cb7-41" aria-hidden="true" tabindex="-1"></a>add is the training's: the initialisation, the order of the data, the dropout. The book fixed in advance when that</span>
+<span id="cb7-42"><a href="#cb7-42" aria-hidden="true" tabindex="-1"></a>noise would be measured: if the paired interval of the fine-tuned model against either untuned system includes</span>
+<span id="cb7-43"><a href="#cb7-43" aria-hidden="true" tabindex="-1"></a>zero, in either history, two more training seeds are trained and scored on the same split, and the results are reported as a</span>
+<span id="cb7-44"><a href="#cb7-44" aria-hidden="true" tabindex="-1"></a>mean and a spread. The rule is checked below, after the table.</span>
+<span id="cb7-45"><a href="#cb7-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-46"><a href="#cb7-46" aria-hidden="true" tabindex="-1"></a><span class="fu">## Results on the development split</span></span>
+<span id="cb7-47"><a href="#cb7-47" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-50"><a href="#cb7-50" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb7-51"><a href="#cb7-51" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb7-52"><a href="#cb7-52" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> matplotlib.pyplot <span class="im">as</span> plt</span>
+<span id="cb7-53"><a href="#cb7-53" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> pandas <span class="im">as</span> pd</span>
+<span id="cb7-54"><a href="#cb7-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-55"><a href="#cb7-55" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.artifacts <span class="im">import</span> get</span>
+<span id="cb7-56"><a href="#cb7-56" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.data.splits <span class="im">import</span> page_group</span>
+<span id="cb7-57"><a href="#cb7-57" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.stats <span class="im">import</span> bootstrap_accuracy, paired_difference</span>
+<span id="cb7-58"><a href="#cb7-58" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-59"><a href="#cb7-59" aria-hidden="true" tabindex="-1"></a>RUNS_DEV <span class="op">=</span> {</span>
+<span id="cb7-60"><a href="#cb7-60" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"predicted"</span>): <span class="st">"scores_untuned_dev_e0p_0_pred"</span>,</span>
+<span id="cb7-61"><a href="#cb7-61" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"gold"</span>): <span class="st">"scores_untuned_dev_e0p_0_gold"</span>,</span>
+<span id="cb7-62"><a href="#cb7-62" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"predicted"</span>): <span class="st">"scores_untuned_dev_e3p_0_pred"</span>,</span>
+<span id="cb7-63"><a href="#cb7-63" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"gold"</span>): <span class="st">"scores_untuned_dev_e3p_0_gold"</span>,</span>
+<span id="cb7-64"><a href="#cb7-64" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>): <span class="st">"scores_tuned_dev_main_0_pred"</span>,</span>
+<span id="cb7-65"><a href="#cb7-65" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>): <span class="st">"scores_tuned_dev_main_0_gold"</span>,</span>
+<span id="cb7-66"><a href="#cb7-66" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-67"><a href="#cb7-67" aria-hidden="true" tabindex="-1"></a>SCORES <span class="op">=</span> {</span>
+<span id="cb7-68"><a href="#cb7-68" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_untuned_dev_e0p_0_pred"</span>),</span>
+<span id="cb7-69"><a href="#cb7-69" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_untuned_dev_e0p_0_gold"</span>),</span>
+<span id="cb7-70"><a href="#cb7-70" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_untuned_dev_e3p_0_pred"</span>),</span>
+<span id="cb7-71"><a href="#cb7-71" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_untuned_dev_e3p_0_gold"</span>),</span>
+<span id="cb7-72"><a href="#cb7-72" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_tuned_dev_main_0_pred"</span>),</span>
+<span id="cb7-73"><a href="#cb7-73" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_tuned_dev_main_0_gold"</span>),</span>
+<span id="cb7-74"><a href="#cb7-74" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-75"><a href="#cb7-75" aria-hidden="true" tabindex="-1"></a>dev <span class="op">=</span> {k: <span class="bu">list</span>(h.jsonl(<span class="st">"scores.jsonl"</span>)) <span class="cf">for</span> k, h <span class="kw">in</span> SCORES.items()}</span>
+<span id="cb7-76"><a href="#cb7-76" aria-hidden="true" tabindex="-1"></a>dev_summary <span class="op">=</span> {k: h.json(<span class="st">"summary.json"</span>) <span class="cf">for</span> k, h <span class="kw">in</span> SCORES.items()}</span>
+<span id="cb7-77"><a href="#cb7-77" aria-hidden="true" tabindex="-1"></a>program <span class="op">=</span> {</span>
+<span id="cb7-78"><a href="#cb7-78" aria-hidden="true" tabindex="-1"></a>    k: [{<span class="op">**</span>s, <span class="st">"correct"</span>: s[<span class="st">"program_correct"</span>]} <span class="cf">for</span> s <span class="kw">in</span> v]</span>
+<span id="cb7-79"><a href="#cb7-79" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> k, v <span class="kw">in</span> dev.items()</span>
+<span id="cb7-80"><a href="#cb7-80" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-81"><a href="#cb7-81" aria-hidden="true" tabindex="-1"></a>ci <span class="op">=</span> {k: bootstrap_accuracy(v) <span class="cf">for</span> k, v <span class="kw">in</span> dev.items()}</span>
+<span id="cb7-82"><a href="#cb7-82" aria-hidden="true" tabindex="-1"></a>ci_program <span class="op">=</span> {k: bootstrap_accuracy(v) <span class="cf">for</span> k, v <span class="kw">in</span> program.items()}</span>
+<span id="cb7-83"><a href="#cb7-83" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-84"><a href="#cb7-84" aria-hidden="true" tabindex="-1"></a>n_turns <span class="op">=</span> {<span class="bu">len</span>(v) <span class="cf">for</span> v <span class="kw">in</span> dev.values()}</span>
+<span id="cb7-85"><a href="#cb7-85" aria-hidden="true" tabindex="-1"></a>dev_ids <span class="op">=</span> {s[<span class="st">"id"</span>] <span class="cf">for</span> s <span class="kw">in</span> dev[(<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>)]}</span>
+<span id="cb7-86"><a href="#cb7-86" aria-hidden="true" tabindex="-1"></a>n_conversations <span class="op">=</span> <span class="bu">len</span>(dev_ids)</span>
+<span id="cb7-87"><a href="#cb7-87" aria-hidden="true" tabindex="-1"></a>n_pages <span class="op">=</span> <span class="bu">len</span>({page_group(i) <span class="cf">for</span> i <span class="kw">in</span> dev_ids})</span>
+<span id="cb7-88"><a href="#cb7-88" aria-hidden="true" tabindex="-1"></a><span class="co"># all six runs cover the same turns, every turn of the split</span></span>
+<span id="cb7-89"><a href="#cb7-89" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">len</span>(n_turns) <span class="op">==</span> <span class="dv">1</span></span>
+<span id="cb7-90"><a href="#cb7-90" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-91"><a href="#cb7-91" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb7-92"><a href="#cb7-92" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb7-93"><a href="#cb7-93" aria-hidden="true" tabindex="-1"></a>        <span class="st">"history"</span>: [h <span class="cf">for</span> _, h <span class="kw">in</span> dev],</span>
+<span id="cb7-94"><a href="#cb7-94" aria-hidden="true" tabindex="-1"></a>        <span class="st">"execution accuracy"</span>: [</span>
+<span id="cb7-95"><a href="#cb7-95" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>ci[k][<span class="st">'accuracy'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb7-96"><a href="#cb7-96" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-97"><a href="#cb7-97" aria-hidden="true" tabindex="-1"></a>        <span class="st">"95</span><span class="sc">% i</span><span class="st">nterval"</span>: [</span>
+<span id="cb7-98"><a href="#cb7-98" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"[</span><span class="sc">{</span>ci[k][<span class="st">'low'</span>]<span class="sc">:.1%}</span><span class="ss">, </span><span class="sc">{</span>ci[k][<span class="st">'high'</span>]<span class="sc">:.1%}</span><span class="ss">]"</span> <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb7-99"><a href="#cb7-99" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-100"><a href="#cb7-100" aria-hidden="true" tabindex="-1"></a>        <span class="st">"program accuracy"</span>: [</span>
+<span id="cb7-101"><a href="#cb7-101" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>ci_program[k][<span class="st">'accuracy'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb7-102"><a href="#cb7-102" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-103"><a href="#cb7-103" aria-hidden="true" tabindex="-1"></a>        <span class="st">"invalid outputs"</span>: [</span>
+<span id="cb7-104"><a href="#cb7-104" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>dev_summary[k][<span class="st">'invalid_rate'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb7-105"><a href="#cb7-105" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-106"><a href="#cb7-106" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb7-107"><a href="#cb7-107" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>pd.Index([s <span class="cf">for</span> s, _ <span class="kw">in</span> dev], name<span class="op">=</span><span class="st">"system"</span>),</span>
+<span id="cb7-108"><a href="#cb7-108" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-109"><a href="#cb7-109" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb7-110"><a href="#cb7-110" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-111"><a href="#cb7-111" aria-hidden="true" tabindex="-1"></a>The split holds <span class="in">`{python} n_conversations`</span> conversations, written from <span class="in">`{python} n_pages`</span> report pages, and</span>
+<span id="cb7-112"><a href="#cb7-112" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} n_turns.pop()`</span> turns. In each row the interval</span>
+<span id="cb7-113"><a href="#cb7-113" aria-hidden="true" tabindex="-1"></a>comes from resampling whole report pages 10,000 times (@sec-evaluating); it covers the choice of</span>
+<span id="cb7-114"><a href="#cb7-114" aria-hidden="true" tabindex="-1"></a>pages, and not the training seed, which is the matter of the rule above.</span>
+<span id="cb7-115"><a href="#cb7-115" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-118"><a href="#cb7-118" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb7-119"><a href="#cb7-119" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb7-120"><a href="#cb7-120" aria-hidden="true" tabindex="-1"></a>contrasts <span class="op">=</span> {}</span>
+<span id="cb7-121"><a href="#cb7-121" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> history <span class="kw">in</span> (<span class="st">"predicted"</span>, <span class="st">"gold"</span>):</span>
+<span id="cb7-122"><a href="#cb7-122" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> other <span class="kw">in</span> (<span class="st">"untuned, e3p"</span>, <span class="st">"untuned, e0p"</span>):</span>
+<span id="cb7-123"><a href="#cb7-123" aria-hidden="true" tabindex="-1"></a>        contrasts[(other, history)] <span class="op">=</span> paired_difference(</span>
+<span id="cb7-124"><a href="#cb7-124" aria-hidden="true" tabindex="-1"></a>            dev[(<span class="st">"fine-tuned"</span>, history)], dev[(other, history)]</span>
+<span id="cb7-125"><a href="#cb7-125" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb7-126"><a href="#cb7-126" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-127"><a href="#cb7-127" aria-hidden="true" tabindex="-1"></a><span class="co"># the fine-tuned model is ahead of both untuned systems, in both</span></span>
+<span id="cb7-128"><a href="#cb7-128" aria-hidden="true" tabindex="-1"></a><span class="co"># histories, by more than the resampling noise: the seed rule does not fire</span></span>
+<span id="cb7-129"><a href="#cb7-129" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(c[<span class="st">"low"</span>] <span class="op">&gt;</span> <span class="dv">0</span> <span class="cf">for</span> c <span class="kw">in</span> contrasts.values())</span>
+<span id="cb7-130"><a href="#cb7-130" aria-hidden="true" tabindex="-1"></a><span class="co"># and the gold history is ahead of the predicted one</span></span>
+<span id="cb7-131"><a href="#cb7-131" aria-hidden="true" tabindex="-1"></a>gap_hist <span class="op">=</span> paired_difference(</span>
+<span id="cb7-132"><a href="#cb7-132" aria-hidden="true" tabindex="-1"></a>    dev[(<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>)], dev[(<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>)]</span>
+<span id="cb7-133"><a href="#cb7-133" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-134"><a href="#cb7-134" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> gap_hist[<span class="st">"low"</span>] <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb7-135"><a href="#cb7-135" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-136"><a href="#cb7-136" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb7-137"><a href="#cb7-137" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb7-138"><a href="#cb7-138" aria-hidden="true" tabindex="-1"></a>        <span class="st">"difference"</span>: [</span>
+<span id="cb7-139"><a href="#cb7-139" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> c[<span class="st">'difference'</span>]<span class="sc">:+.1f}</span><span class="ss">"</span> <span class="cf">for</span> c <span class="kw">in</span> contrasts.values()</span>
+<span id="cb7-140"><a href="#cb7-140" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-141"><a href="#cb7-141" aria-hidden="true" tabindex="-1"></a>        <span class="st">"95</span><span class="sc">% i</span><span class="st">nterval"</span>: [</span>
+<span id="cb7-142"><a href="#cb7-142" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"[</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> c[<span class="st">'low'</span>]<span class="sc">:+.1f}</span><span class="ss">, </span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> c[<span class="st">'high'</span>]<span class="sc">:+.1f}</span><span class="ss">]"</span></span>
+<span id="cb7-143"><a href="#cb7-143" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> c <span class="kw">in</span> contrasts.values()</span>
+<span id="cb7-144"><a href="#cb7-144" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-145"><a href="#cb7-145" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb7-146"><a href="#cb7-146" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>pd.MultiIndex.from_tuples(</span>
+<span id="cb7-147"><a href="#cb7-147" aria-hidden="true" tabindex="-1"></a>        [(<span class="ss">f"fine-tuned minus </span><span class="sc">{</span>o<span class="sc">}</span><span class="ss">"</span>, h) <span class="cf">for</span> (o, h) <span class="kw">in</span> contrasts],</span>
+<span id="cb7-148"><a href="#cb7-148" aria-hidden="true" tabindex="-1"></a>        names<span class="op">=</span>[<span class="st">"comparison"</span>, <span class="st">"history"</span>],</span>
+<span id="cb7-149"><a href="#cb7-149" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb7-150"><a href="#cb7-150" aria-hidden="true" tabindex="-1"></a>).rename_axis(columns<span class="op">=</span><span class="st">"points of execution accuracy"</span>)</span>
+<span id="cb7-151"><a href="#cb7-151" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb7-152"><a href="#cb7-152" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-153"><a href="#cb7-153" aria-hidden="true" tabindex="-1"></a>With the predicted history, the headline mode, the fine-tuned model answers</span>
+<span id="cb7-154"><a href="#cb7-154" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{ci[('fine-tuned', 'predicted')]['accuracy']:.1%}"`</span> of the turns correctly. The untuned model with the</span>
+<span id="cb7-155"><a href="#cb7-155" aria-hidden="true" tabindex="-1"></a>best prompt answers <span class="in">`{python} f"{ci[('untuned, e3p', 'predicted')]['accuracy']:.1%}"`</span>, and with the prompt the</span>
+<span id="cb7-156"><a href="#cb7-156" aria-hidden="true" tabindex="-1"></a>fine-tuned model is trained with <span class="in">`{python} f"{ci[('untuned, e0p', 'predicted')]['accuracy']:.1%}"`</span>. The paired</span>
+<span id="cb7-157"><a href="#cb7-157" aria-hidden="true" tabindex="-1"></a>interval of the fine-tuned model against the first is</span>
+<span id="cb7-158"><a href="#cb7-158" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">`{python} f"{100 * contrasts[('untuned, e3p', 'predicted')</span><span class="co">]['low']</span>:+.1f}"`,</span>
+<span id="cb7-159"><a href="#cb7-159" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{100 * contrasts[('untuned, e3p', 'predicted')]['high']:+.1f}"`</span>] points, and against the second</span>
+<span id="cb7-160"><a href="#cb7-160" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">`{python} f"{100 * contrasts[('untuned, e0p', 'predicted')</span><span class="co">]['low']</span>:+.1f}"`,</span>
+<span id="cb7-161"><a href="#cb7-161" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{100 * contrasts[('untuned, e0p', 'predicted')]['high']:+.1f}"`</span>]. The other two intervals, with the gold</span>
+<span id="cb7-162"><a href="#cb7-162" aria-hidden="true" tabindex="-1"></a>history, are in the table. **All four are far from zero, so the rule for more seeds did not fire, and the</span>
+<span id="cb7-163"><a href="#cb7-163" aria-hidden="true" tabindex="-1"></a>fine-tuned model of the book is the one seed.** The gold history lifts the fine-tuned model to</span>
+<span id="cb7-164"><a href="#cb7-164" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{ci[('fine-tuned', 'gold')]['accuracy']:.1%}"`</span>, <span class="in">`{python} f"{100 * gap_hist['difference']:+.1f}"`</span> points</span>
+<span id="cb7-165"><a href="#cb7-165" aria-hidden="true" tabindex="-1"></a>over its predicted-history score (paired interval <span class="co">[</span><span class="ot">`{python} f"{100 * gap_hist['low'</span><span class="co">]</span>:+.1f}"`,</span>
+<span id="cb7-166"><a href="#cb7-166" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{100 * gap_hist['high']:+.1f}"`</span>]): what the model loses to its own earlier mistakes, as on validation.</span>
+<span id="cb7-167"><a href="#cb7-167" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-168"><a href="#cb7-168" aria-hidden="true" tabindex="-1"></a>Program accuracy is lower than execution accuracy for every system, since it asks for the gold program and not only for</span>
+<span id="cb7-169"><a href="#cb7-169" aria-hidden="true" tabindex="-1"></a>its answer (@sec-evaluating). The failures are of different kinds before and after fine-tuning:</span>
+<span id="cb7-170"><a href="#cb7-170" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-173"><a href="#cb7-173" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb7-174"><a href="#cb7-174" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb7-175"><a href="#cb7-175" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.final_results <span class="im">import</span> outcome_counts</span>
+<span id="cb7-176"><a href="#cb7-176" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-177"><a href="#cb7-177" aria-hidden="true" tabindex="-1"></a>outcomes <span class="op">=</span> pd.DataFrame({</span>
+<span id="cb7-178"><a href="#cb7-178" aria-hidden="true" tabindex="-1"></a>    <span class="ss">f"</span><span class="sc">{</span>s<span class="sc">}</span><span class="ss">, </span><span class="sc">{</span>h<span class="sc">}</span><span class="ss">"</span>: outcome_counts(dev_summary[(s, h)])</span>
+<span id="cb7-179"><a href="#cb7-179" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (s, h) <span class="kw">in</span> dev</span>
+<span id="cb7-180"><a href="#cb7-180" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb7-181"><a href="#cb7-181" aria-hidden="true" tabindex="-1"></a>outcomes_pred <span class="op">=</span> {s: outcome_counts(dev_summary[(s, <span class="st">"predicted"</span>)]) <span class="cf">for</span> s, _ <span class="kw">in</span> dev}</span>
+<span id="cb7-182"><a href="#cb7-182" aria-hidden="true" tabindex="-1"></a>tuned <span class="op">=</span> outcomes_pred[<span class="st">"fine-tuned"</span>]</span>
+<span id="cb7-183"><a href="#cb7-183" aria-hidden="true" tabindex="-1"></a>wrong_tuned <span class="op">=</span> <span class="bu">sum</span>(tuned.values()) <span class="op">-</span> tuned[<span class="st">"correct"</span>]</span>
+<span id="cb7-184"><a href="#cb7-184" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-185"><a href="#cb7-185" aria-hidden="true" tabindex="-1"></a><span class="co"># the untuned model loses most turns to the format of its answer; what is</span></span>
+<span id="cb7-186"><a href="#cb7-186" aria-hidden="true" tabindex="-1"></a><span class="co"># left after fine-tuning is mostly valid programs that are wrong</span></span>
+<span id="cb7-187"><a href="#cb7-187" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> outcomes_pred[<span class="st">"untuned, e0p"</span>][<span class="st">"invalid output"</span>] <span class="op">\</span></span>
+<span id="cb7-188"><a href="#cb7-188" aria-hidden="true" tabindex="-1"></a>    <span class="op">&gt;</span> outcomes_pred[<span class="st">"untuned, e0p"</span>][<span class="st">"correct"</span>]</span>
+<span id="cb7-189"><a href="#cb7-189" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> tuned[<span class="st">"invalid output"</span>] <span class="op">&lt;=</span> <span class="fl">0.05</span> <span class="op">*</span> wrong_tuned</span>
+<span id="cb7-190"><a href="#cb7-190" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> tuned[<span class="st">"wrong numbers"</span>] <span class="op">==</span> <span class="bu">max</span>(</span>
+<span id="cb7-191"><a href="#cb7-191" aria-hidden="true" tabindex="-1"></a>    tuned[k] <span class="cf">for</span> k <span class="kw">in</span> (</span>
+<span id="cb7-192"><a href="#cb7-192" aria-hidden="true" tabindex="-1"></a>        <span class="st">"wrong operations"</span>, <span class="st">"wrong numbers"</span>, <span class="st">"wrong answer, right shape"</span></span>
+<span id="cb7-193"><a href="#cb7-193" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-194"><a href="#cb7-194" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-195"><a href="#cb7-195" aria-hidden="true" tabindex="-1"></a>outcomes</span>
+<span id="cb7-196"><a href="#cb7-196" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb7-197"><a href="#cb7-197" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-198"><a href="#cb7-198" aria-hidden="true" tabindex="-1"></a>With the prompt it is trained on, the untuned model writes a program that runs in</span>
+<span id="cb7-199"><a href="#cb7-199" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} sum(outcomes_pred["untuned, e0p"][k] for k in ("correct", "wrong operations", "wrong numbers", "wrong answer, right shape"))`</span></span>
+<span id="cb7-200"><a href="#cb7-200" aria-hidden="true" tabindex="-1"></a>of its <span class="in">`{python} sum(outcomes_pred["untuned, e0p"].values())`</span> turns, so most of its mistakes are the format of the</span>
+<span id="cb7-201"><a href="#cb7-201" aria-hidden="true" tabindex="-1"></a>answer. After fine-tuning, <span class="in">`{python} tuned["invalid output"]`</span> of the <span class="in">`{python} wrong_tuned`</span> wrong turns are not a</span>
+<span id="cb7-202"><a href="#cb7-202" aria-hidden="true" tabindex="-1"></a>program, and the largest group is valid programs with other numbers (<span class="in">`{python} tuned["wrong numbers"]`</span>). As on</span>
+<span id="cb7-203"><a href="#cb7-203" aria-hidden="true" tabindex="-1"></a>validation, what fine-tuning leaves behind is a reading and reasoning failure, not a writing failure. The book does not</span>
+<span id="cb7-204"><a href="#cb7-204" aria-hidden="true" tabindex="-1"></a>label these dev errors one by one: the error analysis of @sec-evaluating-errors was done on validation, so that no</span>
+<span id="cb7-205"><a href="#cb7-205" aria-hidden="true" tabindex="-1"></a>development failure was read before the freeze.</span>
+<span id="cb7-206"><a href="#cb7-206" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-207"><a href="#cb7-207" aria-hidden="true" tabindex="-1"></a><span class="fu">## How much of the gap does a prompt close?</span></span>
+<span id="cb7-208"><a href="#cb7-208" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-209"><a href="#cb7-209" aria-hidden="true" tabindex="-1"></a>The untuned model with <span class="in">`e0p`</span> and the fine-tuned model see the same input, so the distance between them is what</span>
+<span id="cb7-210"><a href="#cb7-210" aria-hidden="true" tabindex="-1"></a>fine-tuning adds. The untuned model with <span class="in">`e3p`</span> has the best prompt that validation found. How much of that distance has</span>
+<span id="cb7-211"><a href="#cb7-211" aria-hidden="true" tabindex="-1"></a>the prompt already covered?</span>
+<span id="cb7-212"><a href="#cb7-212" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-215"><a href="#cb7-215" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb7-216"><a href="#cb7-216" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb7-217"><a href="#cb7-217" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.final_results <span class="im">import</span> share_of_gap_closed</span>
+<span id="cb7-218"><a href="#cb7-218" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-219"><a href="#cb7-219" aria-hidden="true" tabindex="-1"></a>closed <span class="op">=</span> {</span>
+<span id="cb7-220"><a href="#cb7-220" aria-hidden="true" tabindex="-1"></a>    h: share_of_gap_closed(</span>
+<span id="cb7-221"><a href="#cb7-221" aria-hidden="true" tabindex="-1"></a>        dev[(<span class="st">"untuned, e0p"</span>, h)], dev[(<span class="st">"untuned, e3p"</span>, h)], dev[(<span class="st">"fine-tuned"</span>, h)]</span>
+<span id="cb7-222"><a href="#cb7-222" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-223"><a href="#cb7-223" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> h <span class="kw">in</span> (<span class="st">"predicted"</span>, <span class="st">"gold"</span>)</span>
+<span id="cb7-224"><a href="#cb7-224" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-225"><a href="#cb7-225" aria-hidden="true" tabindex="-1"></a><span class="co"># the prompt closes a large part of the distance, but not all of it:</span></span>
+<span id="cb7-226"><a href="#cb7-226" aria-hidden="true" tabindex="-1"></a><span class="co"># the interval stays between 1/2 and 1 in both histories</span></span>
+<span id="cb7-227"><a href="#cb7-227" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(<span class="fl">0.5</span> <span class="op">&lt;</span> c[<span class="st">"low"</span>] <span class="kw">and</span> c[<span class="st">"high"</span>] <span class="op">&lt;</span> <span class="dv">1</span> <span class="cf">for</span> c <span class="kw">in</span> closed.values())</span>
+<span id="cb7-228"><a href="#cb7-228" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-229"><a href="#cb7-229" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb7-230"><a href="#cb7-230" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb7-231"><a href="#cb7-231" aria-hidden="true" tabindex="-1"></a>        <span class="st">"gap, fine-tuned minus e0p"</span>: [</span>
+<span id="cb7-232"><a href="#cb7-232" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> c[<span class="st">'gap'</span>]<span class="sc">:.1f}</span><span class="ss"> points"</span> <span class="cf">for</span> c <span class="kw">in</span> closed.values()</span>
+<span id="cb7-233"><a href="#cb7-233" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-234"><a href="#cb7-234" aria-hidden="true" tabindex="-1"></a>        <span class="st">"covered by the e3p prompt"</span>: [</span>
+<span id="cb7-235"><a href="#cb7-235" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"</span><span class="sc">{</span>c[<span class="st">'share'</span>]<span class="sc">:.0%}</span><span class="ss">"</span> <span class="cf">for</span> c <span class="kw">in</span> closed.values()</span>
+<span id="cb7-236"><a href="#cb7-236" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-237"><a href="#cb7-237" aria-hidden="true" tabindex="-1"></a>        <span class="st">"95</span><span class="sc">% i</span><span class="st">nterval"</span>: [</span>
+<span id="cb7-238"><a href="#cb7-238" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"[</span><span class="sc">{</span>c[<span class="st">'low'</span>]<span class="sc">:.0%}</span><span class="ss">, </span><span class="sc">{</span>c[<span class="st">'high'</span>]<span class="sc">:.0%}</span><span class="ss">]"</span> <span class="cf">for</span> c <span class="kw">in</span> closed.values()</span>
+<span id="cb7-239"><a href="#cb7-239" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-240"><a href="#cb7-240" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb7-241"><a href="#cb7-241" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>pd.Index(<span class="bu">list</span>(closed), name<span class="op">=</span><span class="st">"history"</span>),</span>
+<span id="cb7-242"><a href="#cb7-242" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-243"><a href="#cb7-243" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb7-244"><a href="#cb7-244" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-245"><a href="#cb7-245" aria-hidden="true" tabindex="-1"></a>With the predicted history the prompt covers <span class="in">`{python} f"{closed['predicted']['share']:.0%}"`</span> of the distance, and with</span>
+<span id="cb7-246"><a href="#cb7-246" aria-hidden="true" tabindex="-1"></a>the gold history <span class="in">`{python} f"{closed['gold']['share']:.0%}"`</span>. Most of what fine-tuning adds can be had from a good prompt</span>
+<span id="cb7-247"><a href="#cb7-247" aria-hidden="true" tabindex="-1"></a>with three examples, and the rest, the part that the prompt cannot reach, is</span>
+<span id="cb7-248"><a href="#cb7-248" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{100 * (contrasts[('untuned, e3p', 'predicted')]['difference']):.1f}"`</span> points with the predicted history. Two</span>
+<span id="cb7-249"><a href="#cb7-249" aria-hidden="true" tabindex="-1"></a>things limit how far to read this. The prompt was developed on validation over several variants, while the</span>
+<span id="cb7-250"><a href="#cb7-250" aria-hidden="true" tabindex="-1"></a>fine-tuning configuration was fixed in advance, which favours the prompt. And the prompt is limited to describing the</span>
+<span id="cb7-251"><a href="#cb7-251" aria-hidden="true" tabindex="-1"></a>language: it does not teach the annotation conventions that the fine-tuning data show (@sec-baseline), which a longer prompt</span>
+<span id="cb7-252"><a href="#cb7-252" aria-hidden="true" tabindex="-1"></a>could. The two routes also cost different amounts at inference: the examples make the prompt longer than the fine-tuned</span>
+<span id="cb7-253"><a href="#cb7-253" aria-hidden="true" tabindex="-1"></a>model's (@sec-evaluating measures it on validation).</span>
+<span id="cb7-254"><a href="#cb7-254" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-255"><a href="#cb7-255" aria-hidden="true" tabindex="-1"></a><span class="fu">## Next to published results</span></span>
+<span id="cb7-256"><a href="#cb7-256" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-257"><a href="#cb7-257" aria-hidden="true" tabindex="-1"></a>The published numbers come from different set-ups, so this is a loose comparison. FinQANet <span class="co">[</span><span class="ot">@chen2022convfinqa</span><span class="co">]</span> is</span>
+<span id="cb7-258"><a href="#cb7-258" aria-hidden="true" tabindex="-1"></a>given facts retrieved from the page, and its gold-facts variant and the few-shot GPT-3 of the same paper are given the</span>
+<span id="cb7-259"><a href="#cb7-259" aria-hidden="true" tabindex="-1"></a>facts that the annotators marked; ours reads the whole page. Our predicted history is the closest to how a</span>
+<span id="cb7-260"><a href="#cb7-260" aria-hidden="true" tabindex="-1"></a>published system would be used, and the gold history is an upper bound. Fin-R1 uses its own protocol (below). Nothing here is a leaderboard.</span>
+<span id="cb7-261"><a href="#cb7-261" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-264"><a href="#cb7-264" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb7-265"><a href="#cb7-265" aria-hidden="true" tabindex="-1"></a><span class="co">#| label: fig-published</span></span>
+<span id="cb7-266"><a href="#cb7-266" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-cap: "Execution accuracy on ConvFinQA, published results (grey diamonds, with what each paper says about its evaluation set) and three systems of this book on the development split (circles and a square, with the 95% interval). The set-ups differ: the published results are not run on the same input."</span></span>
+<span id="cb7-267"><a href="#cb7-267" aria-hidden="true" tabindex="-1"></a><span class="co">#| fig-alt: "Dot chart of execution accuracy, one row per system, sorted from lowest to highest. Published results are grey diamonds, this book's systems are coloured with horizontal intervals. The fine-tuned model with predicted history sits between the published systems."</span></span>
+<span id="cb7-268"><a href="#cb7-268" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb7-269"><a href="#cb7-269" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.final_results <span class="im">import</span> PUBLISHED</span>
+<span id="cb7-270"><a href="#cb7-270" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-271"><a href="#cb7-271" aria-hidden="true" tabindex="-1"></a>ours <span class="op">=</span> [</span>
+<span id="cb7-272"><a href="#cb7-272" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb7-273"><a href="#cb7-273" aria-hidden="true" tabindex="-1"></a>        <span class="st">"this book, fine-tuned, predicted history"</span>,</span>
+<span id="cb7-274"><a href="#cb7-274" aria-hidden="true" tabindex="-1"></a>        (<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>), <span class="st">"#b85450"</span>, <span class="st">"o"</span></span>
+<span id="cb7-275"><a href="#cb7-275" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb7-276"><a href="#cb7-276" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb7-277"><a href="#cb7-277" aria-hidden="true" tabindex="-1"></a>        <span class="st">"this book, fine-tuned, gold history (upper bound)"</span>,</span>
+<span id="cb7-278"><a href="#cb7-278" aria-hidden="true" tabindex="-1"></a>        (<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>), <span class="st">"#3b6ea5"</span>, <span class="st">"o"</span></span>
+<span id="cb7-279"><a href="#cb7-279" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb7-280"><a href="#cb7-280" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb7-281"><a href="#cb7-281" aria-hidden="true" tabindex="-1"></a>        <span class="st">"this book, untuned, e3p, predicted history"</span>,</span>
+<span id="cb7-282"><a href="#cb7-282" aria-hidden="true" tabindex="-1"></a>        (<span class="st">"untuned, e3p"</span>, <span class="st">"predicted"</span>), <span class="st">"#b85450"</span>, <span class="st">"s"</span></span>
+<span id="cb7-283"><a href="#cb7-283" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb7-284"><a href="#cb7-284" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb7-285"><a href="#cb7-285" aria-hidden="true" tabindex="-1"></a>rows <span class="op">=</span> [</span>
+<span id="cb7-286"><a href="#cb7-286" aria-hidden="true" tabindex="-1"></a>    (<span class="ss">f"</span><span class="sc">{</span>p[<span class="st">'label'</span>]<span class="sc">}</span><span class="ss"> (</span><span class="sc">{</span>p[<span class="st">'split'</span>]<span class="sc">}</span><span class="ss">)"</span>, p[<span class="st">"accuracy"</span>], <span class="va">None</span>, <span class="va">None</span>, <span class="st">"#6b6b6b"</span>, <span class="st">"D"</span>)</span>
+<span id="cb7-287"><a href="#cb7-287" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> p <span class="kw">in</span> PUBLISHED</span>
+<span id="cb7-288"><a href="#cb7-288" aria-hidden="true" tabindex="-1"></a>] <span class="op">+</span> [</span>
+<span id="cb7-289"><a href="#cb7-289" aria-hidden="true" tabindex="-1"></a>    (</span>
+<span id="cb7-290"><a href="#cb7-290" aria-hidden="true" tabindex="-1"></a>        label, <span class="dv">100</span> <span class="op">*</span> ci[k][<span class="st">"accuracy"</span>], <span class="dv">100</span> <span class="op">*</span> ci[k][<span class="st">"low"</span>],</span>
+<span id="cb7-291"><a href="#cb7-291" aria-hidden="true" tabindex="-1"></a>        <span class="dv">100</span> <span class="op">*</span> ci[k][<span class="st">"high"</span>], colour, marker</span>
+<span id="cb7-292"><a href="#cb7-292" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-293"><a href="#cb7-293" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> label, k, colour, marker <span class="kw">in</span> ours</span>
+<span id="cb7-294"><a href="#cb7-294" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb7-295"><a href="#cb7-295" aria-hidden="true" tabindex="-1"></a>rows.sort(key<span class="op">=</span><span class="kw">lambda</span> r: r[<span class="dv">1</span>])</span>
+<span id="cb7-296"><a href="#cb7-296" aria-hidden="true" tabindex="-1"></a>ours_rank <span class="op">=</span> {</span>
+<span id="cb7-297"><a href="#cb7-297" aria-hidden="true" tabindex="-1"></a>    name: i <span class="cf">for</span> i, (name, <span class="op">*</span>_) <span class="kw">in</span> <span class="bu">enumerate</span>(rows) <span class="cf">if</span> name.startswith(<span class="st">"this book"</span>)</span>
+<span id="cb7-298"><a href="#cb7-298" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-299"><a href="#cb7-299" aria-hidden="true" tabindex="-1"></a>fine_tuned_rank <span class="op">=</span> ours_rank[<span class="st">"this book, fine-tuned, predicted history"</span>]</span>
+<span id="cb7-300"><a href="#cb7-300" aria-hidden="true" tabindex="-1"></a>published_above <span class="op">=</span> <span class="bu">sum</span>(</span>
+<span id="cb7-301"><a href="#cb7-301" aria-hidden="true" tabindex="-1"></a>    <span class="dv">1</span> <span class="cf">for</span> name, value, <span class="op">*</span>_ <span class="kw">in</span> rows</span>
+<span id="cb7-302"><a href="#cb7-302" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> name.startswith(<span class="st">"this book"</span>) <span class="kw">and</span> value <span class="op">&gt;</span> rows[fine_tuned_rank][<span class="dv">1</span>]</span>
+<span id="cb7-303"><a href="#cb7-303" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-304"><a href="#cb7-304" aria-hidden="true" tabindex="-1"></a>published_below <span class="op">=</span> <span class="bu">sum</span>(</span>
+<span id="cb7-305"><a href="#cb7-305" aria-hidden="true" tabindex="-1"></a>    <span class="dv">1</span> <span class="cf">for</span> name, value, <span class="op">*</span>_ <span class="kw">in</span> rows</span>
+<span id="cb7-306"><a href="#cb7-306" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="kw">not</span> name.startswith(<span class="st">"this book"</span>) <span class="kw">and</span> value <span class="op">&lt;</span> rows[fine_tuned_rank][<span class="dv">1</span>]</span>
+<span id="cb7-307"><a href="#cb7-307" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-308"><a href="#cb7-308" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-309"><a href="#cb7-309" aria-hidden="true" tabindex="-1"></a><span class="co"># the fine-tuned model sits inside the published range, not at an end of it</span></span>
+<span id="cb7-310"><a href="#cb7-310" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> published_above <span class="op">&gt;</span> <span class="dv">0</span> <span class="kw">and</span> published_below <span class="op">&gt;</span> <span class="dv">0</span></span>
+<span id="cb7-311"><a href="#cb7-311" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-312"><a href="#cb7-312" aria-hidden="true" tabindex="-1"></a>fig, ax <span class="op">=</span> plt.subplots(figsize<span class="op">=</span>(<span class="fl">7.5</span>, <span class="fl">4.6</span>))</span>
+<span id="cb7-313"><a href="#cb7-313" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i, (name, value, low, high, colour, marker) <span class="kw">in</span> <span class="bu">enumerate</span>(rows):</span>
+<span id="cb7-314"><a href="#cb7-314" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> low <span class="kw">is</span> <span class="kw">not</span> <span class="va">None</span>:</span>
+<span id="cb7-315"><a href="#cb7-315" aria-hidden="true" tabindex="-1"></a>        ax.hlines(i, low, high, color<span class="op">=</span>colour, linewidth<span class="op">=</span><span class="dv">2</span>, zorder<span class="op">=</span><span class="dv">2</span>)</span>
+<span id="cb7-316"><a href="#cb7-316" aria-hidden="true" tabindex="-1"></a>    ax.plot(</span>
+<span id="cb7-317"><a href="#cb7-317" aria-hidden="true" tabindex="-1"></a>        value, i, marker, color<span class="op">=</span>colour, markersize<span class="op">=</span><span class="dv">7</span>, zorder<span class="op">=</span><span class="dv">3</span>,</span>
+<span id="cb7-318"><a href="#cb7-318" aria-hidden="true" tabindex="-1"></a>        markerfacecolor<span class="op">=</span>(</span>
+<span id="cb7-319"><a href="#cb7-319" aria-hidden="true" tabindex="-1"></a>            <span class="st">"white"</span> <span class="cf">if</span> name.startswith(<span class="st">"this book, untuned"</span>)</span>
+<span id="cb7-320"><a href="#cb7-320" aria-hidden="true" tabindex="-1"></a>            <span class="cf">else</span> colour</span>
+<span id="cb7-321"><a href="#cb7-321" aria-hidden="true" tabindex="-1"></a>        ),</span>
+<span id="cb7-322"><a href="#cb7-322" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-323"><a href="#cb7-323" aria-hidden="true" tabindex="-1"></a>    ax.text(</span>
+<span id="cb7-324"><a href="#cb7-324" aria-hidden="true" tabindex="-1"></a>        value <span class="op">+</span> (<span class="fl">2.5</span> <span class="cf">if</span> low <span class="kw">is</span> <span class="va">None</span> <span class="cf">else</span> (high <span class="op">-</span> value) <span class="op">+</span> <span class="fl">1.5</span>), i, <span class="ss">f"</span><span class="sc">{</span>value<span class="sc">:.1f}</span><span class="ss">"</span>,</span>
+<span id="cb7-325"><a href="#cb7-325" aria-hidden="true" tabindex="-1"></a>        va<span class="op">=</span><span class="st">"center"</span>, fontsize<span class="op">=</span><span class="dv">8</span>, color<span class="op">=</span><span class="st">"#444444"</span></span>
+<span id="cb7-326"><a href="#cb7-326" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb7-327"><a href="#cb7-327" aria-hidden="true" tabindex="-1"></a>ax.set_yticks(<span class="bu">range</span>(<span class="bu">len</span>(rows)), [r[<span class="dv">0</span>] <span class="cf">for</span> r <span class="kw">in</span> rows], fontsize<span class="op">=</span><span class="dv">8</span>)</span>
+<span id="cb7-328"><a href="#cb7-328" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> tick, (name, <span class="op">*</span>_) <span class="kw">in</span> <span class="bu">zip</span>(ax.get_yticklabels(), rows):</span>
+<span id="cb7-329"><a href="#cb7-329" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> name.startswith(<span class="st">"this book"</span>):</span>
+<span id="cb7-330"><a href="#cb7-330" aria-hidden="true" tabindex="-1"></a>        tick.set_fontweight(<span class="st">"bold"</span>)</span>
+<span id="cb7-331"><a href="#cb7-331" aria-hidden="true" tabindex="-1"></a>ax.set_xlim(<span class="dv">0</span>, <span class="dv">100</span>)</span>
+<span id="cb7-332"><a href="#cb7-332" aria-hidden="true" tabindex="-1"></a>ax.set_xlabel(<span class="st">"execution accuracy (%)"</span>)</span>
+<span id="cb7-333"><a href="#cb7-333" aria-hidden="true" tabindex="-1"></a>ax.grid(axis<span class="op">=</span><span class="st">"x"</span>, color<span class="op">=</span><span class="st">"#dddddd"</span>, linewidth<span class="op">=</span><span class="fl">0.6</span>)</span>
+<span id="cb7-334"><a href="#cb7-334" aria-hidden="true" tabindex="-1"></a>ax.set_axisbelow(<span class="va">True</span>)</span>
+<span id="cb7-335"><a href="#cb7-335" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> side <span class="kw">in</span> (<span class="st">"top"</span>, <span class="st">"right"</span>, <span class="st">"left"</span>):</span>
+<span id="cb7-336"><a href="#cb7-336" aria-hidden="true" tabindex="-1"></a>    ax.spines[side].set_visible(<span class="va">False</span>)</span>
+<span id="cb7-337"><a href="#cb7-337" aria-hidden="true" tabindex="-1"></a>ax.tick_params(axis<span class="op">=</span><span class="st">"y"</span>, length<span class="op">=</span><span class="dv">0</span>)</span>
+<span id="cb7-338"><a href="#cb7-338" aria-hidden="true" tabindex="-1"></a>fig.tight_layout()</span>
+<span id="cb7-339"><a href="#cb7-339" aria-hidden="true" tabindex="-1"></a>plt.show()</span>
+<span id="cb7-340"><a href="#cb7-340" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb7-341"><a href="#cb7-341" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-342"><a href="#cb7-342" aria-hidden="true" tabindex="-1"></a>On development, with the predicted history, the fine-tuned model is ahead of <span class="in">`{python} published_below`</span> of the</span>
+<span id="cb7-343"><a href="#cb7-343" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} len(PUBLISHED)`</span> published rows and behind <span class="in">`{python} published_above`</span>; the gold-history point is an upper</span>
+<span id="cb7-344"><a href="#cb7-344" aria-hidden="true" tabindex="-1"></a>bound and is not comparable with them. The bold rows are ours. Two things keep the comparison loose: the inputs</span>
+<span id="cb7-345"><a href="#cb7-345" aria-hidden="true" tabindex="-1"></a>differ (above), and some rows do not say which split they use (FinQANet) or use a sample of 200 questions (the two human</span>
+<span id="cb7-346"><a href="#cb7-346" aria-hidden="true" tabindex="-1"></a>rows). @fig-published is a map of where the number sits and not a ranking: a difference of a couple of points between</span>
+<span id="cb7-347"><a href="#cb7-347" aria-hidden="true" tabindex="-1"></a>rows is not a finding.</span>
+<span id="cb7-348"><a href="#cb7-348" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-349"><a href="#cb7-349" aria-hidden="true" tabindex="-1"></a>The ConvFinQA paper <span class="co">[</span><span class="ot">@chen2022convfinqa</span><span class="co">]</span> gives the crowd, GPT-3, FinQANet and human rows (GPT-3 from its Table 5, the</span>
+<span id="cb7-350"><a href="#cb7-350" aria-hidden="true" tabindex="-1"></a>others from its Table 3), @li2023gpt the GPT-4 row, and @khatuya2025finder the PoT-GPT-4, ENCORE and FINDER rows.</span>
+<span id="cb7-351"><a href="#cb7-351" aria-hidden="true" tabindex="-1"></a>Fin-R1 <span class="co">[</span><span class="ot">@liu2025finr1</span><span class="co">]</span> also reports a ConvFinQA figure, but its answers are judged by a language model on a random</span>
+<span id="cb7-352"><a href="#cb7-352" aria-hidden="true" tabindex="-1"></a>sample whose split it does not state, so it measures something else and is left out.</span>
+<span id="cb7-353"><a href="#cb7-353" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-354"><a href="#cb7-354" aria-hidden="true" tabindex="-1"></a><span class="fu">## Were the validation numbers optimistic?</span></span>
+<span id="cb7-355"><a href="#cb7-355" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-356"><a href="#cb7-356" aria-hidden="true" tabindex="-1"></a>The choices of the book were made on validation: the prompt, the checkpoint, the grammar, the format. If a choice had</span>
+<span id="cb7-357"><a href="#cb7-357" aria-hidden="true" tabindex="-1"></a>fitted the validation conversations in a way that does not carry over, the development numbers would be lower. The</span>
+<span id="cb7-358"><a href="#cb7-358" aria-hidden="true" tabindex="-1"></a>check is the same three systems, both histories, on the two splits. The splits hold different pages, so each</span>
+<span id="cb7-359"><a href="#cb7-359" aria-hidden="true" tabindex="-1"></a>accuracy is resampled on its own, and the interval is for the difference of the two.</span>
+<span id="cb7-360"><a href="#cb7-360" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-363"><a href="#cb7-363" aria-hidden="true" tabindex="-1"></a><span class="in">```{python}</span></span>
+<span id="cb7-364"><a href="#cb7-364" aria-hidden="true" tabindex="-1"></a><span class="co">#HEAVY</span></span>
+<span id="cb7-365"><a href="#cb7-365" aria-hidden="true" tabindex="-1"></a><span class="im">from</span> convfinqa.final_results <span class="im">import</span> split_difference</span>
+<span id="cb7-366"><a href="#cb7-366" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-367"><a href="#cb7-367" aria-hidden="true" tabindex="-1"></a>VAL_SCORES <span class="op">=</span> {</span>
+<span id="cb7-368"><a href="#cb7-368" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_untuned_val_e0p_0_pred"</span>),</span>
+<span id="cb7-369"><a href="#cb7-369" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e0p"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_untuned_val_e0p_0_gold"</span>),</span>
+<span id="cb7-370"><a href="#cb7-370" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_untuned_val_e3p_0_pred"</span>),</span>
+<span id="cb7-371"><a href="#cb7-371" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"untuned, e3p"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_untuned_val_e3p_0_gold"</span>),</span>
+<span id="cb7-372"><a href="#cb7-372" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"predicted"</span>): get(<span class="st">"scores_tuned_val_main_0_pred"</span>),</span>
+<span id="cb7-373"><a href="#cb7-373" aria-hidden="true" tabindex="-1"></a>    (<span class="st">"fine-tuned"</span>, <span class="st">"gold"</span>): get(<span class="st">"scores_tuned_val_main_0_gold"</span>),</span>
+<span id="cb7-374"><a href="#cb7-374" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb7-375"><a href="#cb7-375" aria-hidden="true" tabindex="-1"></a>val <span class="op">=</span> {k: <span class="bu">list</span>(h.jsonl(<span class="st">"scores.jsonl"</span>)) <span class="cf">for</span> k, h <span class="kw">in</span> VAL_SCORES.items()}</span>
+<span id="cb7-376"><a href="#cb7-376" aria-hidden="true" tabindex="-1"></a>ci_val <span class="op">=</span> {k: bootstrap_accuracy(v) <span class="cf">for</span> k, v <span class="kw">in</span> val.items()}</span>
+<span id="cb7-377"><a href="#cb7-377" aria-hidden="true" tabindex="-1"></a>moved <span class="op">=</span> {k: split_difference(dev[k], val[k]) <span class="cf">for</span> k <span class="kw">in</span> dev}</span>
+<span id="cb7-378"><a href="#cb7-378" aria-hidden="true" tabindex="-1"></a>significant <span class="op">=</span> [k <span class="cf">for</span> k, m <span class="kw">in</span> moved.items() <span class="cf">if</span> m[<span class="st">"excludes_zero"</span>]]</span>
+<span id="cb7-379"><a href="#cb7-379" aria-hidden="true" tabindex="-1"></a><span class="co"># the sentence below names the exception: the untuned model with the training prompt, which does not move with the training</span></span>
+<span id="cb7-380"><a href="#cb7-380" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> significant</span>
+<span id="cb7-381"><a href="#cb7-381" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-382"><a href="#cb7-382" aria-hidden="true" tabindex="-1"></a><span class="co"># nothing that validation chose is significantly worse on dev: the two</span></span>
+<span id="cb7-383"><a href="#cb7-383" aria-hidden="true" tabindex="-1"></a><span class="co"># systems that went through the book's choices (the fine-tuned model and the</span></span>
+<span id="cb7-384"><a href="#cb7-384" aria-hidden="true" tabindex="-1"></a><span class="co"># prompt picked on validation) stay within the noise</span></span>
+<span id="cb7-385"><a href="#cb7-385" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="kw">not</span> <span class="bu">any</span>(s <span class="kw">in</span> (<span class="st">"fine-tuned"</span>, <span class="st">"untuned, e3p"</span>) <span class="cf">for</span> s, _ <span class="kw">in</span> significant)</span>
+<span id="cb7-386"><a href="#cb7-386" aria-hidden="true" tabindex="-1"></a><span class="co"># and the fine-tuned model scores lower on dev than on val in both histories,</span></span>
+<span id="cb7-387"><a href="#cb7-387" aria-hidden="true" tabindex="-1"></a><span class="co"># as selection on val would make it, though not by more than the noise</span></span>
+<span id="cb7-388"><a href="#cb7-388" aria-hidden="true" tabindex="-1"></a><span class="cf">assert</span> <span class="bu">all</span>(</span>
+<span id="cb7-389"><a href="#cb7-389" aria-hidden="true" tabindex="-1"></a>    moved[(<span class="st">"fine-tuned"</span>, h)][<span class="st">"difference"</span>] <span class="op">&lt;</span> <span class="dv">0</span> <span class="cf">for</span> h <span class="kw">in</span> (<span class="st">"predicted"</span>, <span class="st">"gold"</span>)</span>
+<span id="cb7-390"><a href="#cb7-390" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-391"><a href="#cb7-391" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-392"><a href="#cb7-392" aria-hidden="true" tabindex="-1"></a>pd.DataFrame(</span>
+<span id="cb7-393"><a href="#cb7-393" aria-hidden="true" tabindex="-1"></a>    {</span>
+<span id="cb7-394"><a href="#cb7-394" aria-hidden="true" tabindex="-1"></a>        <span class="st">"validation"</span>: [<span class="ss">f"</span><span class="sc">{</span>ci_val[k][<span class="st">'accuracy'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev],</span>
+<span id="cb7-395"><a href="#cb7-395" aria-hidden="true" tabindex="-1"></a>        <span class="st">"development"</span>: [<span class="ss">f"</span><span class="sc">{</span>ci[k][<span class="st">'accuracy'</span>]<span class="sc">:.1%}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev],</span>
+<span id="cb7-396"><a href="#cb7-396" aria-hidden="true" tabindex="-1"></a>        <span class="st">"difference"</span>: [<span class="ss">f"</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> moved[k][<span class="st">'difference'</span>]<span class="sc">:+.1f}</span><span class="ss">"</span> <span class="cf">for</span> k <span class="kw">in</span> dev],</span>
+<span id="cb7-397"><a href="#cb7-397" aria-hidden="true" tabindex="-1"></a>        <span class="st">"95</span><span class="sc">% i</span><span class="st">nterval"</span>: [</span>
+<span id="cb7-398"><a href="#cb7-398" aria-hidden="true" tabindex="-1"></a>            <span class="ss">f"[</span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> moved[k][<span class="st">'low'</span>]<span class="sc">:+.1f}</span><span class="ss">, </span><span class="sc">{</span><span class="dv">100</span> <span class="op">*</span> moved[k][<span class="st">'high'</span>]<span class="sc">:+.1f}</span><span class="ss">]"</span></span>
+<span id="cb7-399"><a href="#cb7-399" aria-hidden="true" tabindex="-1"></a>            <span class="cf">for</span> k <span class="kw">in</span> dev</span>
+<span id="cb7-400"><a href="#cb7-400" aria-hidden="true" tabindex="-1"></a>        ],</span>
+<span id="cb7-401"><a href="#cb7-401" aria-hidden="true" tabindex="-1"></a>    },</span>
+<span id="cb7-402"><a href="#cb7-402" aria-hidden="true" tabindex="-1"></a>    index<span class="op">=</span>pd.MultiIndex.from_tuples(<span class="bu">list</span>(dev), names<span class="op">=</span>[<span class="st">"system"</span>, <span class="st">"history"</span>]),</span>
+<span id="cb7-403"><a href="#cb7-403" aria-hidden="true" tabindex="-1"></a>).rename_axis(columns<span class="op">=</span><span class="st">"execution accuracy, points for the last two"</span>)</span>
+<span id="cb7-404"><a href="#cb7-404" aria-hidden="true" tabindex="-1"></a><span class="in">```</span></span>
+<span id="cb7-405"><a href="#cb7-405" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-406"><a href="#cb7-406" aria-hidden="true" tabindex="-1"></a>The fine-tuned model is <span class="in">`{python} f"{-100 * moved[('fine-tuned', 'predicted')]['difference']:.1f}"`</span> points lower on</span>
+<span id="cb7-407"><a href="#cb7-407" aria-hidden="true" tabindex="-1"></a>development than on validation with the predicted history and</span>
+<span id="cb7-408"><a href="#cb7-408" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{-100 * moved[('fine-tuned', 'gold')]['difference']:.1f}"`</span> with the gold history, and the untuned model with</span>
+<span id="cb7-409"><a href="#cb7-409" aria-hidden="true" tabindex="-1"></a><span class="in">`e3p`</span> differs by <span class="in">`{python} f"{100 * moved[('untuned, e3p', 'predicted')]['difference']:+.1f}"`</span> and</span>
+<span id="cb7-410"><a href="#cb7-410" aria-hidden="true" tabindex="-1"></a><span class="in">`{python} f"{100 * moved[('untuned, e3p', 'gold')]['difference']:+.1f}"`</span>. None of these four intervals excludes zero, so the</span>
+<span id="cb7-411"><a href="#cb7-411" aria-hidden="true" tabindex="-1"></a>data cannot tell a small optimism of selection from the difference between two samples of pages; they show that</span>
+<span id="cb7-412"><a href="#cb7-412" aria-hidden="true" tabindex="-1"></a>the validation numbers were not far off. <span class="in">`{python} len(significant)`</span> of the six differences has an interval that does</span>
+<span id="cb7-413"><a href="#cb7-413" aria-hidden="true" tabindex="-1"></a>exclude zero: <span class="in">`{python} ", ".join(f"{s} with the {h} history" for s, h in significant) or "none"`</span>. That is the</span>
+<span id="cb7-414"><a href="#cb7-414" aria-hidden="true" tabindex="-1"></a>untuned model with the prompt of the fine-tuned model, which no choice of the book depended on, and it is the floor of</span>
+<span id="cb7-415"><a href="#cb7-415" aria-hidden="true" tabindex="-1"></a>the comparison, so a few points of difference does not change what the chapter concludes.</span>
+<span id="cb7-416"><a href="#cb7-416" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-417"><a href="#cb7-417" aria-hidden="true" tabindex="-1"></a><span class="fu">## What this chapter does not report</span></span>
+<span id="cb7-418"><a href="#cb7-418" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-419"><a href="#cb7-419" aria-hidden="true" tabindex="-1"></a>Only the comparison above is run on the development split. The other comparisons of the book are results on validation,</span>
+<span id="cb7-420"><a href="#cb7-420" aria-hidden="true" tabindex="-1"></a>reported where they are made, and the book does not claim them for the development split: the untuned prompt</span>
+<span id="cb7-421"><a href="#cb7-421" aria-hidden="true" tabindex="-1"></a>variants, the <span class="in">`e3p`</span> prompt on the fine-tuned model and the extra-compute rows (@sec-evaluating); the DSL against Python,</span>
+<span id="cb7-422"><a href="#cb7-422" aria-hidden="true" tabindex="-1"></a>untuned and fine-tuned (@sec-python-format); the grammar rows (@sec-constrained-decoding); the merged adapter; and the</span>
+<span id="cb7-423"><a href="#cb7-423" aria-hidden="true" tabindex="-1"></a>rank sweep (@sec-rank-sweep). The reason is the same for all: a result on the development split is a result that is</span>
+<span id="cb7-424"><a href="#cb7-424" aria-hidden="true" tabindex="-1"></a>reported, once, and the more comparisons are run on it, the more of its value as a check is spent.</span>
+<span id="cb7-425"><a href="#cb7-425" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-426"><a href="#cb7-426" aria-hidden="true" tabindex="-1"></a>The result is also limited in three ways. It is one training seed, so the interval of a number is for the choice of</span>
+<span id="cb7-427"><a href="#cb7-427" aria-hidden="true" tabindex="-1"></a>pages and does not include the noise of training; the rule for more seeds did not call for them, but a</span>
+<span id="cb7-428"><a href="#cb7-428" aria-hidden="true" tabindex="-1"></a>second seed is what would measure it. The prompt of the untuned model</span>
+<span id="cb7-429"><a href="#cb7-429" aria-hidden="true" tabindex="-1"></a>had one example set. And the numbers are on one benchmark, with one model, so the contrast with published work</span>
+<span id="cb7-430"><a href="#cb7-430" aria-hidden="true" tabindex="-1"></a>is of a set-up and not of a method.</span>
+</code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

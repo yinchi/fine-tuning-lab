@@ -1,0 +1,1407 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.10.19">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Appendix A — Glossary – Fine-tuning lab: LLMs on ConvFinQA</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: 1.5em;}
+div.column{flex: auto;}
+@media screen {
+div.columns{gap: min(4vw, 1.5em);}
+div.column{overflow-x: auto;}
+}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="site_libs/quarto-nav/quarto-nav.js"></script>
+<script src="site_libs/quarto-nav/headroom.min.js"></script>
+<script src="site_libs/clipboard/clipboard.min.js"></script>
+<script src="site_libs/quarto-search/autocomplete.umd.js"></script>
+<script src="site_libs/quarto-search/fuse.min.js"></script>
+<script src="site_libs/quarto-search/quarto-search.js"></script>
+<meta name="quarto:offset" content="./">
+<link href="./902_references.html" rel="next">
+<link href="./404_summary.html" rel="prev">
+<script src="site_libs/quarto-html/quarto.js" type="module"></script>
+<script src="site_libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="site_libs/quarto-html/popper.min.js"></script>
+<script src="site_libs/quarto-html/tippy.umd.min.js"></script>
+<script src="site_libs/quarto-html/anchor.min.js"></script>
+<link href="site_libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="site_libs/quarto-html/quarto-syntax-highlighting-bf27225e3a48a9273f3daa8f8e829971.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="site_libs/bootstrap/bootstrap.min.js"></script>
+<link href="site_libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="site_libs/bootstrap/bootstrap-825aa897e66f6637425967c223a89f82.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<script id="quarto-search-options" type="application/json">{
+  "location": "sidebar",
+  "copy-button": false,
+  "collapse-after": 3,
+  "panel-placement": "start",
+  "type": "textbox",
+  "limit": 50,
+  "keyboard-shortcut": [
+    "f",
+    "/",
+    "s"
+  ],
+  "show-item-context": false,
+  "language": {
+    "search-no-results-text": "No results",
+    "search-matching-documents-text": "matching documents",
+    "search-copy-link-title": "Copy link to search",
+    "search-hide-matches-text": "Hide additional matches",
+    "search-more-match-text": "more match in this document",
+    "search-more-matches-text": "more matches in this document",
+    "search-clear-button-title": "Clear",
+    "search-text-placeholder": "",
+    "search-detached-cancel-button-title": "Cancel",
+    "search-submit-button-title": "Submit",
+    "search-label": "Search"
+  }
+}</script>
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@4/tex-chtml.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="nav-sidebar floating quarto-light">
+
+<div id="quarto-search-results"></div>
+  <header id="quarto-header" class="headroom fixed-top">
+  <nav class="quarto-secondary-nav">
+    <div class="container-fluid d-flex">
+      <button type="button" class="quarto-btn-toggle btn" data-bs-toggle="collapse" role="button" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">
+        <i class="bi bi-layout-text-sidebar-reverse"></i>
+      </button>
+        <nav class="quarto-page-breadcrumbs" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./901_glossary.html">Appendices</a></li><li class="breadcrumb-item"><a href="./901_glossary.html"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glossary</span></a></li></ol></nav>
+        <a class="flex-grow-1" role="navigation" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item" aria-controls="quarto-sidebar" aria-expanded="false" aria-label="Toggle sidebar navigation" onclick="if (window.quartoToggleHeadroom) { window.quartoToggleHeadroom(); }">      
+        </a>
+      <button type="button" class="btn quarto-search-button" aria-label="Search" onclick="window.quartoOpenSearch();">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </nav>
+</header>
+<!-- content -->
+<div id="quarto-content" class="quarto-container page-columns page-rows-contents page-layout-article">
+<!-- sidebar -->
+  <nav id="quarto-sidebar" class="sidebar collapse collapse-horizontal quarto-sidebar-collapse-item sidebar-navigation floating overflow-auto">
+    <div class="pt-lg-2 mt-2 text-left sidebar-header">
+    <div class="sidebar-title mb-0 py-0">
+      <a href="./">Fine-tuning lab: LLMs on ConvFinQA</a> 
+    </div>
+      </div>
+        <div class="mt-2 flex-shrink-0 align-items-center">
+        <div class="sidebar-search">
+        <div id="quarto-search" class="" title="Search"></div>
+        </div>
+        </div>
+    <div class="sidebar-menu-container"> 
+    <ul class="list-unstyled mt-1">
+        <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./index.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text">Preface</span></a>
+  </div>
+</li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true">
+ <span class="menu-text">Setup &amp; data</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-1" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-1" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./101_environment_setup.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">1</span>&nbsp; <span class="chapter-title">Environment setup</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./102_what_convfinqa.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">2</span>&nbsp; <span class="chapter-title">What ConvFinQA looks like</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./103_the_dsl.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">3</span>&nbsp; <span class="chapter-title">The DSL and its executor</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true">
+ <span class="menu-text">Foundations</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-2" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-2" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./201_from_text.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">4</span>&nbsp; <span class="chapter-title">From text to tokens to next-token probabilities</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./202_anatomy_of.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">5</span>&nbsp; <span class="chapter-title">Anatomy of Qwen3-4B</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./203_from_base.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">6</span>&nbsp; <span class="chapter-title">From base model to instruct model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./204_probing_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">7</span>&nbsp; <span class="chapter-title">Probing the untuned model on ConvFinQA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./205_how_fine_tuning.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">8</span>&nbsp; <span class="chapter-title">How fine-tuning works</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./206_lora_in.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">9</span>&nbsp; <span class="chapter-title">LoRA in detail</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true">
+ <span class="menu-text">Experiments</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-3" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-3" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./301_formatting_conversations.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">10</span>&nbsp; <span class="chapter-title">Formatting conversations for training</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./302_the_untuned.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">11</span>&nbsp; <span class="chapter-title">The untuned baseline</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./303_training_with.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">12</span>&nbsp; <span class="chapter-title">Training with LoRA</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./304_evaluating_the.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">13</span>&nbsp; <span class="chapter-title">Evaluating the fine-tuned model</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./305_dsl_vs.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">14</span>&nbsp; <span class="chapter-title">DSL or Python?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./306_constrained_decoding.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">15</span>&nbsp; <span class="chapter-title">Constrained decoding</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true">
+ <span class="menu-text">Beyond</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-4" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-4" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./402_the_final.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">16</span>&nbsp; <span class="chapter-title">The final results</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./403_rank_sweep.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">17</span>&nbsp; <span class="chapter-title">How much rank does the task need?</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./404_summary.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Summary</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+        <li class="sidebar-item sidebar-item-section">
+      <div class="sidebar-item-container"> 
+            <a class="sidebar-item-text sidebar-link text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true">
+ <span class="menu-text">Appendices</span></a>
+          <a class="sidebar-item-toggle text-start" data-bs-toggle="collapse" data-bs-target="#quarto-sidebar-section-5" role="navigation" aria-expanded="true" aria-label="Toggle section">
+            <i class="bi bi-chevron-right ms-2"></i>
+          </a> 
+      </div>
+      <ul id="quarto-sidebar-section-5" class="collapse list-unstyled sidebar-section depth1 show">  
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./901_glossary.html" class="sidebar-item-text sidebar-link active">
+ <span class="menu-text"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glossary</span></span></a>
+  </div>
+</li>
+          <li class="sidebar-item">
+  <div class="sidebar-item-container"> 
+  <a href="./902_references.html" class="sidebar-item-text sidebar-link">
+ <span class="menu-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">References</span></span></a>
+  </div>
+</li>
+      </ul>
+  </li>
+    </ul>
+    </div>
+</nav>
+<div id="quarto-sidebar-glass" class="quarto-sidebar-collapse-item" data-bs-toggle="collapse" data-bs-target=".quarto-sidebar-collapse-item"></div>
+<!-- margin-sidebar -->
+    <div id="quarto-margin-sidebar" class="sidebar margin-sidebar zindex-bottom">
+        
+    </div>
+<!-- main -->
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default"><nav class="quarto-page-breadcrumbs quarto-title-breadcrumbs d-none d-lg-block" aria-label="breadcrumb"><ol class="breadcrumb"><li class="breadcrumb-item"><a href="./901_glossary.html">Appendices</a></li><li class="breadcrumb-item"><a href="./901_glossary.html"><span class="chapter-number">A</span>&nbsp; <span class="chapter-title">Glossary</span></a></li></ol></nav>
+<div class="quarto-title">
+<div class="quarto-title-block"><div><h1 class="title">Appendix A — Glossary</h1><button type="button" class="btn code-tools-button" id="quarto-code-tools-source"><i class="bi"></i> Code</button></div></div>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<p>Terms are in alphabetical order. Each chapter links a term here the first time it uses it, and each entry ends with the chapter where the term is developed.</p>
+<dl>
+<dt><span id="gloss-adamw">AdamW</span></dt>
+<dd>
+The optimizer of the book’s training runs: Adam, with weight decay applied to the weights directly and not through the gradient. The runs use no weight decay. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-adapter">adapter</span></dt>
+<dd>
+The small set of trained matrices that LoRA adds to a frozen model. It is saved on its own, and the base model is not changed. See <a href="206_lora_in.html" class="quarto-xref"><span>Chapter 9</span></a>.
+</dd>
+<dt><span id="gloss-alpha">alpha</span></dt>
+<dd>
+The scale of a LoRA update: the correction is multiplied by <span class="math inline">\(\alpha / r\)</span>. The sweep sets <span class="math inline">\(\alpha = 2r\)</span>, so the multiplier is 2 at every rank. See <a href="206_lora_in.html" class="quarto-xref"><span>Chapter 9</span></a>.
+</dd>
+<dt><span id="gloss-artifact">artifact</span></dt>
+<dd>
+A named result saved in <code>artifacts/</code>, made by a builder function that a chapter declares. It is rebuilt only when it, one of its inputs or the code it uses has changed. See <a href="101_environment_setup.html" class="quarto-xref"><span>Chapter 1</span></a>.
+</dd>
+<dt><span id="gloss-attention">attention</span></dt>
+<dd>
+The layer in which each position takes a weighted mix of the values of the positions it can see, with weights from the match between its query and their keys. See <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a>.
+</dd>
+<dt><span id="gloss-base-model">base model</span></dt>
+<dd>
+A model that has only been pretrained to predict the next token of a large body of text, and not post-trained to follow instructions. See <a href="203_from_base.html" class="quarto-xref"><span>Chapter 6</span></a>.
+</dd>
+<dt><span id="gloss-bf16">bfloat16 and mixed precision</span></dt>
+<dd>
+bfloat16 (bf16) is a 16-bit number format with the range of 32-bit floats and fewer digits of precision. Mixed-precision training does the arithmetic in bf16 over weights that are kept in 32-bit precision. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-bounded-grammar">bounded grammar</span></dt>
+<dd>
+A grammar that also limits each number to the digits that the gold programs use, where the plain grammar allows any number. See <a href="306_constrained_decoding.html#sec-constrained-bounds" class="quarto-xref"><span>Section 15.8</span></a>.
+</dd>
+<dt><span id="gloss-bpe">byte-level BPE</span></dt>
+<dd>
+The way Qwen’s tokenizer splits text: byte-pair encoding over bytes. It starts from single bytes and merges the pairs that occur most often, so any text can be encoded. See <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a>.
+</dd>
+<dt><span id="gloss-causal-mask">causal mask</span></dt>
+<dd>
+The mask that stops a position from attending to the ones after it. It lets one pass over a sequence train the prediction at every position, with each prediction seeing only what comes before it. See <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a>.
+</dd>
+<dt><span id="gloss-chat-template">chat template</span></dt>
+<dd>
+A small program shipped with the tokenizer that wraps each message of a conversation in the model’s own role markers and joins them into one string. See <a href="203_from_base.html" class="quarto-xref"><span>Chapter 6</span></a>.
+</dd>
+<dt><span id="gloss-constrained-decoding">constrained decoding</span></dt>
+<dd>
+Decoding in which a grammar removes, at each step, the tokens that cannot continue a valid output. It guarantees the form of the output, not that the output ends or is right. See <a href="306_constrained_decoding.html" class="quarto-xref"><span>Chapter 15</span></a>.
+</dd>
+<dt><span id="gloss-cosine-schedule">cosine schedule</span></dt>
+<dd>
+The learning rate of the training runs: a short linear warmup to the peak value, then a decay along a cosine curve towards zero. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-decoder-only">decoder-only</span></dt>
+<dd>
+A transformer made only of decoder blocks, in which every position attends to the earlier ones. Qwen3 is one. See <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a>.
+</dd>
+<dt><span id="gloss-dev">development split (dev)</span></dt>
+<dd>
+ConvFinQA’s own development split, used here as the test set. It is touched only for the final reported numbers, after the configuration is frozen. See <a href="301_formatting_conversations.html" class="quarto-xref"><span>Chapter 10</span></a>.
+</dd>
+<dt><span id="gloss-dsl">DSL</span></dt>
+<dd>
+The domain-specific language of ConvFinQA’s programs: a list of steps such as <code>divide(#0, 181001)</code>, each with one of six operations, where <code>#k</code> is the result of an earlier step. See <a href="103_the_dsl.html" class="quarto-xref"><span>Chapter 3</span></a>.
+</dd>
+<dt><span id="gloss-effective-batch">effective batch</span></dt>
+<dd>
+The number of conversations whose gradients are combined for one optimizer step. When they do not fit in memory at once, gradient accumulation reaches it with several smaller micro-batches. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-effective-directions">effective number of directions</span></dt>
+<dd>
+For a LoRA update, <span class="math inline">\(1 / \sum p^2\)</span>, where <span class="math inline">\(p\)</span> is the share of its squared norm held by each direction. It equals the rank if the directions share the norm evenly, and 1 if one direction holds all of it. See <a href="403_rank_sweep.html#sec-rank-loss" class="quarto-xref"><span>Section 17.6.1</span></a>.
+</dd>
+<dt><span id="gloss-entropy">entropy</span></dt>
+<dd>
+A measure of how spread out a probability distribution over the next token is: zero when one token has all the probability, and largest when every token is equally likely. See <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a>.
+</dd>
+<dt><span id="gloss-example-set">example set</span></dt>
+<dd>
+A fixed group of complete training conversations written into a prompt as examples. See <a href="302_the_untuned.html" class="quarto-xref"><span>Chapter 11</span></a>.
+</dd>
+<dt><span id="gloss-execution-accuracy">execution accuracy</span></dt>
+<dd>
+The share of turns where the answer of the model’s program equals the gold answer after rounding to five decimal places. An output that is not a valid program, or does not execute, counts as wrong. See <a href="103_the_dsl.html" class="quarto-xref"><span>Chapter 3</span></a> and <a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>.
+</dd>
+<dt><span id="gloss-exposure-bias">exposure bias</span></dt>
+<dd>
+The mismatch left by teacher forcing: the model is trained on gold earlier turns, but when it is used it sees its own earlier outputs, which can be wrong. See <a href="203_from_base.html" class="quarto-xref"><span>Chapter 6</span></a>.
+</dd>
+<dt><span id="gloss-few-shot">few-shot and zero-shot</span></dt>
+<dd>
+A prompt is few-shot when it contains worked examples, and zero-shot when it has none. See <a href="204_probing_the.html" class="quarto-xref"><span>Chapter 7</span></a>.
+</dd>
+<dt><span id="gloss-full-fine-tuning">full fine-tuning</span></dt>
+<dd>
+Training every weight of the model, where LoRA trains a small adapter. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-gold-history">gold history and predicted history</span></dt>
+<dd>
+The two ways to fill the earlier turns of a prompt when a conversation is scored. With gold history they are the dataset’s own programs; with predicted history they are the model’s own outputs, mistakes included, so errors can compound. Predicted history is the headline setting. See <a href="302_the_untuned.html" class="quarto-xref"><span>Chapter 11</span></a>.
+</dd>
+<dt><span id="gloss-gradient-accumulation">gradient accumulation and clipping</span></dt>
+<dd>
+Accumulation adds up the gradients of several micro-batches before one optimizer step. Clipping rescales a gradient whose norm is above a limit. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-grammar">grammar</span></dt>
+<dd>
+A formal description of the outputs that are allowed. Here it is a context-free grammar written in EBNF, for the DSL or for Python. See <a href="306_constrained_decoding.html" class="quarto-xref"><span>Chapter 15</span></a>.
+</dd>
+<dt><span id="gloss-greedy">greedy decoding</span></dt>
+<dd>
+Choosing the highest-scoring token at every step. It is deterministic, and every evaluation of the book uses it unless it says otherwise. See <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a>.
+</dd>
+<dt><span id="gloss-gqa">grouped-query attention</span></dt>
+<dd>
+Attention in which several query heads share one key and value head, which makes the KV cache smaller. See <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a>.
+</dd>
+<dt><span id="gloss-instruct-model">instruct model</span></dt>
+<dd>
+A base model that has been post-trained to follow instructions and to answer in a chat format. See <a href="203_from_base.html" class="quarto-xref"><span>Chapter 6</span></a>.
+</dd>
+<dt><span id="gloss-invalid-output">invalid output</span></dt>
+<dd>
+An output that is not a valid program or does not execute. It counts as wrong, and the evaluation reports its share next to the accuracy, by cause. See <a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>.
+</dd>
+<dt><span id="gloss-kv-cache">KV cache</span></dt>
+<dd>
+The keys and values of every token already processed, kept so that generating the next token does not recompute them. See <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a>.
+</dd>
+<dt><span id="gloss-labels">labels</span></dt>
+<dd>
+The tokens that the loss is computed on. In this book they are the answer tokens and their end marker; every other token of a conversation is masked out. See <a href="301_formatting_conversations.html" class="quarto-xref"><span>Chapter 10</span></a>.
+</dd>
+<dt><span id="gloss-learning-rate">learning rate</span></dt>
+<dd>
+The size of the step that the optimizer takes along the gradient. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-literal-check">literal check</span></dt>
+<dd>
+A check on the numbers a program is written with: whether they match those of the gold program, as text and as values, and whether each comes from the page. See <a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>.
+</dd>
+<dt><span id="gloss-logits">logits</span></dt>
+<dd>
+The scores that the model gives to every token of its vocabulary at a position, before they are turned into probabilities. See <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a>.
+</dd>
+<dt><span id="gloss-logits-processor">logits processor</span></dt>
+<dd>
+A function that edits the logits after the model produces them and before a token is chosen. Constrained decoding is one. See <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a>.
+</dd>
+<dt><span id="gloss-lora">LoRA</span></dt>
+<dd>
+Low-rank adaptation: the weights of the model are frozen, and each adapted matrix gets an update that is the product of two thin matrices, so only those are trained. See <a href="206_lora_in.html" class="quarto-xref"><span>Chapter 9</span></a>.
+</dd>
+<dt><span id="gloss-loss">loss</span></dt>
+<dd>
+The number that training makes smaller: the negative log probability that the model gives to the gold tokens, averaged over the label tokens. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-main-run">main run</span></dt>
+<dd>
+The LoRA fine-tuning of Qwen3-4B on the DSL whose adapter the later chapters use. See <a href="303_training_with.html" class="quarto-xref"><span>Chapter 12</span></a>.
+</dd>
+<dt><span id="gloss-merging">merging an adapter</span></dt>
+<dd>
+Adding the adapter’s update into the base weights, so the model runs without the adapter. It is the same function in 32-bit precision and not exactly in bf16. See <a href="206_lora_in.html" class="quarto-xref"><span>Chapter 9</span></a>.
+</dd>
+<dt><span id="gloss-nll">negative log-likelihood</span></dt>
+<dd>
+The loss of a sequence: the sum, or mean, of the surprisals of its tokens. See <a href="204_probing_the.html" class="quarto-xref"><span>Chapter 7</span></a>.
+</dd>
+<dt><span id="gloss-number-selection">number-selection turn</span></dt>
+<dd>
+A turn whose program is only a number copied from the page, with no operation. All other turns are lists of steps. See <a href="103_the_dsl.html" class="quarto-xref"><span>Chapter 3</span></a>.
+</dd>
+<dt><span id="gloss-paired-bootstrap">paired bootstrap</span></dt>
+<dd>
+An interval for the difference between two systems scored on the same turns. It resamples whole report pages (with every conversation written from them), since the turns of one conversation, and the conversations of one page, are not independent, and computes both accuracies on each resample. An interval that excludes zero is a clear difference. See <a href="302_the_untuned.html#sec-baseline-rule" class="quarto-xref"><span>Section 11.4.2</span></a>.
+</dd>
+<dt><span id="gloss-perplexity">perplexity</span></dt>
+<dd>
+The exponential of the mean surprisal: the model is as uncertain, on average, as if it were choosing among that many equally likely tokens. See <a href="204_probing_the.html" class="quarto-xref"><span>Chapter 7</span></a>.
+</dd>
+<dt><span id="gloss-post-training">post-training</span></dt>
+<dd>
+The training that turns a pretrained model into an instruct model, such as supervised fine-tuning, distillation and reinforcement learning. See <a href="203_from_base.html" class="quarto-xref"><span>Chapter 6</span></a>.
+</dd>
+<dt><span id="gloss-pretraining">pretraining</span></dt>
+<dd>
+The first stage of training, in which the model learns to predict the next token on a large body of text. See <a href="203_from_base.html" class="quarto-xref"><span>Chapter 6</span></a>.
+</dd>
+<dt><span id="gloss-program-accuracy">program accuracy</span></dt>
+<dd>
+The share of turns where the model’s program is the gold program by the rule of the official ConvFinQA script: the programs are compared as expressions, so the operands of <code>add</code> and <code>multiply</code> may come in either order, and the arguments are compared as exact text. It is stricter than execution accuracy. See <a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>.
+</dd>
+<dt><span id="gloss-qlora">QLoRA</span></dt>
+<dd>
+LoRA on a base model whose weights are stored in a low-precision, quantized format, to save memory. See <a href="206_lora_in.html" class="quarto-xref"><span>Chapter 9</span></a>.
+</dd>
+<dt><span id="gloss-rank">rank</span></dt>
+<dd>
+The number of directions between the two thin matrices of a LoRA update, and so the largest rank the update can have. See <a href="206_lora_in.html" class="quarto-xref"><span>Chapter 9</span></a>.
+</dd>
+<dt><span id="gloss-rank-sweep">rank sweep</span></dt>
+<dd>
+The same fine-tuning run at several values of the LoRA rank, compared on the same turns. See <a href="403_rank_sweep.html" class="quarto-xref"><span>Chapter 17</span></a>.
+</dd>
+<dt><span id="gloss-residual">residual connection</span></dt>
+<dd>
+The addition of a layer’s input to its output, so the layer learns a change to its input and not a replacement. See <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a>.
+</dd>
+<dt><span id="gloss-rope">rotary position embedding</span></dt>
+<dd>
+The way Qwen3 encodes position: queries and keys are rotated by an angle that depends on the position, so an attention score depends on the distance between two tokens. See <a href="202_anatomy_of.html" class="quarto-xref"><span>Chapter 5</span></a>.
+</dd>
+<dt><span id="gloss-sampling">sampling and temperature</span></dt>
+<dd>
+Sampling draws the next token from the probabilities. The temperature divides the logits first: a low value sharpens the distribution towards greedy decoding, and a high one flattens it. See <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a>.
+</dd>
+<dt><span id="gloss-scale-check">scale check</span></dt>
+<dd>
+A check on whether an answer is the gold answer times, or divided by, a power of ten, which is a different mistake from a wrong number. See <a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>.
+</dd>
+<dt><span id="gloss-self-consistency">self-consistency</span></dt>
+<dd>
+Sampling several programs at a temperature, dropping those that do not run, and taking the answer that most of them agree on. See <a href="304_evaluating_the.html" class="quarto-xref"><span>Chapter 13</span></a>.
+</dd>
+<dt><span id="gloss-singular-values">singular values</span></dt>
+<dd>
+The strengths of the independent directions of a matrix. For a LoRA update they show how its size is spread over its directions. See <a href="303_training_with.html" class="quarto-xref"><span>Chapter 12</span></a>.
+</dd>
+<dt><span id="gloss-smoke-run">smoke run</span></dt>
+<dd>
+A short run of the 0.5B model with the same recipe, to test the training code before the main run. See <a href="303_training_with.html" class="quarto-xref"><span>Chapter 12</span></a>.
+</dd>
+<dt><span id="gloss-softmax">softmax</span></dt>
+<dd>
+The function that turns logits into probabilities that are positive and sum to one. See <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a>.
+</dd>
+<dt><span id="gloss-sft">supervised fine-tuning (SFT)</span></dt>
+<dd>
+Training a model on example outputs with a next-token loss. See <a href="203_from_base.html" class="quarto-xref"><span>Chapter 6</span></a>.
+</dd>
+<dt><span id="gloss-surprisal">surprisal</span></dt>
+<dd>
+The negative log of the probability the model gave to a token, in nats. See <a href="204_probing_the.html" class="quarto-xref"><span>Chapter 7</span></a>.
+</dd>
+<dt><span id="gloss-system-message">system message</span></dt>
+<dd>
+The first message of a prompt, which tells the model what its task and its output format are. See <a href="302_the_untuned.html" class="quarto-xref"><span>Chapter 11</span></a>.
+</dd>
+<dt><span id="gloss-teacher-forcing">teacher forcing</span></dt>
+<dd>
+Training with the gold earlier tokens or turns in the input, whatever the model would have produced. See <a href="203_from_base.html" class="quarto-xref"><span>Chapter 6</span></a>.
+</dd>
+<dt><span id="gloss-token">token and tokenizer</span></dt>
+<dd>
+A token is a piece of text, usually a word or part of one, that the model reads and writes as one unit. The tokenizer turns text into token ids and back. See <a href="201_from_text.html" class="quarto-xref"><span>Chapter 4</span></a>.
+</dd>
+<dt><span id="gloss-train-fit">train-fit</span></dt>
+<dd>
+The part of the training data that a run trains on: the training split without the validation conversations. See <a href="303_training_with.html" class="quarto-xref"><span>Chapter 12</span></a>.
+</dd>
+<dt><span id="gloss-conversation-types">Type I and Type II conversations</span></dt>
+<dd>
+Type I conversations break one FinQA question into a chain of turns. Type II conversations join two questions about the same page. See <a href="102_what_convfinqa.html" class="quarto-xref"><span>Chapter 2</span></a>.
+</dd>
+<dt><span id="gloss-validation">validation split</span></dt>
+<dd>
+A tenth of the training conversations, grouped by page, held out for the choices of the book. The tuning is done on it, and the development split is kept for the final numbers. See <a href="301_formatting_conversations.html" class="quarto-xref"><span>Chapter 10</span></a>.
+</dd>
+<dt><span id="gloss-warmup">warmup</span></dt>
+<dd>
+The first steps of a run, in which the learning rate rises linearly from zero to its peak. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+<dt><span id="gloss-weight-decay">weight decay</span></dt>
+<dd>
+A term that pulls each weight a little towards zero at every step. See <a href="205_how_fine_tuning.html" class="quarto-xref"><span>Chapter 8</span></a>.
+</dd>
+</dl>
+
+
+<!-- -->
+
+
+</main> <!-- /main -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+    const viewSource = window.document.getElementById('quarto-view-source') ||
+                       window.document.getElementById('quarto-code-tools-source');
+    if (viewSource) {
+      const sourceUrl = viewSource.getAttribute("data-quarto-source-url");
+      viewSource.addEventListener("click", function(e) {
+        if (sourceUrl) {
+          // rstudio viewer pane
+          if (/\bcapabilities=\b/.test(window.location)) {
+            window.open(sourceUrl);
+          } else {
+            window.location.href = sourceUrl;
+          }
+        } else {
+          const modal = new bootstrap.Modal(document.getElementById('quarto-embedded-source-code-modal'));
+          modal.show();
+        }
+        return false;
+      });
+    }
+    function toggleCodeHandler(show) {
+      return function(e) {
+        const cellDetails = window.document.querySelectorAll(".cell details.code-fold");
+        for (let i=0; i<cellDetails.length; i++) {
+          const details = cellDetails[i];
+          if (show) {
+            details.open = true;
+          } else {
+            details.removeAttribute("open");
+          }
+        }
+        const cellCodeDivs = window.document.querySelectorAll(".cell div.sourceCode.cell-code");
+        const fromCls = show ? "hidden" : "unhidden";
+        const toCls = show ? "unhidden" : "hidden";
+        for (let i=0; i<cellCodeDivs.length; i++) {
+          const codeDiv = cellCodeDivs[i];
+          if (codeDiv.classList.contains(fromCls)) {
+            codeDiv.classList.remove(fromCls);
+            codeDiv.classList.add(toCls);
+          } 
+        }
+        return false;
+      }
+    }
+    const hideAllCode = window.document.getElementById("quarto-hide-all-code");
+    if (hideAllCode) {
+      hideAllCode.addEventListener("click", toggleCodeHandler(false));
+    }
+    const showAllCode = window.document.getElementById("quarto-show-all-code");
+    if (showAllCode) {
+      showAllCode.addEventListener("click", toggleCodeHandler(true));
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+<nav class="page-navigation">
+  <div class="nav-page nav-page-previous">
+      <a href="./404_summary.html" class="pagination-link" aria-label="Summary">
+        <i class="bi bi-arrow-left-short"></i> <span class="nav-page-text"><span class="chapter-number">18</span>&nbsp; <span class="chapter-title">Summary</span></span>
+      </a>          
+  </div>
+  <div class="nav-page nav-page-next">
+      <a href="./902_references.html" class="pagination-link" aria-label="References">
+        <span class="nav-page-text"><span class="chapter-number">B</span>&nbsp; <span class="chapter-title">References</span></span> <i class="bi bi-arrow-right-short"></i>
+      </a>
+  </div>
+</nav><div class="modal fade" id="quarto-embedded-source-code-modal" tabindex="-1" aria-labelledby="quarto-embedded-source-code-modal-label" aria-hidden="true"><div class="modal-dialog modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><h5 class="modal-title" id="quarto-embedded-source-code-modal-label">Source Code</h5><button class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="">
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1" data-shortcodes="false"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu"># Glossary</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>Terms are in alphabetical order. Each chapter links a term here the first time it uses it, and each entry ends with the</span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>chapter where the term is developed.</span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">AdamW</span><span class="co">]</span>{#gloss-adamw}</span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>:   The optimizer of the book's training runs: Adam, with weight decay applied to the weights directly and not through</span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    the gradient. The runs use no weight decay. See @sec-fine-tuning.</span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">adapter</span><span class="co">]</span>{#gloss-adapter}</span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>:   The small set of trained matrices that LoRA adds to a frozen model. It is saved on its own, and the base model is</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>    not changed. See @sec-lora.</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">alpha</span><span class="co">]</span>{#gloss-alpha}</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>:   The scale of a LoRA update: the correction is multiplied by $\alpha / r$. The sweep sets $\alpha = 2r$, so the</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>    multiplier is 2 at every rank. See @sec-lora.</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">artifact</span><span class="co">]</span>{#gloss-artifact}</span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>:   A named result saved in <span class="in">`artifacts/`</span>, made by a builder function that a chapter declares. It is rebuilt only when</span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>    it, one of its inputs or the code it uses has changed. See @sec-environment.</span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">attention</span><span class="co">]</span>{#gloss-attention}</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>:   The layer in which each position takes a weighted mix of the values of the positions it can see, with weights from</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>    the match between its query and their keys. See @sec-anatomy.</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">base model</span><span class="co">]</span>{#gloss-base-model}</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>:   A model that has only been pretrained to predict the next token of a large body of text, and not post-trained to</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a>    follow instructions. See @sec-base-instruct.</span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">bfloat16 and mixed precision</span><span class="co">]</span>{#gloss-bf16}</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>:   bfloat16 (bf16) is a 16-bit number format with the range of 32-bit floats and fewer digits of precision.</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>    Mixed-precision training does the arithmetic in bf16 over weights that are kept in 32-bit precision. See @sec-fine-tuning.</span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">bounded grammar</span><span class="co">]</span>{#gloss-bounded-grammar}</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>:   A grammar that also limits each number to the digits that the gold programs use, where the plain grammar allows</span>
+<span id="cb1-36"><a href="#cb1-36" aria-hidden="true" tabindex="-1"></a>    any number. See @sec-constrained-bounds.</span>
+<span id="cb1-37"><a href="#cb1-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-38"><a href="#cb1-38" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">byte-level BPE</span><span class="co">]</span>{#gloss-bpe}</span>
+<span id="cb1-39"><a href="#cb1-39" aria-hidden="true" tabindex="-1"></a>:   The way Qwen's tokenizer splits text: byte-pair encoding over bytes. It starts from single bytes and merges the</span>
+<span id="cb1-40"><a href="#cb1-40" aria-hidden="true" tabindex="-1"></a>    pairs that occur most often, so any text can be encoded. See @sec-tokens.</span>
+<span id="cb1-41"><a href="#cb1-41" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-42"><a href="#cb1-42" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">causal mask</span><span class="co">]</span>{#gloss-causal-mask}</span>
+<span id="cb1-43"><a href="#cb1-43" aria-hidden="true" tabindex="-1"></a>:   The mask that stops a position from attending to the ones after it. It lets one pass over a sequence train the</span>
+<span id="cb1-44"><a href="#cb1-44" aria-hidden="true" tabindex="-1"></a>    prediction at every position, with each prediction seeing only what comes before it. See @sec-anatomy.</span>
+<span id="cb1-45"><a href="#cb1-45" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-46"><a href="#cb1-46" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">chat template</span><span class="co">]</span>{#gloss-chat-template}</span>
+<span id="cb1-47"><a href="#cb1-47" aria-hidden="true" tabindex="-1"></a>:   A small program shipped with the tokenizer that wraps each message of a conversation in the model's own role</span>
+<span id="cb1-48"><a href="#cb1-48" aria-hidden="true" tabindex="-1"></a>    markers and joins them into one string. See @sec-base-instruct.</span>
+<span id="cb1-49"><a href="#cb1-49" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-50"><a href="#cb1-50" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">constrained decoding</span><span class="co">]</span>{#gloss-constrained-decoding}</span>
+<span id="cb1-51"><a href="#cb1-51" aria-hidden="true" tabindex="-1"></a>:   Decoding in which a grammar removes, at each step, the tokens that cannot continue a valid output. It guarantees</span>
+<span id="cb1-52"><a href="#cb1-52" aria-hidden="true" tabindex="-1"></a>    the form of the output, not that the output ends or is right. See @sec-constrained-decoding.</span>
+<span id="cb1-53"><a href="#cb1-53" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-54"><a href="#cb1-54" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">cosine schedule</span><span class="co">]</span>{#gloss-cosine-schedule}</span>
+<span id="cb1-55"><a href="#cb1-55" aria-hidden="true" tabindex="-1"></a>:   The learning rate of the training runs: a short linear warmup to the peak value, then a decay along a cosine curve</span>
+<span id="cb1-56"><a href="#cb1-56" aria-hidden="true" tabindex="-1"></a>    towards zero. See @sec-fine-tuning.</span>
+<span id="cb1-57"><a href="#cb1-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-58"><a href="#cb1-58" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">decoder-only</span><span class="co">]</span>{#gloss-decoder-only}</span>
+<span id="cb1-59"><a href="#cb1-59" aria-hidden="true" tabindex="-1"></a>:   A transformer made only of decoder blocks, in which every position attends to the earlier ones. Qwen3 is one. See @sec-anatomy.</span>
+<span id="cb1-60"><a href="#cb1-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-61"><a href="#cb1-61" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">development split (dev)</span><span class="co">]</span>{#gloss-dev}</span>
+<span id="cb1-62"><a href="#cb1-62" aria-hidden="true" tabindex="-1"></a>:   ConvFinQA's own development split, used here as the test set. It is touched only for the final reported numbers,</span>
+<span id="cb1-63"><a href="#cb1-63" aria-hidden="true" tabindex="-1"></a>    after the configuration is frozen. See @sec-formatting.</span>
+<span id="cb1-64"><a href="#cb1-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-65"><a href="#cb1-65" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">DSL</span><span class="co">]</span>{#gloss-dsl}</span>
+<span id="cb1-66"><a href="#cb1-66" aria-hidden="true" tabindex="-1"></a>:   The domain-specific language of ConvFinQA's programs: a list of steps such as <span class="in">`divide(#0, 181001)`</span>, each with one</span>
+<span id="cb1-67"><a href="#cb1-67" aria-hidden="true" tabindex="-1"></a>    of six operations, where <span class="in">`#k`</span> is the result of an earlier step. See @sec-dsl.</span>
+<span id="cb1-68"><a href="#cb1-68" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-69"><a href="#cb1-69" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">effective batch</span><span class="co">]</span>{#gloss-effective-batch}</span>
+<span id="cb1-70"><a href="#cb1-70" aria-hidden="true" tabindex="-1"></a>:   The number of conversations whose gradients are combined for one optimizer step. When they do not fit in memory at</span>
+<span id="cb1-71"><a href="#cb1-71" aria-hidden="true" tabindex="-1"></a>    once, gradient accumulation reaches it with several smaller micro-batches. See @sec-fine-tuning.</span>
+<span id="cb1-72"><a href="#cb1-72" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-73"><a href="#cb1-73" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">effective number of directions</span><span class="co">]</span>{#gloss-effective-directions}</span>
+<span id="cb1-74"><a href="#cb1-74" aria-hidden="true" tabindex="-1"></a>:   For a LoRA update, $1 / \sum p^2$, where $p$ is the share of its squared norm held by each direction. It equals</span>
+<span id="cb1-75"><a href="#cb1-75" aria-hidden="true" tabindex="-1"></a>    the rank if the directions share the norm evenly, and 1 if one direction holds all of it. See @sec-rank-loss.</span>
+<span id="cb1-76"><a href="#cb1-76" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-77"><a href="#cb1-77" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">entropy</span><span class="co">]</span>{#gloss-entropy}</span>
+<span id="cb1-78"><a href="#cb1-78" aria-hidden="true" tabindex="-1"></a>:   A measure of how spread out a probability distribution over the next token is: zero when one token has all the</span>
+<span id="cb1-79"><a href="#cb1-79" aria-hidden="true" tabindex="-1"></a>    probability, and largest when every token is equally likely. See @sec-tokens.</span>
+<span id="cb1-80"><a href="#cb1-80" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-81"><a href="#cb1-81" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">example set</span><span class="co">]</span>{#gloss-example-set}</span>
+<span id="cb1-82"><a href="#cb1-82" aria-hidden="true" tabindex="-1"></a>:   A fixed group of complete training conversations written into a prompt as examples. See @sec-baseline.</span>
+<span id="cb1-83"><a href="#cb1-83" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-84"><a href="#cb1-84" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">execution accuracy</span><span class="co">]</span>{#gloss-execution-accuracy}</span>
+<span id="cb1-85"><a href="#cb1-85" aria-hidden="true" tabindex="-1"></a>:   The share of turns where the answer of the model's program equals the gold answer after rounding to five decimal</span>
+<span id="cb1-86"><a href="#cb1-86" aria-hidden="true" tabindex="-1"></a>    places. An output that is not a valid program, or does not execute, counts as wrong. See @sec-dsl and @sec-evaluating.</span>
+<span id="cb1-87"><a href="#cb1-87" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-88"><a href="#cb1-88" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">exposure bias</span><span class="co">]</span>{#gloss-exposure-bias}</span>
+<span id="cb1-89"><a href="#cb1-89" aria-hidden="true" tabindex="-1"></a>:   The mismatch left by teacher forcing: the model is trained on gold earlier turns, but when it is used it sees its</span>
+<span id="cb1-90"><a href="#cb1-90" aria-hidden="true" tabindex="-1"></a>    own earlier outputs, which can be wrong. See @sec-base-instruct.</span>
+<span id="cb1-91"><a href="#cb1-91" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-92"><a href="#cb1-92" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">few-shot and zero-shot</span><span class="co">]</span>{#gloss-few-shot}</span>
+<span id="cb1-93"><a href="#cb1-93" aria-hidden="true" tabindex="-1"></a>:   A prompt is few-shot when it contains worked examples, and zero-shot when it has none. See @sec-probing.</span>
+<span id="cb1-94"><a href="#cb1-94" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-95"><a href="#cb1-95" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">full fine-tuning</span><span class="co">]</span>{#gloss-full-fine-tuning}</span>
+<span id="cb1-96"><a href="#cb1-96" aria-hidden="true" tabindex="-1"></a>:   Training every weight of the model, where LoRA trains a small adapter. See @sec-fine-tuning.</span>
+<span id="cb1-97"><a href="#cb1-97" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-98"><a href="#cb1-98" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">gold history and predicted history</span><span class="co">]</span>{#gloss-gold-history}</span>
+<span id="cb1-99"><a href="#cb1-99" aria-hidden="true" tabindex="-1"></a>:   The two ways to fill the earlier turns of a prompt when a conversation is scored. With gold history they are the</span>
+<span id="cb1-100"><a href="#cb1-100" aria-hidden="true" tabindex="-1"></a>    dataset's own programs; with predicted history they are the model's own outputs, mistakes included, so errors can</span>
+<span id="cb1-101"><a href="#cb1-101" aria-hidden="true" tabindex="-1"></a>    compound. Predicted history is the headline setting. See @sec-baseline.</span>
+<span id="cb1-102"><a href="#cb1-102" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-103"><a href="#cb1-103" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">gradient accumulation and clipping</span><span class="co">]</span>{#gloss-gradient-accumulation}</span>
+<span id="cb1-104"><a href="#cb1-104" aria-hidden="true" tabindex="-1"></a>:   Accumulation adds up the gradients of several micro-batches before one optimizer step. Clipping rescales a gradient</span>
+<span id="cb1-105"><a href="#cb1-105" aria-hidden="true" tabindex="-1"></a>    whose norm is above a limit. See @sec-fine-tuning.</span>
+<span id="cb1-106"><a href="#cb1-106" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-107"><a href="#cb1-107" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">grammar</span><span class="co">]</span>{#gloss-grammar}</span>
+<span id="cb1-108"><a href="#cb1-108" aria-hidden="true" tabindex="-1"></a>:   A formal description of the outputs that are allowed. Here it is a context-free grammar written in EBNF, for the</span>
+<span id="cb1-109"><a href="#cb1-109" aria-hidden="true" tabindex="-1"></a>    DSL or for Python. See @sec-constrained-decoding.</span>
+<span id="cb1-110"><a href="#cb1-110" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-111"><a href="#cb1-111" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">greedy decoding</span><span class="co">]</span>{#gloss-greedy}</span>
+<span id="cb1-112"><a href="#cb1-112" aria-hidden="true" tabindex="-1"></a>:   Choosing the highest-scoring token at every step. It is deterministic, and every evaluation of the book uses it</span>
+<span id="cb1-113"><a href="#cb1-113" aria-hidden="true" tabindex="-1"></a>    unless it says otherwise. See @sec-tokens.</span>
+<span id="cb1-114"><a href="#cb1-114" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-115"><a href="#cb1-115" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">grouped-query attention</span><span class="co">]</span>{#gloss-gqa}</span>
+<span id="cb1-116"><a href="#cb1-116" aria-hidden="true" tabindex="-1"></a>:   Attention in which several query heads share one key and value head, which makes the KV cache smaller. See @sec-anatomy.</span>
+<span id="cb1-117"><a href="#cb1-117" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-118"><a href="#cb1-118" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">instruct model</span><span class="co">]</span>{#gloss-instruct-model}</span>
+<span id="cb1-119"><a href="#cb1-119" aria-hidden="true" tabindex="-1"></a>:   A base model that has been post-trained to follow instructions and to answer in a chat format. See @sec-base-instruct.</span>
+<span id="cb1-120"><a href="#cb1-120" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-121"><a href="#cb1-121" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">invalid output</span><span class="co">]</span>{#gloss-invalid-output}</span>
+<span id="cb1-122"><a href="#cb1-122" aria-hidden="true" tabindex="-1"></a>:   An output that is not a valid program or does not execute. It counts as wrong, and the evaluation reports its share</span>
+<span id="cb1-123"><a href="#cb1-123" aria-hidden="true" tabindex="-1"></a>    next to the accuracy, by cause. See @sec-evaluating.</span>
+<span id="cb1-124"><a href="#cb1-124" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-125"><a href="#cb1-125" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">KV cache</span><span class="co">]</span>{#gloss-kv-cache}</span>
+<span id="cb1-126"><a href="#cb1-126" aria-hidden="true" tabindex="-1"></a>:   The keys and values of every token already processed, kept so that generating the next token does not recompute</span>
+<span id="cb1-127"><a href="#cb1-127" aria-hidden="true" tabindex="-1"></a>    them. See @sec-anatomy.</span>
+<span id="cb1-128"><a href="#cb1-128" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-129"><a href="#cb1-129" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">labels</span><span class="co">]</span>{#gloss-labels}</span>
+<span id="cb1-130"><a href="#cb1-130" aria-hidden="true" tabindex="-1"></a>:   The tokens that the loss is computed on. In this book they are the answer tokens and their end marker; every other</span>
+<span id="cb1-131"><a href="#cb1-131" aria-hidden="true" tabindex="-1"></a>    token of a conversation is masked out. See @sec-formatting.</span>
+<span id="cb1-132"><a href="#cb1-132" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-133"><a href="#cb1-133" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">learning rate</span><span class="co">]</span>{#gloss-learning-rate}</span>
+<span id="cb1-134"><a href="#cb1-134" aria-hidden="true" tabindex="-1"></a>:   The size of the step that the optimizer takes along the gradient. See @sec-fine-tuning.</span>
+<span id="cb1-135"><a href="#cb1-135" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-136"><a href="#cb1-136" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">literal check</span><span class="co">]</span>{#gloss-literal-check}</span>
+<span id="cb1-137"><a href="#cb1-137" aria-hidden="true" tabindex="-1"></a>:   A check on the numbers a program is written with: whether they match those of the gold program, as text and as</span>
+<span id="cb1-138"><a href="#cb1-138" aria-hidden="true" tabindex="-1"></a>    values, and whether each comes from the page. See @sec-evaluating.</span>
+<span id="cb1-139"><a href="#cb1-139" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-140"><a href="#cb1-140" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">logits</span><span class="co">]</span>{#gloss-logits}</span>
+<span id="cb1-141"><a href="#cb1-141" aria-hidden="true" tabindex="-1"></a>:   The scores that the model gives to every token of its vocabulary at a position, before they are turned into</span>
+<span id="cb1-142"><a href="#cb1-142" aria-hidden="true" tabindex="-1"></a>    probabilities. See @sec-tokens.</span>
+<span id="cb1-143"><a href="#cb1-143" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-144"><a href="#cb1-144" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">logits processor</span><span class="co">]</span>{#gloss-logits-processor}</span>
+<span id="cb1-145"><a href="#cb1-145" aria-hidden="true" tabindex="-1"></a>:   A function that edits the logits after the model produces them and before a token is chosen. Constrained decoding</span>
+<span id="cb1-146"><a href="#cb1-146" aria-hidden="true" tabindex="-1"></a>    is one. See @sec-tokens.</span>
+<span id="cb1-147"><a href="#cb1-147" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-148"><a href="#cb1-148" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">LoRA</span><span class="co">]</span>{#gloss-lora}</span>
+<span id="cb1-149"><a href="#cb1-149" aria-hidden="true" tabindex="-1"></a>:   Low-rank adaptation: the weights of the model are frozen, and each adapted matrix gets an update that is the</span>
+<span id="cb1-150"><a href="#cb1-150" aria-hidden="true" tabindex="-1"></a>    product of two thin matrices, so only those are trained. See @sec-lora.</span>
+<span id="cb1-151"><a href="#cb1-151" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-152"><a href="#cb1-152" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">loss</span><span class="co">]</span>{#gloss-loss}</span>
+<span id="cb1-153"><a href="#cb1-153" aria-hidden="true" tabindex="-1"></a>:   The number that training makes smaller: the negative log probability that the model gives to the gold tokens,</span>
+<span id="cb1-154"><a href="#cb1-154" aria-hidden="true" tabindex="-1"></a>    averaged over the label tokens. See @sec-fine-tuning.</span>
+<span id="cb1-155"><a href="#cb1-155" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-156"><a href="#cb1-156" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">main run</span><span class="co">]</span>{#gloss-main-run}</span>
+<span id="cb1-157"><a href="#cb1-157" aria-hidden="true" tabindex="-1"></a>:   The LoRA fine-tuning of Qwen3-4B on the DSL whose adapter the later chapters use. See @sec-training.</span>
+<span id="cb1-158"><a href="#cb1-158" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-159"><a href="#cb1-159" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">merging an adapter</span><span class="co">]</span>{#gloss-merging}</span>
+<span id="cb1-160"><a href="#cb1-160" aria-hidden="true" tabindex="-1"></a>:   Adding the adapter's update into the base weights, so the model runs without the adapter. It is the same function</span>
+<span id="cb1-161"><a href="#cb1-161" aria-hidden="true" tabindex="-1"></a>    in 32-bit precision and not exactly in bf16. See @sec-lora.</span>
+<span id="cb1-162"><a href="#cb1-162" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-163"><a href="#cb1-163" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">negative log-likelihood</span><span class="co">]</span>{#gloss-nll}</span>
+<span id="cb1-164"><a href="#cb1-164" aria-hidden="true" tabindex="-1"></a>:   The loss of a sequence: the sum, or mean, of the surprisals of its tokens. See @sec-probing.</span>
+<span id="cb1-165"><a href="#cb1-165" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-166"><a href="#cb1-166" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">number-selection turn</span><span class="co">]</span>{#gloss-number-selection}</span>
+<span id="cb1-167"><a href="#cb1-167" aria-hidden="true" tabindex="-1"></a>:   A turn whose program is only a number copied from the page, with no operation. All other turns are lists of steps.</span>
+<span id="cb1-168"><a href="#cb1-168" aria-hidden="true" tabindex="-1"></a>    See @sec-dsl.</span>
+<span id="cb1-169"><a href="#cb1-169" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-170"><a href="#cb1-170" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">paired bootstrap</span><span class="co">]</span>{#gloss-paired-bootstrap}</span>
+<span id="cb1-171"><a href="#cb1-171" aria-hidden="true" tabindex="-1"></a>:   An interval for the difference between two systems scored on the same turns. It resamples whole report pages</span>
+<span id="cb1-172"><a href="#cb1-172" aria-hidden="true" tabindex="-1"></a>    (with every conversation written from them), since the turns of one conversation, and the conversations of one page, are not independent, and computes both accuracies on each resample. An interval</span>
+<span id="cb1-173"><a href="#cb1-173" aria-hidden="true" tabindex="-1"></a>    that excludes zero is a clear difference. See @sec-baseline-rule.</span>
+<span id="cb1-174"><a href="#cb1-174" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-175"><a href="#cb1-175" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">perplexity</span><span class="co">]</span>{#gloss-perplexity}</span>
+<span id="cb1-176"><a href="#cb1-176" aria-hidden="true" tabindex="-1"></a>:   The exponential of the mean surprisal: the model is as uncertain, on average, as if it were choosing among that</span>
+<span id="cb1-177"><a href="#cb1-177" aria-hidden="true" tabindex="-1"></a>    many equally likely tokens. See @sec-probing.</span>
+<span id="cb1-178"><a href="#cb1-178" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-179"><a href="#cb1-179" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">post-training</span><span class="co">]</span>{#gloss-post-training}</span>
+<span id="cb1-180"><a href="#cb1-180" aria-hidden="true" tabindex="-1"></a>:   The training that turns a pretrained model into an instruct model, such as supervised fine-tuning, distillation and</span>
+<span id="cb1-181"><a href="#cb1-181" aria-hidden="true" tabindex="-1"></a>    reinforcement learning. See @sec-base-instruct.</span>
+<span id="cb1-182"><a href="#cb1-182" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-183"><a href="#cb1-183" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">pretraining</span><span class="co">]</span>{#gloss-pretraining}</span>
+<span id="cb1-184"><a href="#cb1-184" aria-hidden="true" tabindex="-1"></a>:   The first stage of training, in which the model learns to predict the next token on a large body of text. See @sec-base-instruct.</span>
+<span id="cb1-185"><a href="#cb1-185" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-186"><a href="#cb1-186" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">program accuracy</span><span class="co">]</span>{#gloss-program-accuracy}</span>
+<span id="cb1-187"><a href="#cb1-187" aria-hidden="true" tabindex="-1"></a>:   The share of turns where the model's program is the gold program by the rule of the official ConvFinQA script: the</span>
+<span id="cb1-188"><a href="#cb1-188" aria-hidden="true" tabindex="-1"></a>    programs are compared as expressions, so the operands of <span class="in">`add`</span> and <span class="in">`multiply`</span> may come in either order, and the</span>
+<span id="cb1-189"><a href="#cb1-189" aria-hidden="true" tabindex="-1"></a>    arguments are compared as exact text. It is stricter than execution accuracy. See @sec-evaluating.</span>
+<span id="cb1-190"><a href="#cb1-190" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-191"><a href="#cb1-191" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">QLoRA</span><span class="co">]</span>{#gloss-qlora}</span>
+<span id="cb1-192"><a href="#cb1-192" aria-hidden="true" tabindex="-1"></a>:   LoRA on a base model whose weights are stored in a low-precision, quantized format, to save memory. See @sec-lora.</span>
+<span id="cb1-193"><a href="#cb1-193" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-194"><a href="#cb1-194" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">rank</span><span class="co">]</span>{#gloss-rank}</span>
+<span id="cb1-195"><a href="#cb1-195" aria-hidden="true" tabindex="-1"></a>:   The number of directions between the two thin matrices of a LoRA update, and so the largest rank the update can</span>
+<span id="cb1-196"><a href="#cb1-196" aria-hidden="true" tabindex="-1"></a>    have. See @sec-lora.</span>
+<span id="cb1-197"><a href="#cb1-197" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-198"><a href="#cb1-198" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">rank sweep</span><span class="co">]</span>{#gloss-rank-sweep}</span>
+<span id="cb1-199"><a href="#cb1-199" aria-hidden="true" tabindex="-1"></a>:   The same fine-tuning run at several values of the LoRA rank, compared on the same turns. See @sec-rank-sweep.</span>
+<span id="cb1-200"><a href="#cb1-200" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-201"><a href="#cb1-201" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">residual connection</span><span class="co">]</span>{#gloss-residual}</span>
+<span id="cb1-202"><a href="#cb1-202" aria-hidden="true" tabindex="-1"></a>:   The addition of a layer's input to its output, so the layer learns a change to its input and not a replacement.</span>
+<span id="cb1-203"><a href="#cb1-203" aria-hidden="true" tabindex="-1"></a>    See @sec-anatomy.</span>
+<span id="cb1-204"><a href="#cb1-204" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-205"><a href="#cb1-205" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">rotary position embedding</span><span class="co">]</span>{#gloss-rope}</span>
+<span id="cb1-206"><a href="#cb1-206" aria-hidden="true" tabindex="-1"></a>:   The way Qwen3 encodes position: queries and keys are rotated by an angle that depends on the position, so an</span>
+<span id="cb1-207"><a href="#cb1-207" aria-hidden="true" tabindex="-1"></a>    attention score depends on the distance between two tokens. See @sec-anatomy.</span>
+<span id="cb1-208"><a href="#cb1-208" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-209"><a href="#cb1-209" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">sampling and temperature</span><span class="co">]</span>{#gloss-sampling}</span>
+<span id="cb1-210"><a href="#cb1-210" aria-hidden="true" tabindex="-1"></a>:   Sampling draws the next token from the probabilities. The temperature divides the logits first: a low value</span>
+<span id="cb1-211"><a href="#cb1-211" aria-hidden="true" tabindex="-1"></a>    sharpens the distribution towards greedy decoding, and a high one flattens it. See @sec-tokens.</span>
+<span id="cb1-212"><a href="#cb1-212" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-213"><a href="#cb1-213" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">scale check</span><span class="co">]</span>{#gloss-scale-check}</span>
+<span id="cb1-214"><a href="#cb1-214" aria-hidden="true" tabindex="-1"></a>:   A check on whether an answer is the gold answer times, or divided by, a power of ten, which is a different mistake</span>
+<span id="cb1-215"><a href="#cb1-215" aria-hidden="true" tabindex="-1"></a>    from a wrong number. See @sec-evaluating.</span>
+<span id="cb1-216"><a href="#cb1-216" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-217"><a href="#cb1-217" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">self-consistency</span><span class="co">]</span>{#gloss-self-consistency}</span>
+<span id="cb1-218"><a href="#cb1-218" aria-hidden="true" tabindex="-1"></a>:   Sampling several programs at a temperature, dropping those that do not run, and taking the answer that most of them</span>
+<span id="cb1-219"><a href="#cb1-219" aria-hidden="true" tabindex="-1"></a>    agree on. See @sec-evaluating.</span>
+<span id="cb1-220"><a href="#cb1-220" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-221"><a href="#cb1-221" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">singular values</span><span class="co">]</span>{#gloss-singular-values}</span>
+<span id="cb1-222"><a href="#cb1-222" aria-hidden="true" tabindex="-1"></a>:   The strengths of the independent directions of a matrix. For a LoRA update they show how its size is spread over</span>
+<span id="cb1-223"><a href="#cb1-223" aria-hidden="true" tabindex="-1"></a>    its directions. See @sec-training.</span>
+<span id="cb1-224"><a href="#cb1-224" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-225"><a href="#cb1-225" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">smoke run</span><span class="co">]</span>{#gloss-smoke-run}</span>
+<span id="cb1-226"><a href="#cb1-226" aria-hidden="true" tabindex="-1"></a>:   A short run of the 0.5B model with the same recipe, to test the training code before the main run. See @sec-training.</span>
+<span id="cb1-227"><a href="#cb1-227" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-228"><a href="#cb1-228" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">softmax</span><span class="co">]</span>{#gloss-softmax}</span>
+<span id="cb1-229"><a href="#cb1-229" aria-hidden="true" tabindex="-1"></a>:   The function that turns logits into probabilities that are positive and sum to one. See @sec-tokens.</span>
+<span id="cb1-230"><a href="#cb1-230" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-231"><a href="#cb1-231" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">supervised fine-tuning (SFT)</span><span class="co">]</span>{#gloss-sft}</span>
+<span id="cb1-232"><a href="#cb1-232" aria-hidden="true" tabindex="-1"></a>:   Training a model on example outputs with a next-token loss. See @sec-base-instruct.</span>
+<span id="cb1-233"><a href="#cb1-233" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-234"><a href="#cb1-234" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">surprisal</span><span class="co">]</span>{#gloss-surprisal}</span>
+<span id="cb1-235"><a href="#cb1-235" aria-hidden="true" tabindex="-1"></a>:   The negative log of the probability the model gave to a token, in nats. See @sec-probing.</span>
+<span id="cb1-236"><a href="#cb1-236" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-237"><a href="#cb1-237" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">system message</span><span class="co">]</span>{#gloss-system-message}</span>
+<span id="cb1-238"><a href="#cb1-238" aria-hidden="true" tabindex="-1"></a>:   The first message of a prompt, which tells the model what its task and its output format are. See @sec-baseline.</span>
+<span id="cb1-239"><a href="#cb1-239" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-240"><a href="#cb1-240" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">teacher forcing</span><span class="co">]</span>{#gloss-teacher-forcing}</span>
+<span id="cb1-241"><a href="#cb1-241" aria-hidden="true" tabindex="-1"></a>:   Training with the gold earlier tokens or turns in the input, whatever the model would have produced. See @sec-base-instruct.</span>
+<span id="cb1-242"><a href="#cb1-242" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-243"><a href="#cb1-243" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">token and tokenizer</span><span class="co">]</span>{#gloss-token}</span>
+<span id="cb1-244"><a href="#cb1-244" aria-hidden="true" tabindex="-1"></a>:   A token is a piece of text, usually a word or part of one, that the model reads and writes as one unit. The</span>
+<span id="cb1-245"><a href="#cb1-245" aria-hidden="true" tabindex="-1"></a>    tokenizer turns text into token ids and back. See @sec-tokens.</span>
+<span id="cb1-246"><a href="#cb1-246" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-247"><a href="#cb1-247" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">train-fit</span><span class="co">]</span>{#gloss-train-fit}</span>
+<span id="cb1-248"><a href="#cb1-248" aria-hidden="true" tabindex="-1"></a>:   The part of the training data that a run trains on: the training split without the validation conversations. See @sec-training.</span>
+<span id="cb1-249"><a href="#cb1-249" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-250"><a href="#cb1-250" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">Type I and Type II conversations</span><span class="co">]</span>{#gloss-conversation-types}</span>
+<span id="cb1-251"><a href="#cb1-251" aria-hidden="true" tabindex="-1"></a>:   Type I conversations break one FinQA question into a chain of turns. Type II conversations join two questions about</span>
+<span id="cb1-252"><a href="#cb1-252" aria-hidden="true" tabindex="-1"></a>    the same page. See @sec-convfinqa.</span>
+<span id="cb1-253"><a href="#cb1-253" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-254"><a href="#cb1-254" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">validation split</span><span class="co">]</span>{#gloss-validation}</span>
+<span id="cb1-255"><a href="#cb1-255" aria-hidden="true" tabindex="-1"></a>:   A tenth of the training conversations, grouped by page, held out for the choices of the book. The tuning is done</span>
+<span id="cb1-256"><a href="#cb1-256" aria-hidden="true" tabindex="-1"></a>    on it, and the development split is kept for the final numbers. See @sec-formatting.</span>
+<span id="cb1-257"><a href="#cb1-257" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-258"><a href="#cb1-258" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">warmup</span><span class="co">]</span>{#gloss-warmup}</span>
+<span id="cb1-259"><a href="#cb1-259" aria-hidden="true" tabindex="-1"></a>:   The first steps of a run, in which the learning rate rises linearly from zero to its peak. See @sec-fine-tuning.</span>
+<span id="cb1-260"><a href="#cb1-260" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-261"><a href="#cb1-261" aria-hidden="true" tabindex="-1"></a><span class="co">[</span><span class="ot">weight decay</span><span class="co">]</span>{#gloss-weight-decay}</span>
+<span id="cb1-262"><a href="#cb1-262" aria-hidden="true" tabindex="-1"></a>:   A term that pulls each weight a little towards zero at every step. See @sec-fine-tuning.</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button" data-in-quarto-modal=""><i class="bi"></i></button></div>
+</div></div></div></div></div>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
