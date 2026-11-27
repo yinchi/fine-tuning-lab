@@ -571,7 +571,7 @@ slower = small_on["median_step_s"] / small_off["median_step_s"] - 1
 hours_on = estimate_hours(big_on["median_step_s"], n_fit, 2, 16)
 
 # the sentences below
-assert 0.3 < mem_cut < 0.5 and 0.1 < slower < 0.3  # two fifths, a fifth
+assert 0.3 < mem_cut < 0.5 and 0.1 < slower < 0.3  # about a third or more less memory, a bit more time
 assert big_off["median_step_s"] is None  # does not fit
 assert big_on["worst_peak_gb"] < cap / 2  # plenty of room
 ```
@@ -580,7 +580,7 @@ assert big_on["worst_peak_gb"] < cap / 2  # plenty of room
 
 - On the 0.5B model, checkpointing cuts the peak memory of the typical steps from `{python} f"{small_off['typical_peak_gb']:.0f}"` GB to `{python} f"{small_on['typical_peak_gb']:.0f}"` GB, and of the
   longest batch from `{python} f"{small_off['worst_peak_gb']:.0f}"` GB to `{python} f"{small_on['worst_peak_gb']:.0f}"` GB, and makes a step about `{python} f"{slower:.0%}"` slower (`{python} f"{small_off['median_step_s']:.1f}"` s to `{python} f"{small_on['median_step_s']:.1f}"` s). That is the
-  trade: roughly two fifths less memory for a fifth more time.
+  trade: `{python} f"{mem_cut:.0%}"` less memory for `{python} f"{slower:.0%}"` more time.
 - On the 4B model with LoRA, **without checkpointing the run does not fit** in `{python} f"{cap:g}"` GB at a micro-batch of 4.
   The weights are only `{python} f"{big_on['weights_gb']:.1f}"` GB; it is the activations of 36 layers over thousands of tokens, and the
   logits (the output over a 152,000-token vocabulary at every position), that fill the memory. With
@@ -986,7 +986,7 @@ chapters measure properly.
   accumulated micro-batches), the AdamW learning rate with its warmup and cosine decay, clipping, and the
   precision of the weights.
 - Memory is dominated by what depends on the batch (activations and the logits over the vocabulary), not
-  by the size of the model; gradient checkpointing trades about a fifth more time for about two fifths less
+  by the size of the model; gradient checkpointing trades `{python} f"{slower:.0%}"` more time for `{python} f"{mem_cut:.0%}"` less
   memory on the model we measured.
 - A library run can be **checked** against the pieces: the step count, the labels, the learning-rate
   schedule and the step-0 loss all matched what we computed by hand. The same four checks apply to

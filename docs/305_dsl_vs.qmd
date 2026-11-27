@@ -595,7 +595,7 @@ With examples, the DSL runs produce `{python} pts(fewer_invalid[("e3", "pred")])
 history), against leads of `{python} pts(lead[("e3", "pred")]["difference"])` and
 `{python} pts(lead[("e3", "gold")]["difference"])`. The lead is about as large as the difference in invalid output, so it
 may be largely the untuned model failing to write the DSL, which tuning removes: an adapter for the DSL writes a valid
-program on all but one turn of the validation data (@sec-evaluating-errors). If a lead remains after tuning, it is a lead in the reasoning, and the only way to see it is
+program on essentially every turn of the validation data (@sec-evaluating-errors). If a lead remains after tuning, it is a lead in the reasoning, and the only way to see it is
 to train.
 
 The next step is one adapter for Python with the hyperparameters of the DSL adapter,

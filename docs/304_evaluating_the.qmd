@@ -753,7 +753,7 @@ pd.DataFrame(rows_).set_index("type")
 
 `{python} counts["right with the gold history"]` of the `{python} n_wrong` wrong turns are right when the earlier answers
 are the gold ones. With the predicted history, a mistake at one turn can make the next turns wrong, and these turns
-account for nearly all of the `{python} gap_turns` turns by which the gold history is ahead; the model is not wrong at
+are about as many as the `{python} gap_turns` turns by which the gold history is ahead; the model is not wrong at
 them for a reason of its own. Of the rest,
 `{python} counts["other numbers"]` have the right operations with other numbers, or another number where a number was
 asked for, and `{python} counts["wrong operation"]` have other operations. The remaining types are
@@ -1449,7 +1449,7 @@ examples from every call to the training run, which is paid once.
   the untuned model with the same prompt and `{python} f"{ci['base']['accuracy']:.1%}"` with the best prompt. With the
   gold history it gets `{python} f"{ci['gold']['accuracy']:.1%}"`. By program accuracy, the stricter measure, it gets
   `{python} f"{ci_program['pred']['accuracy']:.1%}"`.
-- **Where it goes wrong.** Almost every wrong output is a valid program
+- **Where it goes wrong.** The wrong outputs are valid programs
   (`{python} invalid["pred"]` of `{python} wrong["pred"]` is not). `{python} counts["right with the gold history"]` of the
   `{python} n_wrong` wrong turns are right once the earlier answers are the gold ones, and most of the rest use other
   numbers or other operations. At the first token where a wrong program departs from the gold one, the gold token is

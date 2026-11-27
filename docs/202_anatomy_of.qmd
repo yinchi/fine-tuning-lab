@@ -479,6 +479,7 @@ d, theta = cfg.head_dim, cfg.rope_parameters["rope_theta"]
 cos, sin = rope_tables(ids.shape[1], d, theta)
 
 # one fixed query and one fixed key
+torch.manual_seed(0)
 q, k = torch.randn(d, device="cuda"), torch.randn(d, device="cuda")
 
 def rotated_dot(m, n):

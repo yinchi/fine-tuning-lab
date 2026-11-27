@@ -235,7 +235,7 @@ pd.DataFrame(table).T.rename_axis(["history", "rank"])
 ```{python}
 #| label: fig-rank-accuracy
 #| fig-cap: "Accuracy on the validation turns of the adapters of each rank, with predicted history and with gold history. The bars are 95% intervals from resampling conversations. Rank 64 is the highest point in both lines."
-#| fig-alt: "Line chart of accuracy against LoRA rank on a logarithmic axis from 4 to 64, with two lines and interval bars. The line for gold history lies above the line for predicted history at every rank. The gold line is nearly level from rank 4 to rank 32 and rises at rank 64; the predicted-history line rises slowly across the ranks. Both lines are highest at rank 64."
+#| fig-alt: "Line chart of accuracy against LoRA rank on a logarithmic axis from 4 to 64, with two lines and interval bars. The line for gold history lies above the line for predicted history at every rank. The gold line is nearly level from rank 4 to rank 32 and rises at rank 64; the predicted-history line rises from rank 4 to rank 8 and is nearly level after that, apart from a small dip at rank 32. Both lines are highest at rank 64."
 # Plot the accuracy of each rank, in both history modes.
 fig, ax = plt.subplots(figsize=(6.5, 3.4))
 for m, label, color, shift in [

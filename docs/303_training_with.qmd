@@ -323,8 +323,8 @@ plt.show()
 The validation loss starts at `{python} f"{step0:.4f}"`, which is the untuned model's loss of @sec-probing, now measured
 through the training code, so the two agree. By step `{python} eval_steps[1]` it has fallen to
 `{python} f"{eval_values[1]:.3f}"`, `{python} f"{step0 / eval_values[1]:.0f}"`-fold. It keeps falling at every check up to step `{python} best_step`, where it reaches
-`{python} f"{best:.4f}"`. The first check alone covers over 90% of the whole fall. The last two checks differ from it by less than
-`{python} f"{max(after) - best:.4f}"`: the loss has levelled off while the learning rate falls along the tail of the
+`{python} f"{best:.4f}"`. The first check alone covers over 90% of the whole fall. The last two checks are within
+`{python} f"{100 * (max(after) - best) / best:.1f}"`% of it: the loss has levelled off while the learning rate falls along the tail of the
 cosine (@fig-lr-schedule). The kept adapter is the one
 from step `{python} best_step`, of the `{python} steps` steps the run took. The loss is not rising again, so the run
 shows no sign of overfitting, and the weight decay of zero was not a problem.
