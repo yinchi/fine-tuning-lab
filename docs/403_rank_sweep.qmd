@@ -191,9 +191,25 @@ assert diff[64, "gold"]["difference"] > 0
 # rank 64 has the highest accuracy in both modes
 for m in MODES:
     assert max(RANKS, key=lambda r: acc[r, m]["accuracy"]) == 64
-# with predicted history the accuracy never falls as the rank rises
+# with predicted history the accuracy rises from rank 4 to rank 8, is level from
+# rank 8 to rank 32, and no step up the ranks falls by as much as a point
 pred_acc = [acc[r, "pred"]["accuracy"] for r in RANKS]
-assert pred_acc == sorted(pred_acc)
+assert RANKS == [4, 8, 16, 32, 64]
+assert pred_acc[1] > pred_acc[0]
+level = pred_acc[1:4]
+spread = max(level) - min(level)
+assert spread < 0.01
+falls = [
+    (a, b, pred_acc[i] - pred_acc[i + 1])
+    for i, (a, b) in enumerate(zip(RANKS, RANKS[1:]))
+]
+fall_from, fall_to, largest_fall = max(falls, key=lambda f: f[2])
+assert 0 < largest_fall < 0.01
+assert sum(f[2] > 0 for f in falls) == 1  # the text says "the one step down"
+# rank 4 is the one furthest from rank 16 with predicted history
+assert max(
+    (r for r in RANKS if r != 16), key=lambda r: abs(diff[r, "pred"]["difference"])
+) == 4
 
 pct = lambda x: f"{100 * x:.1f}%"
 pts = lambda x: f"{100 * x:+.1f}"
@@ -246,8 +262,9 @@ plt.show()
 
 With predicted history, none of the four other ranks differs from rank 16 by an interval that excludes zero. The
 accuracy goes from `{python} pct(acc[4, "pred"]["accuracy"])` at rank 4 to
-`{python} pct(acc[64, "pred"]["accuracy"])` at rank 64 and does not fall anywhere along the way, but the steps
-are small against their intervals: the largest, rank 4 against rank 16, is
+`{python} pct(acc[64, "pred"]["accuracy"])` at rank 64. It does not rise steadily: the one step down, from rank
+`{python} fall_from` to rank `{python} fall_to`, is `{python} f"{100 * largest_fall:.1f}"` points. The steps are small
+against their intervals: the largest difference from rank 16, rank 4, is
 `{python} pts(diff[4, "pred"]["difference"])` points with an interval of `{python} pts(diff[4, "pred"]["low"])` to
 `{python} pts(diff[4, "pred"]["high"])`. With gold history, ranks 4, 8 and 32 are within
 `{python} f"{100 * max(abs(diff[r, 'gold']['difference']) for r in [4, 8, 32]):.1f}"` points of rank 16 and none is shown to
@@ -337,7 +354,8 @@ plt.show()
 All five runs start from the loss of the untuned model, `{python} f"{history[16]['curve'][0][1]:.2f}"`, and the lowest
 loss falls as the rank goes up to 32 (`{python} f"{history[4]['best']:.4f}"` at rank 4,
 `{python} f"{history[32]['best']:.4f}"` at rank 32) and is no lower at 64 (`{python} f"{history[64]['best']:.4f}"`).
-With predicted history the accuracy over the same range rises or stays level. The two lowest ranks reach their
+With predicted history the accuracy over the same range rises from rank 4 to rank 8 and then stays within
+`{python} f"{100 * spread:.1f}"` points from rank 8 to rank 32. The two lowest ranks reach their
 lowest loss at the last check, step `{python} max_steps`, so they were still improving when the run ended; the other
 three reach theirs at step `{python} history[16]["best_step"]` and are slightly above it at the end, by at most
 `{python} f"{late_rise:.4f}"`. The runs have the same schedule, so a lower rank
@@ -446,7 +464,7 @@ main_scores = list(main_pred.jsonl("scores.jsonl"))
 main_sum = main_pred.json("summary.json")
 n_val = main_sum["n"]
 n_invalid = round(main_sum["invalid_rate"] * n_val)
-n_bad_reference = main_sum["by_kind"]["bad_reference"]
+n_bad_reference = main_sum["by_kind"].get("bad_reference", 0)
 
 # DSL adapter: the numbers it writes, checked against the page (@sec-evaluating-errors)
 dsl_checks = [
@@ -455,7 +473,9 @@ dsl_checks = [
 ]
 dsl_off_page = sum(not c["lit_grounded"] for c in dsl_checks)
 assert dsl_off_page == 0
-assert n_invalid == n_bad_reference == 1
+# the fine-tuned model writes almost nothing invalid, and what it does is a bad reference
+assert n_invalid <= 1
+assert n_bad_reference == n_invalid
 
 # Python adapter against the DSL adapter (@sec-python-numbers)
 py_scores = list(
@@ -473,7 +493,8 @@ Three ideas would add a constraint or a variant that the results show to be unne
   grammar would have nothing to forbid. It is the untuned model that writes numbers that are not on the page
   (@sec-python-numbers).
 - **A grammar for the `#k` references to earlier steps.** Of the `{python} f"{n_val:,}"` validation turns of the
-  fine-tuned model, `{python} n_invalid` is invalid, and it is a reference to a step that does not exist (@sec-constrained-results). A grammar for references could fix at most that turn.
+  fine-tuned model, `{python} n_invalid` are invalid, and `{python} n_bad_reference` of them are a reference to a step that does not exist
+  (@sec-constrained-results). A grammar for references could fix at most those `{python} n_invalid` turns.
 - **A Python variant where variables persist across turns,** like a notebook. The Python adapter is
   `{python} pts(py_lead["difference"])` points from the DSL adapter on the validation turns, with a paired interval of
   `{python} pts(py_lead["low"])` to `{python} pts(py_lead["high"])` (predicted history), so a second Python variant

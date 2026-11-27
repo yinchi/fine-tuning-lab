@@ -805,12 +805,17 @@ either.
 #HEAVY
 metrics_py = get("python_lora_0").json("metrics.json")
 metrics_dsl = get("lora_main_0").json("metrics.json")
-assert metrics_py["best_step"] == metrics_dsl["best_step"]
+# both runs converge: each ends within 2% of its best validation loss, and the two
+# best losses are within 5% of each other (the best step itself is where noise puts it)
+for m in (metrics_py, metrics_dsl):
+    assert m["final_eval_loss"] <= 1.02 * m["best_eval_loss"]
+assert abs(metrics_py["best_eval_loss"] / metrics_dsl["best_eval_loss"] - 1) < 0.05
 ```
 
 The training runs agree. The validation loss starts at `{python} f"{metrics_dsl['step0_eval_loss']:.2f}"` for the DSL and
 `{python} f"{metrics_py['step0_eval_loss']:.2f}"` for Python, and ends at `{python} f"{metrics_dsl['best_eval_loss']:.4f}"` and
-`{python} f"{metrics_py['best_eval_loss']:.4f}"` (both at step `{python} metrics_py["best_step"]`). The two losses are measured
+`{python} f"{metrics_py['best_eval_loss']:.4f}"` (best at step `{python} metrics_dsl["best_step"]` for the DSL and
+`{python} metrics_py["best_step"]` for Python; both curves are flat by then). The two losses are measured
 on different token sequences, so they say that both runs converge, not that one format is easier.
 
 By the rule of the plan, then, the fine-tuned Python rows are not run on the development data, and the book keeps the

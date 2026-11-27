@@ -832,7 +832,9 @@ timing = {
     }
     for k, (a, b) in RUNS.items()
 }
-assert all(t["on"][0] <= t["off"][0] for t in timing.values())
+# the logs count whole seconds from separate sessions: a tie can come out a second
+# either way, so the claim is "not noticeably longer", not "never longer"
+assert all(t["on"][0] <= 1.05 * t["off"][0] for t in timing.values())
 assert all(t["on"][1] <= t["off"][1] for t in timing.values())
 pd.DataFrame([
     {
@@ -848,8 +850,8 @@ pd.DataFrame([
 
 These are the durations that the build logs of the runs report, and they do not isolate the cost of the grammar. The
 runs were made in separate sessions, and the runs without a grammar generated at least as many tokens (invalid answers
-can run on). What the table can say is that no run with the grammar took longer than the run without it
-(the largest ratio is `{python} f"{max(t['on'][0] / t['off'][0] for t in timing.values()):.2f}"`). The overhead of the grammar
+can run on). What the table can say is that no run with the grammar took noticeably longer than the run without it
+(the largest ratio of the time with the grammar to the time without is `{python} f"{max(t['on'][0] / t['off'][0] for t in timing.values()):.2f}"`). The overhead of the grammar
 is not measured in this book.
 
 ## Discussion {#sec-constrained-discussion}
