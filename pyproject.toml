@@ -16,6 +16,11 @@ dependencies = [
     "tensorboard",
 ]
 
+[project.scripts]
+train-adapter = "convfinqa.cli.train:main"
+chat = "convfinqa.cli.chat:main"
+print-example = "convfinqa.cli.example:main"
+
 [dependency-groups]
 dev = [
     "ipykernel",

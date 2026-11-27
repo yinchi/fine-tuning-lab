@@ -20,4 +20,17 @@ quarto render docs/                       # render the whole book (stale heavy a
 quarto render docs/<chapter>.qmd --no-execute-daemon   # (re-)execute one chapter
 ```
 
+## Using the result without the book
+
+Three commands, run from this directory (see the last chapter of the book for details):
+
+```bash
+uv run train-adapter                          # build the adapter from scratch (about 4 hours on the GB10); writes outputs/adapter/
+uv run print-example dev:3 > page.json        # print one conversation of the dataset as a page (--show-gold adds the answers)
+uv run chat --page page.json                  # ask the fine-tuned model questions about the page, one per line
+uv run chat --page page.json -q "what was ...?" -q "and in 2007?"   # or give the questions on the command line
+```
+
+`chat` also works with the book's own adapter: `--adapter artifacts/lora_main_0/adapter`.
+
 Hardware used: NVIDIA DGX Spark (GB10, 128 GB unified memory, aarch64, CUDA 13.2).

@@ -1,17 +1,19 @@
-"""Dev numbers appear in one chapter only (PLAN.md, "Where dev appears: one chapter")."""
+"""Dev numbers appear in the final-results chapter, and are restated in the summary (PLAN.md, "Where dev appears")."""
 
 import re
 from pathlib import Path
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
-FINAL = "402_the_final.qmd"  # the final-results chapter, the only one that may ask for dev artifacts
+FINAL = "402_the_final.qmd"  # the final-results chapter, the one that reports the dev numbers
+SUMMARY = "404_summary.qmd"  # restates §4.2's headline from the same artifacts (decision of 2026-11-27); builds none
+MAY_ASK_FOR_DEV = {FINAL, SUMMARY}
 # get("...") or get(f"...") whose name has "dev" as a word of its own: scores_tuned_dev_main_0_pred, ...
 DEV_GET = re.compile(r"""\bget\(\s*f?(["'])(?:[^"']*_)?dev(?:_[^"']*)?\1""")
 CELL = re.compile(r"^```\{python\}.*?^```", re.S | re.M)
 
 
 def chapters_before_final():
-    return [p for p in sorted(DOCS.glob("[0-9]*.qmd")) if p.name != FINAL]
+    return [p for p in sorted(DOCS.glob("[0-9]*.qmd")) if p.name not in MAY_ASK_FOR_DEV]
 
 
 def test_the_pattern_finds_dev_names_and_only_those():

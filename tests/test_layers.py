@@ -66,3 +66,13 @@ def test_artifact_modules_import_only_what_they_may():
         imported = hashing.local_imports((directory / f"{module}.py").read_text(), "convfinqa.artifacts")
         used = {name.split(".")[2] for name in imported if name.startswith("convfinqa.artifacts.")}
         assert used <= allowed, f"{module} imports {sorted(used - allowed)}"
+
+
+def test_nothing_imports_the_standalone_commands():
+    root = Path(importlib.util.find_spec("convfinqa").origin).parent
+    for path in root.rglob("*.py"):
+        parts = path.relative_to(root).with_suffix("").parts
+        if parts[0] == "cli" or path.name in ("__init__.py", "__main__.py"):
+            continue
+        used = {m for m in hashing.module_closure(".".join(("convfinqa", *parts))) if m.startswith("convfinqa.cli")}
+        assert not used, f"{'.'.join(parts)} imports {sorted(used)}"

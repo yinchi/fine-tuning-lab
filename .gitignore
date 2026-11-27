@@ -7,6 +7,7 @@ __pycache__/
 # Data and run outputs (large, regenerable)
 /data/
 /artifacts/
+/outputs/
 
 # Quarto build output (the freeze cache docs/_freeze/ IS committed)
 docs/_book/

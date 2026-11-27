@@ -1,0 +1,111 @@
+# Summary {#sec-summary}
+
+```{python}
+#| code-fold: true
+#HEAVY
+from convfinqa.artifacts import get
+from convfinqa.stats import bootstrap_accuracy, paired_difference
+
+DEV = {
+    ("fine-tuned", "pred"): "scores_tuned_dev_main_0_pred",
+    ("fine-tuned", "gold"): "scores_tuned_dev_main_0_gold",
+    ("e3p", "pred"): "scores_untuned_dev_e3p_0_pred",
+    ("e0p", "pred"): "scores_untuned_dev_e0p_0_pred",
+}
+dev = {k: list(get(name).jsonl("scores.jsonl")) for k, name in DEV.items()}
+acc = {k: bootstrap_accuracy(v) for k, v in dev.items()}
+lead_e3p = paired_difference(dev[("fine-tuned", "pred")], dev[("e3p", "pred")])
+lead_e0p = paired_difference(dev[("fine-tuned", "pred")], dev[("e0p", "pred")])
+n_dev_turns = len(dev[("fine-tuned", "pred")])
+# the fine-tuned model is ahead of both untuned systems by more than the resampling noise (@sec-final)
+assert lead_e3p["excludes_zero"] and lead_e3p["difference"] > 0
+assert lead_e0p["excludes_zero"] and lead_e0p["difference"] > lead_e3p["difference"]
+# and the gold history is ahead of the predicted one
+assert acc[("fine-tuned", "gold")]["accuracy"] > acc[("fine-tuned", "pred")]["accuracy"]
+
+run = get("lora_main_0")
+metrics = run.json("metrics.json")
+max_steps = run.json("trainer_state.json")["max_steps"]
+hours = metrics["train_seconds"] / 3600
+# as a share of the base model, as in @sec-lora (total_params counts the adapter too)
+share = metrics["trainable_params"] / (metrics["total_params"] - metrics["trainable_params"])
+# the validation loss falls by a large factor, and the kept checkpoint is the lowest one (@sec-training)
+assert metrics["best_eval_loss"] < metrics["step0_eval_loss"] / 10
+
+val_main = list(get("scores_tuned_val_main_0_pred").jsonl("scores.jsonl"))
+python = paired_difference(list(get("scores_python_tuned_val_0_pred").jsonl("scores.jsonl")), val_main)
+# after fine-tuning, DSL and Python are tied (@sec-python-format)
+assert not python["excludes_zero"]
+
+untuned_free = paired_difference(
+    list(get("scores_constrained_untuned_val_e3p_0_pred_free").jsonl("scores.jsonl")),
+    list(get("scores_untuned_val_e3p_0_pred").jsonl("scores.jsonl")),
+)
+tuned_free = paired_difference(
+    list(get("scores_constrained_tuned_val_main_0_pred_free").jsonl("scores.jsonl")), val_main
+)
+# a grammar helps the untuned model and does almost nothing for the tuned one (@sec-constrained-decoding)
+assert untuned_free["low"] > 0
+assert abs(tuned_free["difference"]) < 0.005 and tuned_free["difference"] < untuned_free["difference"] / 4
+
+RANKS = {4: "rank4", 8: "rank8", 16: "main", 32: "rank32", 64: "rank64"}
+rank_scores = {r: list(get(f"scores_tuned_val_{n}_0_pred").jsonl("scores.jsonl")) for r, n in RANKS.items()}
+rank_acc = {r: bootstrap_accuracy(v)["accuracy"] for r, v in rank_scores.items()}
+rank_vs_16 = {r: paired_difference(rank_scores[r], rank_scores[16]) for r in RANKS if r != 16}
+spread = max(rank_acc.values()) - min(rank_acc.values())
+# every rank from 4 to 64 is within a few points of the others, and none is told apart from rank 16 (@sec-rank-sweep)
+assert spread < 0.03
+assert not any(d["excludes_zero"] for d in rank_vs_16.values())
+```
+
+The book fine-tunes a small model, Qwen3-4B-Instruct-2507, on one desktop GPU to answer the questions of ConvFinQA. A
+LoRA adapter of rank 16 teaches it to write each answer as a program in a small language, and the program is run to
+get the number. The adapter holds
+`{python} f"{metrics['trainable_params'] / 1e6:.0f}"` million weights, `{python} f"{100 * share:.2f}"`% of the model's,
+and took `{python} f"{hours:.1f}"` hours to train.
+
+On the development split, `{python} f"{n_dev_turns:,}"` turns that no choice of the book was made on, the fine-tuned
+model gets `{python} f"{acc[('fine-tuned', 'pred')]['accuracy']:.1%}"` of the answers right when its own earlier answers
+are the history of the conversation, and `{python} f"{acc[('fine-tuned', 'gold')]['accuracy']:.1%}"` when it is given
+the right ones (@sec-final). The best prompt for the untuned model, with three worked examples, gets
+`{python} f"{acc[('e3p', 'pred')]['accuracy']:.1%}"`, and the training prompt without examples
+`{python} f"{acc[('e0p', 'pred')]['accuracy']:.1%}"`. The fine-tuned model is
+`{python} f"{100 * lead_e3p['difference']:.1f}"` points ahead of the first and
+`{python} f"{100 * lead_e0p['difference']:.1f}"` points ahead of the second, and the intervals of both differences
+(from resampling whole report pages) stay above zero. The comparison rests on one training seed.
+
+The experiments on the validation split showed four more things:
+
+- Training took the validation loss from `{python} f"{metrics['step0_eval_loss']:.2f}"` to
+  `{python} f"{metrics['best_eval_loss']:.3f}"`, with the lowest value at step `{python} metrics["best_step"]` of
+  `{python} max_steps` (@sec-training).
+- After fine-tuning, writing the program in Python or in the small language makes no difference: the paired difference
+  is `{python} f"{100 * python['difference']:+.1f}"` points, and its interval includes zero (@sec-python-format).
+- A grammar that forces a valid program lifts the untuned model by
+  `{python} f"{100 * untuned_free['difference']:+.1f}"` points, and the fine-tuned one by
+  `{python} f"{100 * tuned_free['difference']:+.1f}"` (@sec-constrained-decoding).
+- Ranks from `{python} min(RANKS)` to `{python} max(RANKS)` end within
+  `{python} f"{100 * spread:.1f}"` points of each other, and none of the other ranks is told apart from rank 16
+  (@sec-rank-sweep).
+
+Three commands reproduce the result without the book. `train-adapter` downloads the data and the base model if they are
+missing, trains the adapter with the settings of the main run on the training and validation splits (the development
+split is not read), and writes the adapter, with a file that records what it was trained from, to `outputs/adapter`:
+
+```bash
+uv run train-adapter
+```
+
+Training on a GPU is not bit-for-bit repeatable (@sec-fine-tuning), so a new adapter lands close to the book's numbers
+and not on them. To ask the model about a page, `print-example` prints one conversation of the
+dataset as JSON (with `--show-gold`, also its questions and answers), and `chat` takes a page of that form, the three
+fields `pre_text`, `table` and `post_text`, and answers questions about it, one at a time, from the terminal:
+
+```bash
+uv run print-example dev:3 > page.json
+uv run chat --page page.json
+uv run chat --page page.json -q "what was the equipment rents payable in 2008?" -q "and in 2007?"
+```
+
+`chat` writes the program the model gave and the number it evaluates to, and keeps the model's own programs as the
+history of the conversation, as in the predicted-history setting above.
