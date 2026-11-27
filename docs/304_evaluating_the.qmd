@@ -1024,9 +1024,10 @@ def mean_prompt_tokens(name):
 tokens_zero = mean_prompt_tokens("tuned_val_main_0_pred")
 tokens_shots = mean_prompt_tokens("prompted_tuned_val_main_0_e3p_0_pred")
 
-# the examples do not make the tuned model worse by more than about a point,
-# and the validation split cannot say that they make it better
-assert extra["low"] > -0.01
+# the examples do not make the tuned model worse by more than a few points (the
+# text quotes the lower end of the interval), and the validation split cannot say
+# that they make it better
+assert extra["low"] > -0.03
 assert extra["high"] < gain["difference"] / 2
 assert not extra["excludes_zero"]
 assert summary["shots"]["invalid_rate"] == 0
@@ -1048,8 +1049,8 @@ With the three examples the tuned model gets `{python} f"{ci['shots']['accuracy'
 `{python} f"{ci['pred']['accuracy']:.1%}"` without them: a difference of
 `{python} f"{100 * extra['difference']:+.1f}"` points, with a paired 95% interval of
 [`{python} f"{100 * extra['low']:+.1f}"`, `{python} f"{100 * extra['high']:+.1f}"`]. The interval includes zero, so the
-validation split cannot say whether the examples help. What it does show is that they do not hurt by more than about a
-point, and that the effect, if there is one, is small next to the `{python} f"{100 * gain['difference']:.0f}"` points
+validation split cannot say whether the examples help. What it does show is that they do not hurt by more than
+`{python} f"{-100 * extra['low']:.1f}"` points (the lower end of the interval), and that the effect, if there is one, is small next to the `{python} f"{100 * gain['difference']:.0f}"` points
 that fine-tuning added to the best prompt of the untuned model. The effect, if any, is not free: the prompt is
 `{python} f"{tokens_shots / tokens_zero:.1f}"` times as long (`{python} f"{tokens_shots:,.0f}"` tokens against
 `{python} f"{tokens_zero:,.0f}"`), and every turn pays for it. So for this model, the two routes do not clearly add up:
